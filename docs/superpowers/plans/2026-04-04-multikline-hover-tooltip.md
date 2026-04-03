@@ -210,7 +210,7 @@ export function resolveHoverTooltipLayout({
   return {
     left,
     top,
-    placement: `${horizontal}-${vertical}`,
+    placement: `${horizontal}-${vertical}`, // indicates the flip direction chosen before the margin clamp ensures the tooltip stays inside the chart
   }
 }
 ```
@@ -225,7 +225,7 @@ node --test frontend/src/components/stock-lightweight-kline/hoverTooltip.test.mj
 
 Expected:
 
-- all 4 tests pass
+- all 5 tests pass
 - no snapshot files or extra config files are created
 
 - [ ] **Step 5: Commit the helper slice**
