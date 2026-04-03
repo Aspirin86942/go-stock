@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/logger"
 	"io"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -41,20 +42,14 @@ func setEastMoneyKlineBrowserHeaders(r *resty.Request, referer string) {
 	r.SetHeader("Referer", referer)
 }
 
-// fetchKLineJSONBytesByHTTP 每次调用均发起真实 GET，不缓存 K 线响应；cookieHeader 仅来自 chromedp 缓存或当次刷新。
-// 由于 Transport 设置了 DisableCompression=true，需要手动处理 gzip 解压。
-func (receiver *EastMoneyKLineApi) fetchKLineJSONBytesByHTTP(reqURL string) ([]byte, error) {
+// fetchKLineJSONBytesByHTTP 每次调用均发起真实 GET，不缓存 K 线响应。
+// 这里允许注入 cookieHeader，是因为东财在部分环境下会对无 cookie 的直连请求直接断流。
+func (receiver *EastMoneyKLineApi) fetchKLineJSONBytesByHTTP(reqURL string, cookieHeader string) ([]byte, error) {
 	req := receiver.client.SetTimeout(time.Duration(receiver.config.CrawlTimeOut) * time.Second).R()
 	setEastMoneyKlineBrowserHeaders(req, "https://quote.eastmoney.com")
-	// 使用缓存的 Cookie，pageURL 参数传空字符串由函数内部使用默认值
-	//cookieHeader, err := FetchEastMoneyCookiesViaChromedp("", time.Second*5, reqURL)
-	//if err != nil {
-	//	logger.SugaredLogger.Errorf("FetchEastMoneyCookiesViaChromedp error: %v", err)
-	//}
-	//if err == nil {
-	//	//logger.SugaredLogger.Infof("Cookie: %s", cookieHeader)
-	//	req.SetHeader("Cookie", cookieHeader)
-	//}
+	if strings.TrimSpace(cookieHeader) != "" {
+		req.SetHeader("Cookie", cookieHeader)
+	}
 
 	resp, err := req.Get(reqURL)
 	if err != nil {
@@ -149,9 +144,21 @@ func isValidResponse(body []byte) bool {
 
 // EastMoneyKLineApi 东方财富 K 线 API 结构体
 type EastMoneyKLineApi struct {
-	client *resty.Client
-	config *SettingConfig
+	client               *resty.Client
+	config               *SettingConfig
+	fetchHTTP            eastMoneyFetchHTTPFunc
+	cookieHeaderProvider eastMoneyCookieProvider
 }
+
+type eastMoneyFetchResult struct {
+	Data            []KLineData
+	ErrorCode       string
+	Message         string
+	UsedCookieRetry bool
+}
+
+type eastMoneyFetchHTTPFunc func(reqURL string, cookieHeader string) ([]byte, error)
+type eastMoneyCookieProvider func(config *SettingConfig) string
 
 // KLineType K 线类型枚举
 type KLineType string
@@ -205,9 +212,55 @@ type CallAuctionData struct {
 	BidVol1      string // 买一量
 }
 
+func newEastMoneyKLineTransport() *http.Transport {
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DisableCompression:    true,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          32,
+		MaxIdleConnsPerHost:   8,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+}
+
+func shouldRetryEastMoneyWithCookie(err error, config *SettingConfig) bool {
+	if err == nil || config == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	retryable := strings.Contains(msg, "eof") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "tls") ||
+		strings.Contains(msg, "handshake")
+	if !retryable {
+		return false
+	}
+	if strings.TrimSpace(config.BrowserPath) != "" {
+		return true
+	}
+	_, ok := CheckBrowser()
+	return ok
+}
+
 // NewEastMoneyKLineApi 创建东方财富 K 线 API 实例
 func NewEastMoneyKLineApi(config *SettingConfig) *EastMoneyKLineApi {
 	client := resty.New()
+	if config == nil {
+		config = &SettingConfig{Settings: &Settings{}}
+	}
+	if config.Settings == nil {
+		config.Settings = &Settings{}
+	}
+	if config.CrawlTimeOut <= 0 {
+		config.CrawlTimeOut = 30
+	}
+	client.SetTransport(newEastMoneyKLineTransport())
+	if config.HttpProxyEnabled && strings.TrimSpace(config.HttpProxy) != "" {
+		client.SetProxy(config.HttpProxy)
+	}
 
 	//// 配置强制 IPv4 优先的 Transport，解决 IPv6 连接问题
 	//dialer := &net.Dialer{
@@ -248,10 +301,36 @@ func NewEastMoneyKLineApi(config *SettingConfig) *EastMoneyKLineApi {
 	//
 	//client.SetTimeout(time.Duration(config.CrawlTimeOut) * time.Second)
 
-	return &EastMoneyKLineApi{
+	api := &EastMoneyKLineApi{
 		client: client,
 		config: config,
 	}
+	api.fetchHTTP = api.fetchKLineJSONBytesByHTTP
+	api.cookieHeaderProvider = EastMoneyCookieHeaderForPush2his
+	return api
+}
+
+func (receiver *EastMoneyKLineApi) fetchKLineJSONBytes(reqURL string) ([]byte, bool, error) {
+	body, err := receiver.fetchHTTP(reqURL, "")
+	if err == nil {
+		return body, false, nil
+	}
+	if !shouldRetryEastMoneyWithCookie(err, receiver.config) {
+		return nil, false, err
+	}
+	if receiver.cookieHeaderProvider == nil {
+		return nil, false, err
+	}
+	// 只在连接类失败时走一次 cookie 重试，避免把真正的业务错误放大成无限重试。
+	cookieHeader := receiver.cookieHeaderProvider(receiver.config)
+	if strings.TrimSpace(cookieHeader) == "" {
+		return nil, false, err
+	}
+	body, retryErr := receiver.fetchHTTP(reqURL, cookieHeader)
+	if retryErr != nil {
+		return nil, true, fmt.Errorf("首次请求失败: %v; cookie 重试失败: %w", err, retryErr)
+	}
+	return body, true, nil
 }
 
 // GetKLineData 获取 K 线数据（最新一段，等价于 end=20500101）
@@ -267,30 +346,48 @@ func (receiver *EastMoneyKLineApi) GetKLineData2(stockCode, kLineType, adjustFla
 // GetKLineDataBefore 获取 end 时间点之前的 limit 根 K 线。
 // end 为空或 "20500101" 表示取到最新；否则为东方财富格式：日/周等为 YYYYMMDD，分钟线多为 YYYYMMDDHHmmss（与 f51 字段一致即可）。
 func (receiver *EastMoneyKLineApi) GetKLineDataBefore(stockCode, kLineType, adjustFlag string, limit int, end string) *[]KLineData {
-	kLines := &[]KLineData{}
+	result := receiver.GetKLineDataBeforeResult(stockCode, kLineType, adjustFlag, limit, end)
+	if result.ErrorCode != "" {
+		logger.SugaredLogger.Errorf(
+			"GetKLineDataBefore failed stock=%s klt=%s limit=%d end=%s retry=%t code=%s msg=%s",
+			stockCode,
+			kLineType,
+			limit,
+			end,
+			result.UsedCookieRetry,
+			result.ErrorCode,
+			result.Message,
+		)
+	}
+	data := append([]KLineData(nil), result.Data...)
+	return &data
+}
 
-	// 转换股票代码格式
-	secid := receiver.convertStockCode(stockCode)
-	if secid == "" {
-		logger.SugaredLogger.Errorf("invalid stock code: %s", stockCode)
-		return kLines
+func (receiver *EastMoneyKLineApi) GetKLineDataBeforeResult(stockCode, kLineType, adjustFlag string, limit int, end string) *eastMoneyFetchResult {
+	result := &eastMoneyFetchResult{
+		Data: make([]KLineData, 0),
 	}
 
+	secid := receiver.convertStockCode(stockCode)
+	if secid == "" {
+		result.ErrorCode = "eastmoney_invalid_code"
+		result.Message = fmt.Sprintf("东财 K 线不支持当前代码：%s", stockCode)
+		return result
+	}
 	if limit <= 0 {
-		return kLines
+		result.ErrorCode = "eastmoney_invalid_limit"
+		result.Message = "东财 K 线请求参数无效：limit 必须大于 0"
+		return result
 	}
 	if strings.TrimSpace(end) == "" {
 		end = "20500101"
 	}
 
-	// 构建 fields 参数
 	fields := "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116"
 	if adjustFlag != "" {
 		fields = "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116,f113,f114,f115"
 	}
 
-	// 构建 URL
-	baseURL := "https://push2his.eastmoney.com/api/qt/stock/kline/get"
 	params := url.Values{}
 	params.Set("secid", secid)
 	params.Set("klt", kLineType)
@@ -301,53 +398,39 @@ func (receiver *EastMoneyKLineApi) GetKLineDataBefore(stockCode, kLineType, adju
 	params.Set("fields2", fields)
 	params.Set("wbp2u", "|0|0|0|web")
 	params.Set("_", fmt.Sprintf("%d", time.Now().UnixMilli()))
+	reqURL := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/stock/kline/get?%s", params.Encode())
 
-	reqURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
-
-	//logger.SugaredLogger.Infof("GetKLineDataBefore url: %s", reqURL)
-
-	if receiver.config != nil && strings.TrimSpace(receiver.config.BrowserPath) == "" {
-		logger.SugaredLogger.Infof("东财 K 线未配置 BrowserPath，HTTP 请求不带 chromedp cookie")
-	}
-
-	var body []byte
-	var fetchErr error
-	body, fetchErr = receiver.fetchKLineJSONBytesByHTTP(reqURL)
-
+	body, usedCookieRetry, fetchErr := receiver.fetchKLineJSONBytes(reqURL)
+	result.UsedCookieRetry = usedCookieRetry
 	if fetchErr != nil {
-		logger.SugaredLogger.Errorf("GetKLineData error: %v", fetchErr)
-		return kLines
+		result.ErrorCode = "eastmoney_request_failed"
+		result.Message = fmt.Sprintf("东财 K 线请求失败：%v", fetchErr)
+		return result
 	}
+
 	var response EastMoneyKLineResponse
-	err := json.Unmarshal(body, &response)
-	if err != nil {
-		preview := body
-		if len(preview) > 400 {
-			preview = preview[:400]
-		}
-		logger.SugaredLogger.Errorf("json.Unmarshal error: %v body_prefix=%q", err, string(preview))
-		return kLines
+	if err := json.Unmarshal(body, &response); err != nil {
+		result.ErrorCode = "eastmoney_decode_failed"
+		result.Message = fmt.Sprintf("东财 K 线响应解析失败：%v", err)
+		return result
+	}
+	if response.Rc != 0 || response.Code != 0 {
+		result.ErrorCode = "eastmoney_api_error"
+		result.Message = fmt.Sprintf("东财 K 线接口返回异常：rc=%d code=%d message=%s", response.Rc, response.Code, response.Message)
+		return result
 	}
 
-	if response.Rc != 0 {
-		logger.SugaredLogger.Errorf("API error: rc=%d code=%d message=%s", response.Rc, response.Code, response.Message)
-		return kLines
-	}
-	if response.Code != 0 {
-		logger.SugaredLogger.Errorf("API error: code=%d, message=%s", response.Code, response.Message)
-		return kLines
-	}
-
-	// 解析 K 线数据
 	for _, klineStr := range response.Data.Klines {
 		kline := receiver.parseKLine(klineStr, adjustFlag)
 		if kline != nil {
-			*kLines = append(*kLines, *kline)
+			result.Data = append(result.Data, *kline)
 		}
 	}
-
-	//logger.SugaredLogger.Infof("GetKLineData success, count: %d", len(*kLines))
-	return kLines
+	if len(result.Data) == 0 {
+		result.ErrorCode = "eastmoney_empty_data"
+		result.Message = "东财 K 线暂无可用数据"
+	}
+	return result
 }
 
 // GetMinuteKLine 获取分时 K 线数据 (1 分钟、5 分钟等)

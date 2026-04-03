@@ -1,5 +1,5 @@
 <script setup>
-import { GetStockEastMoneyKLine, GetStockEastMoneyKLinePage } from '../../wailsjs/go/main/App'
+import { GetStockEastMoneyKLinePageResult, GetStockEastMoneyKLineResult } from '../../wailsjs/go/main/App'
 import {
   CandlestickSeries,
   createChart,
@@ -91,6 +91,31 @@ const suppressLongPriceEmit = ref(false)
 const loading = ref(false)
 const loadingHistory = ref(false)
 const errorText = ref('')
+
+function normalizeKlineEnvelope(raw) {
+  return {
+    ok: !!raw?.ok,
+    list: Array.isArray(raw?.data) ? raw.data : [],
+    message: String(raw?.message || ''),
+    errorCode: String(raw?.errorCode || ''),
+    usedCookieRetry: !!raw?.usedCookieRetry,
+  }
+}
+
+function hasLikelyMoreHistory(receivedCount, requestedLimit) {
+  const count = Number(receivedCount)
+  const limit = Number(requestedLimit)
+  if (!Number.isFinite(limit) || limit <= 0) return true
+  if (!Number.isFinite(count) || count < 0) return true
+  return count >= limit
+}
+
+function isNoMoreHistoryEnvelope(envelope) {
+  const errorCode = String(envelope?.errorCode || '')
+  const message = String(envelope?.message || '')
+  if (errorCode === 'eastmoney_empty_data') return true
+  return errorCode === 'eastmoney_api_error' && /\brc=100\b/.test(message)
+}
 
 let chart = null
 let candleSeries = null
@@ -1532,16 +1557,27 @@ async function loadOlderHistory() {
   const logical = chart.timeScale().getVisibleLogicalRange()
   const beforeCount = mergedRawRows.length
   try {
-    const raw = await GetStockEastMoneyKLinePage(
-      codeSnap,
-      props.stockName || '',
-      kltSnap,
-      HISTORY_PAGE_SIZE,
-      end,
+    const envelope = normalizeKlineEnvelope(
+      await GetStockEastMoneyKLinePageResult(
+        codeSnap,
+        props.stockName || '',
+        kltSnap,
+        HISTORY_PAGE_SIZE,
+        end,
+      ),
     )
     if (kltSnap !== activeKlt.value || codeSnap !== props.code) return
-    const inc = Array.isArray(raw) ? raw : []
+    const inc = envelope.list
     if (!inc.length) {
+      if (isNoMoreHistoryEnvelope(envelope)) {
+        hasMoreOlder.value = false
+        lastOlderHistoryEndTried = ''
+        return
+      }
+      if (!envelope.ok && envelope.message) {
+        errorText.value = envelope.message
+        return
+      }
       hasMoreOlder.value = false
       lastOlderHistoryEndTried = ''
       return
@@ -1558,6 +1594,9 @@ async function loadOlderHistory() {
       return
     }
     lastOlderHistoryEndTried = ''
+    if (!hasLikelyMoreHistory(inc.length, HISTORY_PAGE_SIZE)) {
+      hasMoreOlder.value = false
+    }
     mergedRawRows = merged
     syncDefaultLatestPanelRow()
     withProgrammaticTimeRange(() => {
@@ -1582,14 +1621,16 @@ async function refreshLatestPoll() {
   const codeSnap = props.code
   try {
     const meta = INTERVALS.find((x) => x.klt === kltSnap) || INTERVALS[0]
-    const raw = await GetStockEastMoneyKLine(
-      codeSnap,
-      props.stockName || '',
-      meta.klt,
-      meta.limit,
+    const envelope = normalizeKlineEnvelope(
+      await GetStockEastMoneyKLineResult(
+        codeSnap,
+        props.stockName || '',
+        meta.klt,
+        meta.limit,
+      ),
     )
     if (codeSnap !== props.code || activeKlt.value !== kltSnap) return
-    const list = Array.isArray(raw) ? raw : []
+    const list = envelope.list
     if (!list.length) return
     mergedRawRows = mergeRefreshWithLatest(mergedRawRows, list)
     syncDefaultLatestPanelRow()
@@ -1694,20 +1735,22 @@ async function loadData() {
   lastOlderHistoryEndTried = ''
   try {
     const meta = INTERVALS.find((x) => x.klt === activeKlt.value) || INTERVALS[0]
-    const raw = await GetStockEastMoneyKLine(
-      props.code,
-      props.stockName || '',
-      meta.klt,
-      meta.limit,
+    const envelope = normalizeKlineEnvelope(
+      await GetStockEastMoneyKLineResult(
+        props.code,
+        props.stockName || '',
+        meta.klt,
+        meta.limit,
+      ),
     )
-    const list = Array.isArray(raw) ? raw : []
+    const list = envelope.list
     ensureChart()
+    hasMoreOlder.value = hasLikelyMoreHistory(list.length, meta.limit)
     mergedRawRows = mergeKlineRows([], list)
     syncDefaultLatestPanelRow()
     const { candles } = toSeriesData(mergedRawRows)
     if (!candles.length) {
-      errorText.value =
-        '暂无 K 线数据（需东方财富支持的代码，如 600519.SH、000001.SZ）'
+      errorText.value = envelope.message || '东财 K 线暂无可用数据，请稍后重试'
       candleSeries?.setData([])
       volSeries?.setData([])
       syncIndicators()

@@ -1684,6 +1684,10 @@ func (a *App) GetStockEastMoneyKLine(stockCode, stockName string, klt string, li
 	return a.GetStockEastMoneyKLinePage(stockCode, stockName, klt, limit, "")
 }
 
+func (a *App) GetStockEastMoneyKLineResult(stockCode, stockName string, klt string, limit int) map[string]any {
+	return a.GetStockEastMoneyKLinePageResult(stockCode, stockName, klt, limit, "")
+}
+
 // GetStockEastMoneyKLinePage 分页拉取 K 线：end 为东财 end 参数（YYYYMMDD 或 YYYYMMDDHHmmss），空字符串表示取最新一段（同 GetStockEastMoneyKLine）。
 func (a *App) GetStockEastMoneyKLinePage(stockCode, stockName string, klt string, limit int, end string) *[]data.KLineData {
 	if limit <= 0 {
@@ -1707,6 +1711,30 @@ func (a *App) GetStockEastMoneyKLinePage(stockCode, stockName string, klt string
 	//	return data.AggregateKLineEveryN(raw, 10)
 	//}
 	return api.GetKLineDataBefore(stockCode, klt, "", limit, end)
+}
+
+func (a *App) GetStockEastMoneyKLinePageResult(stockCode, stockName string, klt string, limit int, end string) map[string]any {
+	if limit <= 0 {
+		limit = 500
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+	klt = strings.TrimSpace(klt)
+	if klt == "" {
+		klt = "1"
+	}
+	end = strings.TrimSpace(end)
+
+	api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
+	result := api.GetKLineDataBeforeResult(stockCode, klt, "", limit, end)
+	return map[string]any{
+		"ok":              len(result.Data) > 0 && result.ErrorCode == "",
+		"data":            result.Data,
+		"message":         result.Message,
+		"errorCode":       result.ErrorCode,
+		"usedCookieRetry": result.UsedCookieRetry,
+	}
 }
 
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {

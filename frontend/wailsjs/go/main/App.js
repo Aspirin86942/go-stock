@@ -282,6 +282,14 @@ export function GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['GetStockEastMoneyKLinePage'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function GetStockEastMoneyKLinePageResult(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetStockEastMoneyKLinePageResult'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetStockEastMoneyKLineResult(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetStockEastMoneyKLineResult'](arg1, arg2, arg3, arg4);
+}
+
 export function GetStockKLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetStockKLine'](arg1, arg2, arg3);
 }

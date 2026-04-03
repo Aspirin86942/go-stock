@@ -145,6 +145,10 @@ export function GetStockEastMoneyKLine(arg1:string,arg2:string,arg3:string,arg4:
 
 export function GetStockEastMoneyKLinePage(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<any>;
 
+export function GetStockEastMoneyKLinePageResult(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<Record<string, any>>;
+
+export function GetStockEastMoneyKLineResult(arg1:string,arg2:string,arg3:string,arg4:number):Promise<Record<string, any>>;
+
 export function GetStockKLine(arg1:string,arg2:string,arg3:number):Promise<any>;
 
 export function GetStockList(arg1:string):Promise<Array<data.StockBasic>>;
