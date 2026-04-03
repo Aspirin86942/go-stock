@@ -1,6 +1,7 @@
 <script setup>
 import { GetStockEastMoneyKLinePageResult, GetStockEastMoneyKLineResult } from '../../wailsjs/go/main/App'
 import {
+  CrosshairMode,
   CandlestickSeries,
   createChart,
   HistogramSeries,
@@ -8,6 +9,12 @@ import {
   LineStyle,
   TickMarkType,
 } from 'lightweight-charts'
+import {
+  HOVER_TOOLTIP_HEIGHT,
+  HOVER_TOOLTIP_WIDTH,
+  resolveHoverTooltipLayout,
+  shouldShowHoverTooltip,
+} from './stock-lightweight-kline/hoverTooltip.mjs'
 import { NButton, NFlex, NInput, NSpin, NText } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -66,6 +73,10 @@ const emit = defineEmits([
 const chartContainerRef = ref(null)
 /** 十字线当前 K 对应的原始行（东财字段） */
 const hoverRawRow = ref(null)
+const hoverTooltipVisible = ref(false)
+const hoverTooltipLeft = ref(0)
+const hoverTooltipTop = ref(0)
+const hoverTooltipPlacement = ref('right-bottom')
 /** 无十字线时展示：当前数据中时间最新的一根 K 线 */
 const defaultLatestRawRow = ref(null)
 const activeKlt = ref('101')
@@ -872,6 +883,33 @@ const crosshairPanel = computed(() => {
   }
 })
 
+const hoverTooltipPanel = computed(() => {
+  if (!hoverRawRow.value) return null
+  const panel = crosshairPanel.value
+  if (!panel) return null
+  return {
+    title: panel.title,
+    open: panel.open,
+    close: panel.close,
+    high: panel.high,
+    low: panel.low,
+    changePercent: panel.changePercent,
+    volume: panel.volume,
+    cOpenClose: panel.cOpenClose,
+    cHigh: panel.cHigh,
+    cLow: panel.cLow,
+    cChg: panel.cChg,
+    cNeu: panel.cNeu,
+  }
+})
+
+function clearHoverTooltip() {
+  hoverTooltipVisible.value = false
+  hoverTooltipLeft.value = 0
+  hoverTooltipTop.value = 0
+  hoverTooltipPlacement.value = 'right-bottom'
+}
+
 function clearLongPositionPriceLines() {
   longLineByKind = { entry: null, stop: null, takeProfit: null }
   if (!candleSeries) {
@@ -1243,6 +1281,8 @@ function applyLongClickPrice(price) {
 
 function chartThemeOptions(isDark) {
   const minuteLike = !DAILY_LIKE_KLT.has(activeKlt.value)
+  const crosshairColor = isDark ? '#64748b' : '#94a3b8'
+  const labelBg = isDark ? '#334155' : '#e2e8f0'
   return {
     layout: {
       background: { type: 'solid', color: isDark ? '#141414' : '#ffffff' },
@@ -1252,7 +1292,25 @@ function chartThemeOptions(isDark) {
       vertLines: { color: isDark ? '#27272a' : '#f1f5f9' },
       horzLines: { color: isDark ? '#27272a' : '#f1f5f9' },
     },
-    crosshair: { mode: 1 },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: {
+        visible: true,
+        labelVisible: true,
+        width: 1,
+        style: LineStyle.LargeDashed,
+        color: crosshairColor,
+        labelBackgroundColor: labelBg,
+      },
+      horzLine: {
+        visible: true,
+        labelVisible: true,
+        width: 1,
+        style: LineStyle.LargeDashed,
+        color: crosshairColor,
+        labelBackgroundColor: labelBg,
+      },
+    },
     rightPriceScale: { borderColor: isDark ? '#3f3f46' : '#e2e8f0' },
     localization: {
       locale: 'zh-CN',
@@ -1436,6 +1494,7 @@ function setupPoll() {
 
 function disposeChart() {
   clearPoll()
+  clearHoverTooltip()
   if (loadOlderDebounceTimer) {
     clearTimeout(loadOlderDebounceTimer)
     loadOlderDebounceTimer = null
@@ -1676,21 +1735,47 @@ function ensureChart() {
   startHistoryVisiblePoll()
   crosshairMoveHandler = (param) => {
     if (param.point === undefined) {
+      clearHoverTooltip()
       hoverRawRow.value = null
       clearLongPriceLinePaneCursor()
       return
     }
     refreshLongPriceLineCursorFromCrosshair(param)
-    if (param.time === undefined) {
+
+    const bar = param.time === undefined ? null : param.seriesData.get(candleSeries)
+    if (
+      !shouldShowHoverTooltip({
+        point: param.point,
+        time: param.time,
+        paneIndex: param.paneIndex,
+        hasBar: !!bar,
+      })
+    ) {
+      clearHoverTooltip()
       hoverRawRow.value = null
       return
     }
-    const bar = param.seriesData.get(candleSeries)
-    if (!bar) {
-      hoverRawRow.value = null
+
+    const rawRow = findRawRowByChartTime(param.time)
+    hoverRawRow.value = rawRow
+    if (!rawRow || !chartContainerRef.value) {
+      clearHoverTooltip()
       return
     }
-    hoverRawRow.value = findRawRowByChartTime(param.time)
+
+    const layout = resolveHoverTooltipLayout({
+      pointX: param.point.x,
+      pointY: param.point.y,
+      containerWidth: chartContainerRef.value.clientWidth,
+      containerHeight: chartContainerRef.value.clientHeight,
+      tooltipWidth: HOVER_TOOLTIP_WIDTH,
+      tooltipHeight: HOVER_TOOLTIP_HEIGHT,
+    })
+
+    hoverTooltipLeft.value = layout.left
+    hoverTooltipTop.value = layout.top
+    hoverTooltipPlacement.value = layout.placement
+    hoverTooltipVisible.value = true
   }
   chart.subscribeCrosshairMove(crosshairMoveHandler)
   chartClickHandler = (param) => {
@@ -1716,6 +1801,8 @@ function ensureChart() {
 }
 
 async function loadData() {
+  clearHoverTooltip()
+  hoverRawRow.value = null
   if (!props.code) {
     errorText.value = '未设置股票代码'
     mergedRawRows = []
@@ -1899,6 +1986,7 @@ onBeforeUnmount(() => {
 watch(
   () => props.code,
   () => {
+    clearHoverTooltip()
     hoverRawRow.value = null
     loadData()
     setupPoll()
@@ -1906,6 +1994,7 @@ watch(
 )
 
 watch(activeKlt, () => {
+  clearHoverTooltip()
   hoverRawRow.value = null
   chart?.applyOptions(chartThemeOptions(props.darkTheme))
   loadData()
