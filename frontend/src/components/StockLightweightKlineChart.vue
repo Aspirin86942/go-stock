@@ -2275,10 +2275,56 @@ watch(showLongPosition, (newVal) => {
       </div>
       <NText v-if="errorText" type="error" style="font-size: 12px">{{ errorText }}</NText>
       <div
-        ref="chartContainerRef"
-        class="lw-kline-chart"
+        class="lw-kline-chart-shell"
         :style="{ height: chartHeight + 'px', minHeight: chartHeight + 'px' }"
-      />
+      >
+        <div
+          ref="chartContainerRef"
+          class="lw-kline-chart"
+          :style="{ height: '100%', minHeight: '100%' }"
+        />
+
+        <div
+          v-if="hoverTooltipVisible && hoverTooltipPanel"
+          class="lw-kline-hover-tooltip"
+          :class="[
+            darkTheme ? 'lw-kline-hover-tooltip--dark' : '',
+            `lw-kline-hover-tooltip--${hoverTooltipPlacement}`,
+          ]"
+          :style="{
+            left: hoverTooltipLeft + 'px',
+            top: hoverTooltipTop + 'px',
+          }"
+        >
+          <div class="lw-kline-hover-tooltip__title">{{ hoverTooltipPanel.title }}</div>
+          <div class="lw-kline-hover-tooltip__grid">
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">开</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cOpenClose }">{{ hoverTooltipPanel.open }}</span>
+            </span>
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">高</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cHigh }">{{ hoverTooltipPanel.high }}</span>
+            </span>
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">低</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cLow }">{{ hoverTooltipPanel.low }}</span>
+            </span>
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">收</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cOpenClose }">{{ hoverTooltipPanel.close }}</span>
+            </span>
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">涨跌幅</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cChg }">{{ hoverTooltipPanel.changePercent }}</span>
+            </span>
+            <span class="lw-kline-kv">
+              <span class="lw-kline-hover-tooltip__k">成交量</span>
+              <span class="lw-kline-hover-tooltip__v" :style="{ color: hoverTooltipPanel.cNeu }">{{ hoverTooltipPanel.volume }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
     </NFlex>
   </div>
 </template>
@@ -2405,10 +2451,17 @@ watch(showLongPosition, (newVal) => {
   font-variant-numeric: tabular-nums;
   min-width: 0;
 }
+.lw-kline-chart-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+}
 .lw-kline-chart {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  height: 100%;
   position: relative;
   touch-action: none;
   box-sizing: border-box;
@@ -2420,5 +2473,46 @@ watch(showLongPosition, (newVal) => {
 .lw-kline-root:not(.lw-kline--dark) .lw-kline-chart {
   border-radius: 4px;
   border: 1px solid #e2e8f0;
+}
+.lw-kline-hover-tooltip {
+  position: absolute;
+  z-index: 5;
+  width: 180px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 18%);
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+.lw-kline-hover-tooltip--dark {
+  border-color: #475569;
+  background: rgb(15 23 42 / 94%);
+  box-shadow: 0 10px 30px rgb(2 6 23 / 45%);
+}
+.lw-kline-hover-tooltip__title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.lw-kline-hover-tooltip--dark .lw-kline-hover-tooltip__title {
+  color: #f8fafc;
+}
+.lw-kline-hover-tooltip__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  font-size: 11px;
+}
+.lw-kline-hover-tooltip__k {
+  color: #64748b;
+}
+.lw-kline-hover-tooltip--dark .lw-kline-hover-tooltip__k {
+  color: #94a3b8;
+}
+.lw-kline-hover-tooltip__v {
+  font-variant-numeric: tabular-nums;
 }
 </style>
