@@ -1760,6 +1760,7 @@ function ensureChart() {
     hoverRawRow.value = rawRow
     if (!rawRow || !chartContainerRef.value) {
       clearHoverTooltip()
+      hoverRawRow.value = null
       return
     }
 
