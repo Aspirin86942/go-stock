@@ -2284,6 +2284,7 @@ watch(showLongPosition, (newVal) => {
           :style="{ height: '100%', minHeight: '100%' }"
         />
 
+        <!-- placement class 仅暴露翻转状态，当前不参与定位计算（定位由 left/top 与 helper 决定） -->
         <div
           v-if="hoverTooltipVisible && hoverTooltipPanel"
           class="lw-kline-hover-tooltip"
@@ -2456,6 +2457,7 @@ watch(showLongPosition, (newVal) => {
   max-width: 100%;
   min-width: 0;
   position: relative;
+  box-sizing: border-box;
 }
 .lw-kline-chart {
   width: 100%;
@@ -2478,10 +2480,13 @@ watch(showLongPosition, (newVal) => {
   position: absolute;
   z-index: 5;
   width: 180px;
+  height: 132px;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
+  box-sizing: border-box;
   background: rgb(255 255 255 / 96%);
+  color: #0f172a;
   box-shadow: 0 10px 30px rgb(15 23 42 / 18%);
   pointer-events: none;
   backdrop-filter: blur(6px);
@@ -2489,6 +2494,7 @@ watch(showLongPosition, (newVal) => {
 .lw-kline-hover-tooltip--dark {
   border-color: #475569;
   background: rgb(15 23 42 / 94%);
+  color: #e2e8f0;
   box-shadow: 0 10px 30px rgb(2 6 23 / 45%);
 }
 .lw-kline-hover-tooltip__title {
