@@ -48,6 +48,8 @@ type shareRequest struct {
 	Title string `json:"title"`
 }
 
+const unlockedWebMessage = "当前版本已开放全部功能，无需赞助码。"
+
 // Start 在当前进程内启动 ai-assistant-web 服务（阻塞，适合放在 goroutine 中）。
 func Start() error {
 	checkDir("data")
@@ -95,38 +97,16 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	level, active := data.EffectiveSponsorVipLevel()
-	ok := active && level >= 2
-	payload := map[string]any{
-		"ok":       ok,
-		"vipLevel": level,
-		"active":   active,
-	}
-	if !ok {
-		payload["message"] = vipDeniedMessage(level, active)
-	}
-	writeJSON(w, http.StatusOK, payload)
-}
-
-func vipDeniedMessage(level int, active bool) string {
-	if !active && level > 0 {
-		return "检测到赞助信息，但当前不在 VIP 有效期内或尚未到授权生效时间。请在 go-stock 客户端「关于」确认赞助状态。"
-	}
-	return "go-stock AI 助手（Web）仅对 VIP2 及以上有效赞助用户开放。请在 go-stock 桌面客户端「关于」页面填写赞助码后，使用与本机相同的 data 目录启动服务。"
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"vipLevel": 2,
+		"active":   true,
+		"message":  unlockedWebMessage,
+	})
 }
 
 func requireVip2(w http.ResponseWriter) bool {
-	level, active := data.EffectiveSponsorVipLevel()
-	if active && level >= 2 {
-		return true
-	}
-	writeJSON(w, http.StatusForbidden, map[string]any{
-		"code":     "VIP2_REQUIRED",
-		"message":  vipDeniedMessage(level, active),
-		"vipLevel": level,
-		"active":   active,
-	})
-	return false
+	return true
 }
 
 func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {

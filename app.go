@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"go-stock/backend/agent"
@@ -20,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/duke-git/lancet/v2/cryptor"
 	"github.com/inconshreveable/go-update"
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
@@ -54,6 +52,15 @@ type App struct {
 	stockAlertLastSent map[string]time.Time
 	priceAtAlertReset  map[string]float64
 }
+
+const (
+	// 兼容保留：当前版本全部功能开放，但旧前端仍依赖 VIP 结构字段。
+	unlockedVipLevel      = 2
+	unlockedVipLevelText  = "2"
+	unlockedVipStartTime  = "2024-01-01 00:00:00"
+	unlockedVipEndTime    = "2099-12-31 23:59:59"
+	unlockedSponsorNotice = "当前版本已开放全部功能，无需赞助码。"
+)
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -93,81 +100,32 @@ func (a *App) removeCronEntry(key string) {
 }
 
 func (a *App) GetSponsorInfo() map[string]any {
-	return a.SponsorInfo
+	// 兼容保留：返回稳定结构，避免旧前端读取赞助信息时出现空值分支。
+	return map[string]any{
+		"vipLevel":     unlockedVipLevelText,
+		"vipStartTime": unlockedVipStartTime,
+		"vipEndTime":   unlockedVipEndTime,
+		"active":       true,
+		"message":      unlockedSponsorNotice,
+	}
 }
 
 // GetEffectiveSponsorVip 从本地配置解密赞助信息并判断当前是否在 VIP 有效期内（与 ai-assistant-web / data.EffectiveSponsorVipLevel 一致）。
 func (a *App) GetEffectiveSponsorVip() map[string]any {
-	level, active := data.EffectiveSponsorVipLevel()
 	return map[string]any{
-		"vipLevel": level,
-		"active":   active,
+		"vipLevel": unlockedVipLevel,
+		"active":   true,
+		"message":  unlockedSponsorNotice,
 	}
 }
 func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
-	sponsorCode = strutil.Trim(sponsorCode)
-	if sponsorCode != "" {
-		encrypted, err := hex.DecodeString(sponsorCode)
-		if err != nil {
-			return map[string]any{
-				"code": 0,
-				"msg":  "赞助码格式错误,请输入正确的赞助码!",
-			}
-		}
-		key, err := hex.DecodeString(BuildKey)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return map[string]any{
-				"code": 0,
-				"msg":  "版本错误，不支持赞助码!",
-			}
-		}
-		decrypt := cryptor.AesEcbDecrypt(encrypted, key)
-		if decrypt == nil || len(decrypt) == 0 {
-			return map[string]any{
-				"code": 0,
-				"msg":  "赞助码错误，请输入正确的赞助码!",
-			}
-		}
-
-		// 校验通过后，将赞助码持久化到 Settings 中
-		config := data.GetSettingConfig()
-		// 只在赞助码变更时写库，避免无谓更新
-		if config.SponsorCode != sponsorCode {
-			config.SponsorCode = sponsorCode
-			data.UpdateConfig(config)
-		}
-
-		return map[string]any{
-			"code": 1,
-			"msg":  "赞助码校验成功，感谢您的支持!",
-		}
-	} else {
-		return map[string]any{"code": 0, "message": "赞助码不能为空,请输入正确的赞助码!"}
+	return map[string]any{
+		"code": 1,
+		"msg":  unlockedSponsorNotice,
 	}
 }
 
 func (a *App) CheckUpdate(flag int) {
-	sponsorCode := strutil.Trim(a.GetConfig().SponsorCode)
-	if sponsorCode != "" {
-		encrypted, err := hex.DecodeString(sponsorCode)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return
-		}
-		key, err := hex.DecodeString(BuildKey)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return
-		}
-		decrypt := string(cryptor.AesEcbDecrypt(encrypted, key))
-		err = json.Unmarshal([]byte(decrypt), &a.SponsorInfo)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return
-		}
-	}
-
 	releaseVersion := &models.GitHubReleaseVersion{}
 	_, err := resty.New().R().
 		SetResult(releaseVersion).
@@ -178,7 +136,7 @@ func (a *App) CheckUpdate(flag int) {
 	}
 	//logger.SugaredLogger.Infof("releaseVersion:%+v", releaseVersion.TagName)
 
-	if _, vipLevel, ok := a.isVip(sponsorCode, "", releaseVersion); ok {
+	if _, vipLevel, ok := a.isVip("", "", releaseVersion); ok {
 		level, _ := convertor.ToInt(vipLevel)
 		a.VipLevel = level
 		if level >= 2 {
@@ -210,7 +168,7 @@ func (a *App) CheckUpdate(flag int) {
 		} else if IsLinux() {
 			downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
 		}
-		downloadUrl, _, done := a.isVip(sponsorCode, downloadUrl, releaseVersion)
+		downloadUrl, _, done := a.isVip("", downloadUrl, releaseVersion)
 		if !done {
 			return
 		}
@@ -269,75 +227,8 @@ func (a *App) CheckUpdate(flag int) {
 }
 
 func (a *App) isVip(sponsorCode string, downloadUrl string, releaseVersion *models.GitHubReleaseVersion) (string, string, bool) {
-	isVip := false
-	vipLevel := "0"
-	sponsorCode = strutil.Trim(a.GetConfig().SponsorCode)
-	if sponsorCode != "" {
-		encrypted, err := hex.DecodeString(sponsorCode)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return "", "0", false
-		}
-		key, err := hex.DecodeString(BuildKey)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return "", "0", false
-		}
-		decrypt := string(cryptor.AesEcbDecrypt(encrypted, key))
-		err = json.Unmarshal([]byte(decrypt), &a.SponsorInfo)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return "", "0", false
-		}
-		vipLevel = a.SponsorInfo["vipLevel"].(string)
-		vipStartTime, err := time.ParseInLocation("2006-01-02 15:04:05", a.SponsorInfo["vipStartTime"].(string), time.Local)
-		vipEndTime, err := time.ParseInLocation("2006-01-02 15:04:05", a.SponsorInfo["vipEndTime"].(string), time.Local)
-		vipAuthTime, err := time.ParseInLocation("2006-01-02 15:04:05", a.SponsorInfo["vipAuthTime"].(string), time.Local)
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-			return "", vipLevel, false
-		}
-
-		if time.Now().After(vipAuthTime) && time.Now().After(vipStartTime) && time.Now().Before(vipEndTime) {
-			isVip = true
-		}
-
-		if IsWindows() {
-			if isVip {
-				if a.SponsorInfo["winDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-windows-amd64.exe", releaseVersion.TagName)
-				} else {
-					downloadUrl = a.SponsorInfo["winDownUrl"].(string)
-				}
-			} else {
-				downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-windows-amd64.exe", releaseVersion.TagName)
-			}
-		}
-		if IsMacOS() {
-			if isVip {
-				if a.SponsorInfo["macDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-darwin-universal", releaseVersion.TagName)
-				} else {
-					downloadUrl = a.SponsorInfo["macDownUrl"].(string)
-				}
-			} else {
-				downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-darwin-universal", releaseVersion.TagName)
-			}
-		}
-		if IsLinux() {
-			if isVip {
-				if a.SponsorInfo["linuxDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
-				} else {
-					downloadUrl = a.SponsorInfo["linuxDownUrl"].(string)
-				}
-			} else {
-				downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
-			}
-		}
-
-	}
-	return downloadUrl, vipLevel, isVip
+	// 兼容保留：旧调用方仍会通过该方法读取 VIP 结果，但当前版本不再按赞助信息分流。
+	return downloadUrl, unlockedVipLevelText, true
 }
 
 func (a *App) syncNews() {

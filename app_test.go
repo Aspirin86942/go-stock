@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -124,4 +125,34 @@ func TestFetchAiModels(t *testing.T) {
 	app := NewApp()
 	models := app.FetchAiModels("https://ark.cn-beijing.volces.com/api/v3", "")
 	t.Log(models)
+}
+
+func TestGetEffectiveSponsorVip_ReturnsOpenAccess(t *testing.T) {
+	db.Init(fmt.Sprintf("%s/stock.db", t.TempDir()))
+	sqlDB, err := db.Dao.DB()
+	if err != nil {
+		t.Fatalf("open test db handle: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+	})
+
+	app := NewApp()
+	result := app.GetEffectiveSponsorVip()
+
+	active, ok := result["active"].(bool)
+	if !ok {
+		t.Fatalf("expected active to be bool, got %#v", result["active"])
+	}
+	if !active {
+		t.Fatalf("expected active=true, got %#v", result["active"])
+	}
+
+	level, ok := result["vipLevel"].(int)
+	if !ok {
+		t.Fatalf("expected vipLevel to be int, got %#v", result["vipLevel"])
+	}
+	if level < 2 {
+		t.Fatalf("expected vipLevel >= 2, got %d", level)
+	}
 }
