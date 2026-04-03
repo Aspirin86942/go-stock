@@ -85,9 +85,9 @@ test('resolveHoverTooltipLayout flips downward near the top edge and clamps into
       tooltipHeight: 132,
     }),
     {
-      left: 48,
+      left: 8,
       top: 28,
-      placement: 'right-bottom',
+      placement: 'left-bottom',
     },
   )
 })

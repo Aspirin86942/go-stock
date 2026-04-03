@@ -33,22 +33,9 @@ export function resolveHoverTooltipLayout({
   let horizontal = 'right'
   let vertical = 'bottom'
 
-  const maxRight = containerWidth - tooltipWidth - margin
-  const overflowRight = left + tooltipWidth + margin - containerWidth
-  const flipLeft = pointX - tooltipWidth - offsetX
-
-  if (overflowRight > 0) {
-    if (flipLeft >= margin) {
-      left = flipLeft
-      horizontal = 'left'
-    } else {
-      const shift = Math.max(margin, overflowRight)
-      left = left - shift
-    }
-  }
-
-  if (maxRight >= margin && left > maxRight) {
-    left = maxRight
+  if (left + tooltipWidth + margin > containerWidth) {
+    left = pointX - tooltipWidth - offsetX
+    horizontal = 'left'
   }
   if (left < margin) {
     left = margin
