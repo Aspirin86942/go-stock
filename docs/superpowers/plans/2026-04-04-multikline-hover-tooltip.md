@@ -109,15 +109,33 @@ test('resolveHoverTooltipLayout flips downward near the top edge and clamps into
     resolveHoverTooltipLayout({
       pointX: 40,
       pointY: 12,
-      containerWidth: 240,
-      containerHeight: 180,
+      containerWidth: 500,
+      containerHeight: 150,
       tooltipWidth: 180,
       tooltipHeight: 132,
     }),
     {
-      left: 48,
-      top: 28,
-      placement: 'right-bottom',
+      left: 56,
+      top: 8,
+      placement: 'right-top',
+    },
+  )
+})
+
+test('resolveHoverTooltipLayout keeps placement hints even when margin clamp shifts left', () => {
+  assert.deepEqual(
+    resolveHoverTooltipLayout({
+      pointX: 40,
+      pointY: 100,
+      containerWidth: 200,
+      containerHeight: 300,
+      tooltipWidth: 180,
+      tooltipHeight: 132,
+    }),
+    {
+      left: 8,
+      top: 116,
+      placement: 'left-bottom',
     },
   )
 })

@@ -52,6 +52,7 @@ export function resolveHoverTooltipLayout({
   return {
     left,
     top,
+    /** horizontal-vertical values reflect the flip direction chosen before the margin clamp */
     placement: `${horizontal}-${vertical}`,
   }
 }
