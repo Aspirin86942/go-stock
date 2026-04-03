@@ -49,16 +49,8 @@
 
 [//]: # (- Tushare大数据开放社区,免费提供各类金融数据,助力行业和量化研究&#40;注意：Tushare只需要120积分即可，注册完成个人资料补充即可得120积分！！！&#41;，[注册链接]&#40;https://tushare.pro/register?reg=701944&#41;)
 - 软件快速迭代开发中,请大家优先测试和使用最新发布的版本。
-- 欢迎大家提出宝贵的建议，欢迎提issue,PR。当然更欢迎[赞助我](#都划到这了如果我的项目对您有帮助请赞助我吧)。💕
-
-
-### 支持开源💕计划
-| 赞助计划	                           | 赞助等级	          | 权益说明                                                   |
-|:--------------------------------|----------------|:-------------------------------------------------------|
-| 每月 0 RMB	                       | vip0	          | 🌟 全部功能,软件自动更新(从GitHub下载),自行解决github平台网络问题。            |
-| 每月赞助 18.8 RMB<br>每年赞助 120 RMB		 | vip1	          | 💕 全部功能,软件自动更新(从CDN下载),更新快速便捷。AI配置指导，提示词参考等            |
-| 每月赞助 28.8 RMB<br>每年赞助 240 RMB		 | vip2	          | 💕 vip1全部功能,启动时自动同步最近24小时市场资讯(包括外媒简讯)，go-stock Ai助手等   |
-| 每月赞助 X RMB			                   | vipX	          | 🧩 更多计划，视go-stock开源项目发展情况而定...(承接GitHub项目README广告推广💖) |
+- 欢迎大家提出宝贵的建议，欢迎提 issue、PR。
+- 当前版本默认开放全部功能，完成基础配置后即可直接使用。
 
 ## 🧩 重大功能开发计划
 | 功能说明            | 状态 | 备注                                                                                                       |
@@ -164,31 +156,17 @@
 - [Vite](https://vitejs.dev/)
 - [Tushare](https://tushare.pro/register?reg=701944)
 
-## 😘 赞助我
-### 都划到这了，如果我的项目对您有帮助，请赞助我吧！😊😊😊
-| 支付宝 | 微信  |
-|-----|-----| 
-| ![alipay.jpg](build/screenshot/alipay.jpg)  | ![wxpay.jpg](build/screenshot/wxpay.jpg) |
-
-
 ## ⭐ Star History
 [![Star History Chart](https://api.star-history.com/svg?repos=ArvinLovegood/go-stock&type=Date)](https://star-history.com/#ArvinLovegood/go-stock&Date)
 ## 🤖 状态
 ![Alt](https://repobeats.axiom.co/api/embed/40b07d415a42c2264a18c4fe1b6f182ff1470687.svg "Repobeats analytics image")
 
 ## 🐳 关于技术支持申明
-- 本软件基于开源技术构建，使用Wails、NaiveUI、Vue、AI大模型等开源项目。 技术上如有问题，可以先向对应的开源社区请求帮助。
-- 开源不易，本人精力和时间有限，如需一对一技术支持，请先赞助。联系QQ(备注 技术支持)：506808970
+- 本软件基于开源技术构建，使用 Wails、NaiveUI、Vue、AI 大模型等开源项目。
+- 技术问题建议优先通过 GitHub Issues、讨论区或对应开源社区交流。
+- 如需进一步沟通，可联系 QQ：506808970。
 
 [//]: # (<img src="./build/wx.jpg" width="301px" height="402px" alt="ArvinLovegood">)
-
-
-| 技术支持方式                          | 赞助(元) | 
-|:--------------------------------|:-----:|
-| 加 QQ：506808970                  | 100/次 |
-| 长期技术支持（不限次数，新功能优先体验等）           | 5000  |                  
-
-
 
 ## License
 [GNU GPLv3](LICENSE)
