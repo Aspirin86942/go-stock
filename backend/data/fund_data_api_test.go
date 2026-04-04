@@ -6,6 +6,7 @@ import (
 )
 
 func TestCrawlFundBasic(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	db.Dao.AutoMigrate(&FundBasic{})
 	api := NewFundApi()
@@ -17,6 +18,7 @@ func TestCrawlFundBasic(t *testing.T) {
 }
 
 func TestCrawlFundNetUnitValue(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	api := NewFundApi()
 	api.CrawlFundNetUnitValue("016533")

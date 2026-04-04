@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
-	"github.com/duke-git/lancet/v2/validator"
 	"github.com/go-resty/resty/v2"
 	uaFake "github.com/lib4u/fake-useragent"
 )
@@ -469,11 +468,26 @@ func (receiver *EastMoneyKLineApi) GetAdjustedKLine(stockCode, adjustType string
 	return receiver.GetKLineData(stockCode, "101", adjustType, days)
 }
 
+func isNumericStockCode(code string) bool {
+	if code == "" {
+		return false
+	}
+	for _, ch := range code {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // convertStockCode 转换股票代码为东方财富格式
 // 输入：000001 或 sz000001 或 000001.SZ
 // 输出：0.000001 或 1.600000
 func (receiver *EastMoneyKLineApi) convertStockCode(stockCode string) string {
 	stockCode = strings.ToUpper(strings.TrimSpace(stockCode))
+	if stockCode == "" {
+		return ""
+	}
 
 	// 如果已经包含点号，说明是标准格式
 	if strings.Contains(stockCode, ".") {
@@ -481,6 +495,9 @@ func (receiver *EastMoneyKLineApi) convertStockCode(stockCode string) string {
 		if len(parts) == 2 {
 			code := parts[0]
 			market := parts[1]
+			if !isNumericStockCode(code) {
+				return ""
+			}
 
 			switch market {
 			case "SH", "SS":
@@ -495,15 +512,19 @@ func (receiver *EastMoneyKLineApi) convertStockCode(stockCode string) string {
 				return "90." + code
 
 			default:
-				return stockCode
+				return ""
 			}
 		}
+		return ""
 	}
 
 	// 处理带市场前缀的代码
-	if strings.HasPrefix(stockCode, "SH") || strings.HasPrefix(stockCode, "SZ") || strings.HasPrefix(stockCode, "BJ") {
+	if len(stockCode) > 2 && (strings.HasPrefix(stockCode, "SH") || strings.HasPrefix(stockCode, "SZ") || strings.HasPrefix(stockCode, "BJ") || strings.HasPrefix(stockCode, "HK") || strings.HasPrefix(stockCode, "BK")) {
 		market := stockCode[:2]
 		code := stockCode[2:]
+		if !isNumericStockCode(code) {
+			return ""
+		}
 
 		switch market {
 		case "SH":
@@ -517,12 +538,12 @@ func (receiver *EastMoneyKLineApi) convertStockCode(stockCode string) string {
 		case "BK":
 			return "90." + code
 		default:
-			return stockCode
+			return ""
 		}
 	}
 
-	// 纯数字代码，根据代码规则判断市场
-	if len(stockCode) >= 1 && validator.IsNumber(stockCode) {
+	// 纯数字代码仅对 6 位 A 股代码做市场推断，避免将 5 位港股代码误判为有效代码。
+	if len(stockCode) == 6 && isNumericStockCode(stockCode) {
 		firstChar := stockCode[0:1]
 		switch firstChar {
 		case "6": // 沪市主板
@@ -532,12 +553,11 @@ func (receiver *EastMoneyKLineApi) convertStockCode(stockCode string) string {
 		case "0", "3": // 深市
 			return "0." + stockCode
 		default:
-			// 其他情况默认按深市处理
-			return stockCode
+			return ""
 		}
 	}
 
-	return stockCode
+	return ""
 }
 
 // getAdjustType 获取复权类型对应的数字

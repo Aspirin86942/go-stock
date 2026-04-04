@@ -1,0 +1,2 @@
+frontend build placeholder for `go test`.
+This file keeps the embed target present in fresh checkouts.

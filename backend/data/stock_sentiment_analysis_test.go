@@ -16,6 +16,7 @@ import (
 //-----------------------------------------------------------------------------------
 
 func TestAnalyzeSentiment(t *testing.T) {
+	requireIntegrationTest(t)
 
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()

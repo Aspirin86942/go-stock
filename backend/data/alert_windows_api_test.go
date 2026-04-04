@@ -16,6 +16,7 @@ import (
 //-----------------------------------------------------------------------------------
 
 func TestAlert(t *testing.T) {
+	requireIntegrationTest(t)
 	notification := toast.Notification{
 		AppID:    "go-stock",
 		Title:    "Hello, World!",

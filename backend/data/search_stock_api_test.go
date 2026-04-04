@@ -15,6 +15,7 @@ import (
 )
 
 func TestSearchStock(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 
 	e := convertor.ToString(math.Floor(float64(9*random.RandFloat(0, 1, 12) + 1)))
@@ -64,12 +65,14 @@ func TestSearchStock(t *testing.T) {
 }
 
 func TestGetStockFinancialInfo(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewStockDataApi().GetStockFinancialInfo("600519.SH")
 	MD := util.MarkdownTableWithTitle("600519.SH股票财报信息", res.Result.Data)
 	logger.SugaredLogger.Infof("res:\n%s", MD)
 }
 func TestGetStockHolderNum(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewStockDataApi().GetStockHolderNum("600519.SH")
 	MD := util.MarkdownTableWithTitle("股票股东人数信息", res.Result.Data)
@@ -77,6 +80,7 @@ func TestGetStockHolderNum(t *testing.T) {
 }
 
 func TestSearchStockApi_HotStrategy(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewSearchStockApi("").HotStrategy()
 	bytes, err := json.Marshal(res)
@@ -97,6 +101,7 @@ func TestSearchStockApi_HotStrategy(t *testing.T) {
 	//}
 }
 func TestSearchStockApi_HotStrategyTable(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewSearchStockApi("").StrategySquare()
 	logger.SugaredLogger.Infof("res:%+v", res)

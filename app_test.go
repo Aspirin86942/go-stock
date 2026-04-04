@@ -35,11 +35,13 @@ func TestIsUSTradingTime(t *testing.T) {
 }
 
 func TestCheckStockBaseInfo(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("./data/stock.db")
 	NewApp().CheckStockBaseInfo(context.Background())
 }
 
 func TestJson(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("./data/stock.db")
 
 	jsonStr := "{\n\t\t\"id\" : 3334,\n\t\t\"created_at\" : \"2025-02-28 16:49:31.8342514+08:00\",\n\t\t\"updated_at\" : \"2025-02-28 16:49:31.8342514+08:00\",\n\t\t\"deleted_at\" : null,\n\t\t\"code\" : \"PUK.US\",\n\t\t\"name\" : \"英国保诚集团\",\n\t\t\"full_name\" : \"\",\n\t\t\"e_name\" : \"\",\n\t\t\"exchange\" : \"NASDAQ\",\n\t\t\"type\" : \"stock\",\n\t\t\"is_del\" : 0,\n\t\t\"bk_name\" : null,\n\t\t\"bk_code\" : null\n\t}"
@@ -53,6 +55,7 @@ func TestJson(t *testing.T) {
 }
 
 func TestUpdateCheck(t *testing.T) {
+	requireIntegrationTest(t)
 	releaseVersion := &models.GitHubReleaseVersion{}
 	_, err := resty.New().R().
 		SetResult(releaseVersion).
@@ -78,11 +81,13 @@ func TestGetScreenResolution(t *testing.T) {
 }
 
 func TestCheckUpdate(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("./data/stock.db")
 	NewApp().CheckUpdate(1)
 }
 
 func TestGetAiRecommendStocksList(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("./data/stock.db")
 
 	str := "{\"startDate\": \"2026-03-20 00:00:00\", \"endDate\": \"2026-03-27 23:59:59\", \"page\": 1, \"pageSize\": 5000}"
@@ -103,6 +108,7 @@ func TestGetAiRecommendStocksList(t *testing.T) {
 }
 
 func TestSummaryStockNews(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("./data/stock.db")
 	question := "分析今日的市场行情走势是否和券商的观点一致"
 	app := NewApp()
@@ -117,11 +123,11 @@ func TestSummaryStockNews(t *testing.T) {
 }
 
 func TestCalculateNextRunTime(t *testing.T) {
-	db.Init("./data/stock.db")
 	t.Log(NewApp().CalculateNextRunTime("0 0 0 * * ?"))
 }
 
 func TestFetchAiModels(t *testing.T) {
+	requireIntegrationTest(t)
 	app := NewApp()
 	models := app.FetchAiModels("https://ark.cn-beijing.volces.com/api/v3", "")
 	t.Log(models)

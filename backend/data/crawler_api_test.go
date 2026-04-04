@@ -19,6 +19,7 @@ import (
 )
 
 func TestNewTimeOutGuShiTongCrawler(t *testing.T) {
+	requireIntegrationTest(t)
 	crawlerAPI := CrawlerApi{}
 	timeout := 10
 	crawlerBaseInfo := CrawlerBaseInfo{
@@ -34,6 +35,7 @@ func TestNewTimeOutGuShiTongCrawler(t *testing.T) {
 }
 
 func TestNewGuShiTongCrawler(t *testing.T) {
+	requireIntegrationTest(t)
 	crawlerAPI := CrawlerApi{}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -50,6 +52,7 @@ func TestNewGuShiTongCrawler(t *testing.T) {
 }
 
 func TestGetHtml(t *testing.T) {
+	requireIntegrationTest(t)
 	crawlerAPI := CrawlerApi{}
 	crawlerBaseInfo := CrawlerBaseInfo{
 		Name:        "TestCrawler",
@@ -83,6 +86,7 @@ func TestGetHtml(t *testing.T) {
 }
 
 func TestGetHtmlWithActions(t *testing.T) {
+	requireIntegrationTest(t)
 	crawlerAPI := CrawlerApi{}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -123,6 +127,7 @@ func TestGetHtmlWithActions(t *testing.T) {
 }
 
 func TestHk(t *testing.T) {
+	requireIntegrationTest(t)
 	//https://stock.finance.sina.com.cn/hkstock/quotes/00001.html
 	db.Init("../../data/stock.db")
 	hks := &[]models.StockInfoHK{}
@@ -170,6 +175,7 @@ func TestHk(t *testing.T) {
 }
 
 func TestUpdateUSName(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	us := &[]models.StockInfoUS{}
 	db.Dao.Model(&models.StockInfoUS{}).Where("name = ?", "").Order("RANDOM()").Find(us)
@@ -215,6 +221,7 @@ func TestUpdateUSName(t *testing.T) {
 
 }
 func TestUS(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	bytes, err := os.ReadFile("../../build/us.json")
 	if err != nil {
@@ -272,6 +279,7 @@ func TestUS(t *testing.T) {
 }
 
 func TestUSSINA(t *testing.T) {
+	requireIntegrationTest(t)
 	//https://finance.sina.com.cn/stock/usstock/sector.shtml#cm
 	crawlerAPI := CrawlerApi{}
 	crawlerBaseInfo := CrawlerBaseInfo{
@@ -299,6 +307,7 @@ func TestUSSINA(t *testing.T) {
 }
 
 func TestSina(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	url := "https://finance.sina.com.cn/realstock/company/sz002906/nc.shtml"
 	crawlerAPI := CrawlerApi{}
@@ -332,6 +341,7 @@ func TestSina(t *testing.T) {
 }
 
 func TestDC(t *testing.T) {
+	requireIntegrationTest(t)
 	url := "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=sh600745#/cwfx"
 	db.Init("../../data/stock.db")
 	crawlerAPI := CrawlerApi{}

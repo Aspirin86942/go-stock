@@ -11,6 +11,7 @@ func init() {
 }
 
 func TestWebSearchApi_Search(t *testing.T) {
+	requireIntegrationTest(t)
 	defer GetBrowserManager().ResetBrowser()
 
 	path := GetSettingConfig().BrowserPath
@@ -30,6 +31,7 @@ func TestWebSearchApi_Search(t *testing.T) {
 }
 
 func TestWebSearchApi_SearchToMarkdown(t *testing.T) {
+	requireIntegrationTest(t)
 	defer GetBrowserManager().ResetBrowser()
 
 	path := GetSettingConfig().BrowserPath
@@ -46,6 +48,7 @@ func TestWebSearchApi_SearchToMarkdown(t *testing.T) {
 }
 
 func TestWebSearchApi_SearchToJson(t *testing.T) {
+	requireIntegrationTest(t)
 	defer GetBrowserManager().ResetBrowser()
 
 	path := GetSettingConfig().BrowserPath
@@ -62,6 +65,7 @@ func TestWebSearchApi_SearchToJson(t *testing.T) {
 }
 
 func TestWebSearchApi_Bing(t *testing.T) {
+	requireIntegrationTest(t)
 	defer GetBrowserManager().ResetBrowser()
 
 	path := GetSettingConfig().BrowserPath
@@ -89,6 +93,7 @@ func TestWebSearchApi_Bing(t *testing.T) {
 }
 
 func TestWebSearchApi_Baidu(t *testing.T) {
+	requireIntegrationTest(t)
 	defer GetBrowserManager().ResetBrowser()
 
 	path := GetSettingConfig().BrowserPath

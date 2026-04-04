@@ -10,6 +10,7 @@ import (
 // @Desc
 // -----------------------------------------------------------------------------------
 func TestGetDaily(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	tushareApi := NewTushareApi(GetSettingConfig())
 	res := tushareApi.GetDaily("00927.HK", "20250101", "20250217", 30)
@@ -18,6 +19,7 @@ func TestGetDaily(t *testing.T) {
 }
 
 func TestGetUSDaily(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	tushareApi := NewTushareApi(GetSettingConfig())
 

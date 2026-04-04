@@ -8,6 +8,7 @@ import (
 )
 
 func TestSaveStockChangesWithDedup(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 
 	service := NewStockChangesApi()
@@ -24,6 +25,7 @@ func TestSaveStockChangesWithDedup(t *testing.T) {
 }
 
 func TestStockChangesApi_GetStockChanges(t *testing.T) {
+	requireIntegrationTest(t)
 	api := NewStockChangesApi()
 
 	tests := []struct {
@@ -78,6 +80,7 @@ func TestStockChangesApi_GetStockChanges(t *testing.T) {
 }
 
 func TestStockChangesApi_GetStockChangesReadable(t *testing.T) {
+	requireIntegrationTest(t)
 	api := NewStockChangesApi()
 
 	result := api.GetStockChangesReadable([]int{8201, 8204}, 0, 5)

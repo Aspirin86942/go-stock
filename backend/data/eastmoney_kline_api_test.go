@@ -16,6 +16,7 @@ func init() {
 }
 
 func TestEastMoneyKLineApi_GetDayKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -51,6 +52,7 @@ func TestEastMoneyKLineApi_GetDayKLine(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetWeekKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -75,6 +77,7 @@ func TestEastMoneyKLineApi_GetWeekKLine(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetMonthKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -98,6 +101,7 @@ func TestEastMoneyKLineApi_GetMonthKLine(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetAdjustedKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -121,6 +125,7 @@ func TestEastMoneyKLineApi_GetAdjustedKLine(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetMinuteKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -196,6 +201,7 @@ func TestEastMoneyKLineApi_ValidateStockCode(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetLatestKLine(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -213,6 +219,7 @@ func TestEastMoneyKLineApi_GetLatestKLine(t *testing.T) {
 }
 
 func TestEastMoneyKLineApi_GetBatchKLineData(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 
@@ -239,6 +246,7 @@ func TestEastMoneyKLineApi_GetBatchKLineData(t *testing.T) {
 }
 
 func TestGetKLineWithMA(t *testing.T) {
+	requireIntegrationTest(t)
 	config := GetSettingConfig()
 	api := NewEastMoneyKLineApi(config)
 	kLines, err := api.GetKLineWithMA("000001.SZ", "101", 10, 5, 10, 20, 60, 120)
@@ -250,6 +258,7 @@ func TestGetKLineWithMA(t *testing.T) {
 }
 
 func TestFetchEastMoneyKlineViaChromedp(t *testing.T) {
+	requireIntegrationTest(t)
 	bs, err := fetchEastMoneyCookiesViaChromedp("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", 30, "https://quote.eastmoney.com/")
 
 	if err != nil {

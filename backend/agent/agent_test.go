@@ -21,6 +21,7 @@ import (
 //-----------------------------------------------------------------------------------
 
 func TestGetStockAiAgent(t *testing.T) {
+	requireIntegrationTest(t)
 	ctx := context.Background()
 	db.Init("../../data/stock.db")
 	config := data.GetSettingConfig()
@@ -73,6 +74,7 @@ func TestGetStockAiAgent(t *testing.T) {
 }
 
 func TestAgent(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 
 	md := strings.Builder{}

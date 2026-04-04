@@ -27,6 +27,7 @@ import (
 //-----------------------------------------------------------------------------------
 
 func TestGetSinaNews(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()
 	news := NewMarketNewsApi().GetSinaNews(30)
@@ -39,6 +40,7 @@ func TestGetSinaNews(t *testing.T) {
 }
 
 func TestGlobalStockIndexes(t *testing.T) {
+	requireIntegrationTest(t)
 	resp := NewMarketNewsApi().GlobalStockIndexes(30)
 
 	bs, _ := json.Marshal(resp)
@@ -50,12 +52,14 @@ func TestGlobalStockIndexes(t *testing.T) {
 }
 
 func TestGetIndustryRank(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetIndustryRank("0", 10)
 	for s, a := range res["data"].([]any) {
 		logger.SugaredLogger.Debugf("key: %+v, value: %+v", s, a)
 	}
 }
 func TestGetIndustryMoneyRankSina(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetIndustryMoneyRankSina("0", "netamount")
 	for i, re := range res {
 		logger.SugaredLogger.Debugf("key: %+v, value: %+v", i, re)
@@ -63,6 +67,7 @@ func TestGetIndustryMoneyRankSina(t *testing.T) {
 	}
 }
 func TestGetMoneyRankSina(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetMoneyRankSina("r3_net")
 	for i, re := range res {
 		logger.SugaredLogger.Debugf("key: %+v, value: %+v", i, re)
@@ -70,6 +75,7 @@ func TestGetMoneyRankSina(t *testing.T) {
 }
 
 func TestGetStockMoneyTrendByDay(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetStockMoneyTrendByDay("sh600438", 360)
 	for i, re := range res {
 		logger.SugaredLogger.Debugf("key: %+v, value: %+v", i, re)
@@ -77,12 +83,14 @@ func TestGetStockMoneyTrendByDay(t *testing.T) {
 }
 
 func TestLongTiger(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 
 	NewMarketNewsApi().LongTiger("2025-06-08")
 }
 
 func TestStockResearchReport(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	resp := NewMarketNewsApi().StockResearchReport("002046", 7)
 	for _, a := range resp {
@@ -94,6 +102,7 @@ func TestStockResearchReport(t *testing.T) {
 }
 
 func TestIndustryResearchReport(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	resp := NewMarketNewsApi().IndustryResearchReport("", 7)
 	for _, a := range resp {
@@ -106,6 +115,7 @@ func TestIndustryResearchReport(t *testing.T) {
 }
 
 func TestStockNotice(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	resp := NewMarketNewsApi().StockNotice("600584,600900")
 	// 转为可表格化的结构：东方财富接口返回的 list 中每项为 map，字段名多为驼峰
@@ -140,6 +150,7 @@ func TestStockNotice(t *testing.T) {
 }
 
 func TestEMDictCode(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	resp := NewMarketNewsApi().EMDictCode("016", freecache.NewCache(100))
 	for _, a := range resp {
@@ -158,12 +169,14 @@ func TestEMDictCode(t *testing.T) {
 }
 
 func TestTradingViewNews(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()
 	NewMarketNewsApi().TradingViewNews()
 }
 
 func TestXUEQIUHotStock(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewMarketNewsApi().XUEQIUHotStock(50, "10")
 	for _, a := range *res {
@@ -175,6 +188,7 @@ func TestXUEQIUHotStock(t *testing.T) {
 }
 
 func TestHotEvent(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewMarketNewsApi().HotEvent(50)
 	for _, a := range *res {
@@ -184,6 +198,7 @@ func TestHotEvent(t *testing.T) {
 }
 
 func TestHotTopic(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewMarketNewsApi().HotTopic(10)
 	for _, a := range res {
@@ -193,6 +208,7 @@ func TestHotTopic(t *testing.T) {
 }
 
 func TestInvestCalendar(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewMarketNewsApi().InvestCalendar("2025-06")
 	for _, a := range res {
@@ -208,6 +224,7 @@ func TestInvestCalendar(t *testing.T) {
 }
 
 func TestClsCalendar(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	res := NewMarketNewsApi().ClsCalendar()
 	md := strings.Builder{}
@@ -231,11 +248,13 @@ func TestClsCalendar(t *testing.T) {
 }
 
 func TestGetGDP(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetGDP()
 	md := util.MarkdownTableWithTitle("国内生产总值(GDP)", res.GDPResult.Data)
 	logger.SugaredLogger.Debugf(md)
 }
 func TestGetCPI(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetCPI()
 	md := util.MarkdownTableWithTitle("居民消费价格指数(CPI)", res.CPIResult.Data)
 	logger.SugaredLogger.Debugf(md)
@@ -243,6 +262,7 @@ func TestGetCPI(t *testing.T) {
 
 // PPI
 func TestGetPPI(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetPPI()
 	md := util.MarkdownTableWithTitle("工业品出厂价格指数(PPI)", res.PPIResult.Data)
 	logger.SugaredLogger.Debugf(md)
@@ -250,20 +270,24 @@ func TestGetPPI(t *testing.T) {
 
 // PMI
 func TestGetPMI(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetPMI()
 	md := util.MarkdownTableWithTitle("采购经理人指数(PMI)", res.PMIResult.Data)
 	logger.SugaredLogger.Debugf(md)
 }
 func TestGetIndustryReportInfo(t *testing.T) {
+	requireIntegrationTest(t)
 	NewMarketNewsApi().GetIndustryReportInfo("AP202507151709216483")
 }
 
 func TestReutersNew(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	NewMarketNewsApi().ReutersNew()
 }
 
 func TestInteractiveAnswer(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	datas := NewMarketNewsApi().InteractiveAnswer(1, 100, "立讯精密")
 	logger.SugaredLogger.Debugf("PageSize:%d", datas.PageSize)
@@ -272,6 +296,7 @@ func TestInteractiveAnswer(t *testing.T) {
 
 }
 func TestGetNewsList2(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	news := NewMarketNewsApi().GetNewsList2("财联社电报", random.RandInt(100, 500))
 	messageText := strings.Builder{}
@@ -283,12 +308,14 @@ func TestGetNewsList2(t *testing.T) {
 }
 
 func TestTelegraphList(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()
 	NewMarketNewsApi().TelegraphList(30)
 }
 
 func TestProxy(t *testing.T) {
+	requireIntegrationTest(t)
 	response, err := resty.New().
 		SetProxy("http://go-stock:778d4ff2-73f3-4d56-b3c3-d9a730a06ae3@stock.sparkmemory.top:8888").
 		R().
@@ -307,6 +334,7 @@ func TestProxy(t *testing.T) {
 }
 
 func TestNtfy(t *testing.T) {
+	requireIntegrationTest(t)
 
 	//attach := "http://go-stock.sparkmemory.top/%E5%88%86%E6%9E%90%E6%8A%A5%E5%91%8A/%E8%B5%84%E9%87%91%E6%B5%81%E5%90%91/2025-12/AI%EF%BC%9A%E5%B8%82%E5%9C%BA%E5%88%86%E6%9E%90%E6%8A%A5%E5%91%8A-[2025.12.11_12.02.01].html"
 	//post, err := resty.New().SetBaseURL("https://go-stock.sparkmemory.top:16667").R().
@@ -324,6 +352,7 @@ func TestNtfy(t *testing.T) {
 }
 
 func TestGetSecuritiesCompanyOpinion(t *testing.T) {
+	requireIntegrationTest(t)
 	res := NewMarketNewsApi().GetSecuritiesCompanyOpinion("2026-03-01", "2026-03-03")
 	md := strings.Builder{}
 	for _, d := range res.Data {
@@ -333,6 +362,7 @@ func TestGetSecuritiesCompanyOpinion(t *testing.T) {
 
 }
 func TestGetNewsListData(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	list, total := NewMarketNewsApi().GetNewsListData("", time.Now().Add(-time.Hour*24*2), 1, 2)
 	md := strings.Builder{}

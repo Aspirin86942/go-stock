@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewDeepSeekOpenAiConfig(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()
 
@@ -48,11 +49,13 @@ func TestNewDeepSeekOpenAiConfig(t *testing.T) {
 }
 
 func TestGetTopNewsList(t *testing.T) {
+	requireIntegrationTest(t)
 	news := GetTopNewsList(30)
 	t.Log(news)
 }
 
 func TestSearchGuShiTongStockInfo(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	//SearchGuShiTongStockInfo("hk01810", 60)
 	msgs := SearchGuShiTongStockInfo("sh600745", 60)
@@ -64,6 +67,7 @@ func TestSearchGuShiTongStockInfo(t *testing.T) {
 }
 
 func TestGetZSInfo(t *testing.T) {
+	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
 	GetZSInfo("中证银行", "sz399986", 5)
 	GetZSInfo("上海贝岭", "sh600171", 5)
