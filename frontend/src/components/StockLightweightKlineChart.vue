@@ -12,6 +12,7 @@ import {
 import {
   HOVER_TOOLTIP_HEIGHT,
   HOVER_TOOLTIP_WIDTH,
+  resolveMainPaneVerticalBounds,
   resolveHoverTooltipLayout,
   shouldShowHoverTooltip,
 } from './stock-lightweight-kline/hoverTooltip.mjs'
@@ -910,6 +911,26 @@ function clearHoverTooltip() {
   hoverTooltipPlacement.value = 'right-bottom'
 }
 
+function resolveHoverTooltipBoundaries() {
+  const containerEl = chartContainerRef.value
+  const containerWidth = containerEl?.clientWidth
+  const containerHeight = containerEl?.clientHeight
+
+  const mainPaneApi = chart?.panes?.()?.[0]
+  const mainPaneHeight = mainPaneApi?.getHeight?.()
+  const { mainPaneTop, mainPaneBottom } = resolveMainPaneVerticalBounds({
+    containerHeight,
+    mainPaneHeight,
+  })
+
+  return {
+    containerWidth,
+    containerHeight,
+    mainPaneTop,
+    mainPaneBottom,
+  }
+}
+
 function clearLongPositionPriceLines() {
   longLineByKind = { entry: null, stop: null, takeProfit: null }
   if (!candleSeries) {
@@ -1743,12 +1764,17 @@ function ensureChart() {
     refreshLongPriceLineCursorFromCrosshair(param)
 
     const bar = param.time === undefined ? null : param.seriesData.get(candleSeries)
+    const hoverBoundaries = resolveHoverTooltipBoundaries()
     if (
       !shouldShowHoverTooltip({
         point: param.point,
         time: param.time,
         paneIndex: param.paneIndex,
         hasBar: !!bar,
+        containerWidth: hoverBoundaries.containerWidth,
+        containerHeight: hoverBoundaries.containerHeight,
+        mainPaneTop: hoverBoundaries.mainPaneTop,
+        mainPaneBottom: hoverBoundaries.mainPaneBottom,
       })
     ) {
       clearHoverTooltip()

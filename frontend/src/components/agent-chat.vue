@@ -83,12 +83,13 @@ import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
 import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo} from "../../wailsjs/go/main/App";
 import {EventsOff, EventsOn} from '../../wailsjs/runtime'
 import 'tdesign-vue-next/es/style/index.css';
+import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 
 
 const allowToolTip = ref(true);
 const chatSenderRef = ref(null);
 const selectOptions = ref([]);
-const selectValue = ref("default");
+const selectValue = ref(null);
 
 // 定义事件处理函数，方便在挂载和卸载时管理
 const handleAgentMessage = (data) => {
@@ -127,7 +128,7 @@ onBeforeMount(() => {
   GetAiConfigs().then(res=>{
     console.log(res)
     selectOptions.value = res
-    selectValue.value = res[0].ID
+    selectValue.value = resolveFirstAiConfigId(res)
   })
 })
 

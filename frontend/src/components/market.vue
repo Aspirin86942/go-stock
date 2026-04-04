@@ -36,6 +36,7 @@ import InvestCalendarTimeLine from "./InvestCalendarTimeLine.vue";
 import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import SelectStock from "./SelectStock.vue";
 import Stockhotmap from "./stockhotmap.vue";
+import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 
 const route = useRoute()
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
@@ -110,7 +111,7 @@ onBeforeMount(() => {
 
   GetAiConfigs().then(res=>{
     aiConfigs.value = res
-    aiConfigId.value = res[0].ID
+    aiConfigId.value = resolveFirstAiConfigId(res)
   })
   GetTelegraphList("财联社电报").then((res) => {
     telegraphList.value = res

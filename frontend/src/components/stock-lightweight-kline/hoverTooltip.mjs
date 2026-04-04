@@ -4,7 +4,43 @@ export const HOVER_TOOLTIP_MARGIN = 8
 export const HOVER_TOOLTIP_WIDTH = 180
 export const HOVER_TOOLTIP_HEIGHT = 132
 
-export function shouldShowHoverTooltip({ point, time, paneIndex, hasBar }) {
+export function resolveMainPaneVerticalBounds({
+  containerHeight,
+  mainPaneHeight,
+}) {
+  if (Number.isFinite(mainPaneHeight) && mainPaneHeight > 0) {
+    const bottom = Number.isFinite(containerHeight)
+      ? Math.min(mainPaneHeight, containerHeight)
+      : mainPaneHeight
+    return {
+      mainPaneTop: 0,
+      mainPaneBottom: bottom,
+    }
+  }
+
+  if (Number.isFinite(containerHeight) && containerHeight > 0) {
+    return {
+      mainPaneTop: 0,
+      mainPaneBottom: containerHeight,
+    }
+  }
+
+  return {
+    mainPaneTop: null,
+    mainPaneBottom: null,
+  }
+}
+
+export function shouldShowHoverTooltip({
+  point,
+  time,
+  paneIndex,
+  hasBar,
+  containerWidth,
+  containerHeight,
+  mainPaneTop,
+  mainPaneBottom,
+}) {
   if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
     return false
   }
@@ -12,6 +48,25 @@ export function shouldShowHoverTooltip({ point, time, paneIndex, hasBar }) {
     return false
   }
   if (!hasBar) {
+    return false
+  }
+  if (
+    Number.isFinite(containerWidth) &&
+    (point.x < 0 || point.x >= containerWidth)
+  ) {
+    return false
+  }
+  if (
+    Number.isFinite(containerHeight) &&
+    (point.y < 0 || point.y >= containerHeight)
+  ) {
+    return false
+  }
+  if (
+    Number.isFinite(mainPaneTop) &&
+    Number.isFinite(mainPaneBottom) &&
+    (point.y < mainPaneTop || point.y >= mainPaneBottom)
+  ) {
     return false
   }
   return paneIndex == null || paneIndex === 0

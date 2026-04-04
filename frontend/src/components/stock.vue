@@ -73,6 +73,8 @@ import {useRoute, useRouter} from 'vue-router'
 import MoneyTrend from "./moneyTrend.vue";
 import StockSparkLine from "./stockSparkLine.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
+import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
+import { normalizeFollowStockCode, resolveFollowStockCode } from "../utils/stockCode.mjs";
 
 const route = useRoute()
 const router = useRouter()
@@ -357,7 +359,7 @@ onBeforeMount(() => {
 
   GetAiConfigs().then(res => {
     aiConfigs.value = res
-    data.aiConfigId = res[0].ID
+    data.aiConfigId = resolveFirstAiConfigId(res)
   })
 
   EventsOn("loadingDone", (data) => {
@@ -671,17 +673,16 @@ function fetchGroupList() {
 }
 
 function AddStock() {
-  if (!data?.code) {
+  const normalizedCode = resolveFollowStockCode([data?.code, data?.name], stockList.value)
+  if (!normalizedCode) {
     message.error("请输入有效股票代码");
     return;
   }
-  if (!stocks.value.includes(data.code)) {
-    Follow(data.code).then(result => {
+  data.code = normalizedCode
+  if (!stocks.value.includes(normalizedCode)) {
+    Follow(normalizedCode).then(result => {
       if (result === "关注成功") {
-        if (data.code.startsWith("us")) {
-          data.code = "gb_" + data.code.replace("us", "").toLowerCase()
-        }
-        stocks.value.push(data.code)
+        stocks.value.push(normalizedCode)
         message.success(result)
         GetFollowList(currentGroupId.value).then(result => {
           followList.value = result
@@ -732,9 +733,7 @@ function getStockList(value) {
       value: item.ts_code
     }
   })
-  if (value && value.indexOf("-") <= 0) {
-    data.code = value
-  }
+  data.code = normalizeFollowStockCode(value, stockList.value)
 
   //console.log("getStockList-options",data.code)
 
@@ -841,13 +840,7 @@ function GetSortKey(sort, code) {
 
 function onSelect(item) {
   ////console.log("onSelect",item)
-
-  if (item.indexOf("-") > 0) {
-    item = item.split("-")[1].toLowerCase()
-  }
-  if (item.indexOf(".") > 0) {
-    data.code = item.split(".")[1].toLowerCase() + item.split(".")[0]
-  }
+  data.code = normalizeFollowStockCode(item, stockList.value)
 
 }
 
@@ -2498,7 +2491,7 @@ watch(modalShow6, (newVal) => {
                               }"
                        :options="options"
                        placeholder="股票指数名称/代码/弹幕"
-                       clearable @update-value="getStockList" :on-select="onSelect"/>
+                       clearable @update:value="getStockList" @select="onSelect"/>
 
       <n-popover trigger="manual" :show="showPopover">
         <template #trigger>

@@ -71,6 +71,9 @@ func main() {
 	checkDir("data")
 	data.SponsorDecryptKeyHex = BuildKey
 	db.Init("")
+	if err := ensureBundledStockSearchData(); err != nil {
+		log.SugaredLogger.Errorf("初始化内置股票搜索数据失败: %v", err)
+	}
 	data.InitAnalyzeSentiment()
 	go AutoMigrate()
 

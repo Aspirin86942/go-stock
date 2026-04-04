@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   resolveHoverTooltipLayout,
+  resolveMainPaneVerticalBounds,
   shouldShowHoverTooltip,
 } from './hoverTooltip.mjs'
 
@@ -35,6 +36,111 @@ test('shouldShowHoverTooltip returns true only for the main K-line pane', () => 
       hasBar: true,
     }),
     false,
+  )
+})
+
+test('shouldShowHoverTooltip returns false when point is outside chart shell bounds', () => {
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: -1, y: 40 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 0,
+      mainPaneBottom: 320,
+    }),
+    false,
+  )
+
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: 520, y: 40 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 0,
+      mainPaneBottom: 320,
+    }),
+    false,
+  )
+})
+
+test('shouldShowHoverTooltip returns false when point is outside main pane vertical region', () => {
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: 120, y: 18 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 20,
+      mainPaneBottom: 280,
+    }),
+    false,
+  )
+
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: 120, y: 281 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 20,
+      mainPaneBottom: 280,
+    }),
+    false,
+  )
+})
+
+test('shouldShowHoverTooltip accepts point at main pane top boundary', () => {
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: 120, y: 20 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 20,
+      mainPaneBottom: 280,
+    }),
+    true,
+  )
+})
+
+test('shouldShowHoverTooltip accepts point at main pane bottom minus one boundary', () => {
+  assert.equal(
+    shouldShowHoverTooltip({
+      point: { x: 120, y: 279 },
+      time: 1712219400,
+      paneIndex: 0,
+      hasBar: true,
+      containerWidth: 520,
+      containerHeight: 360,
+      mainPaneTop: 20,
+      mainPaneBottom: 280,
+    }),
+    true,
+  )
+})
+
+test('resolveMainPaneVerticalBounds returns content-area aligned bounds from pane height', () => {
+  assert.deepEqual(
+    resolveMainPaneVerticalBounds({
+      containerHeight: 360,
+      mainPaneHeight: 320,
+    }),
+    {
+      mainPaneTop: 0,
+      mainPaneBottom: 320,
+    },
   )
 })
 
