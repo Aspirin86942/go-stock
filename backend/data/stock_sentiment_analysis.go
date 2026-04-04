@@ -4,6 +4,7 @@ import (
 	"bufio"
 	_ "embed"
 	"fmt"
+	"go-stock/backend/apppath"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
@@ -146,9 +147,14 @@ func InitAnalyzeSentiment() {
 	}
 	logger.SugaredLogger.Info("加载tags词典成功")
 	seg.CalcToken()
+	paths, pathErr := apppath.Ensure()
+	if pathErr != nil {
+		logger.SugaredLogger.Errorf("初始化运行时路径失败:%v", pathErr)
+		return
+	}
 	//加载用户自定义词典 先判断用户词典是否存在
-	if fileutil.IsExist("data/dict/user.txt") {
-		lines, err := fileutil.ReadFileByLine("data/dict/user.txt")
+	if fileutil.IsExist(paths.UserDictPath) {
+		lines, err := fileutil.ReadFileByLine(paths.UserDictPath)
 		if err != nil {
 			logger.SugaredLogger.Error(err.Error())
 			return

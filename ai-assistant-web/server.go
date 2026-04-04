@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"go-stock/backend/apppath"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -52,8 +53,9 @@ const unlockedWebMessage = "当前版本已开放全部功能，无需赞助码�
 
 // Start 在当前进程内启动 ai-assistant-web 服务（阻塞，适合放在 goroutine 中）。
 func Start() error {
-	checkDir("data")
-	checkDir("logs")
+	if _, err := apppath.Ensure(); err != nil {
+		return err
+	}
 
 	// 当作为 go-stock 子组件启动时，db 可能已经初始化过。
 	if db.Dao == nil {
@@ -322,13 +324,6 @@ func getAddr() string {
 		addr = ":18888"
 	}
 	return addr
-}
-
-func checkDir(dir string) {
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		_ = os.Mkdir(dir, os.ModePerm)
-	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

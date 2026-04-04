@@ -1,6 +1,7 @@
 package db
 
 import (
+	"go-stock/backend/apppath"
 	"log"
 	"os"
 	"time"
@@ -11,6 +12,10 @@ import (
 )
 
 var Dao *gorm.DB
+
+func defaultSQLiteDSN(stockDBPath string) string {
+	return stockDBPath + "?_busy_timeout=10000&_journal_mode=WAL&_synchronous=NORMAL&_cache_size=-524288"
+}
 
 func Init(sqlitePath string) {
 	dbLogger := logger.New(
@@ -26,7 +31,11 @@ func Init(sqlitePath string) {
 	var openDb *gorm.DB
 	var err error
 	if sqlitePath == "" {
-		sqlitePath = "data/stock.db?_busy_timeout=10000&_journal_mode=WAL&_synchronous=NORMAL&_cache_size=-524288"
+		paths, pathErr := apppath.Ensure()
+		if pathErr != nil {
+			log.Fatalf("init app paths error: %s", pathErr.Error())
+		}
+		sqlitePath = defaultSQLiteDSN(paths.StockDBPath)
 	}
 	openDb, err = gorm.Open(sqlite.Open(sqlitePath), &gorm.Config{
 		Logger:                                   dbLogger,

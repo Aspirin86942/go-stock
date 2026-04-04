@@ -100,7 +100,8 @@ SectionEnd
 Section "uninstall"
     !insertmacro wails.setShellContext
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+    RMDir /r "$LOCALAPPDATA\go-stock\webview" # Remove the custom WebView2 DataPath
+    RMDir "$LOCALAPPDATA\go-stock" # Remove the runtime root if it is empty after uninstall
 
     RMDir /r $INSTDIR
 

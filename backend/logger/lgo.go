@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"go-stock/backend/apppath"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -14,6 +15,10 @@ var SugaredLogger *zap.SugaredLogger
 
 func init() {
 	InitLogger()
+}
+
+func buildLogPaths(paths apppath.Paths) (string, string) {
+	return paths.InfoLogPath, paths.ErrorLogPath
 }
 
 func InitLogger() {
@@ -110,10 +115,15 @@ func getEncoder() zapcore.Encoder {
 
 // core 三个参数之  日志输出路径
 func getInfoWriterSyncer() zapcore.WriteSyncer {
+	paths, err := apppath.Ensure()
+	if err != nil {
+		panic(fmt.Sprintf("init app paths for info logger: %v", err))
+	}
+	infoPath, _ := buildLogPaths(paths)
 
 	//引入第三方库 Lumberjack 加入日志切割功能
 	infoLumberIO := &lumberjack.Logger{
-		Filename:   "./logs/info.log",
+		Filename:   infoPath,
 		MaxSize:    10, // megabytes
 		MaxBackups: 100,
 		MaxAge:     28,    // days
@@ -123,9 +133,14 @@ func getInfoWriterSyncer() zapcore.WriteSyncer {
 }
 
 func getErrorWriterSyncer() zapcore.WriteSyncer {
+	paths, err := apppath.Ensure()
+	if err != nil {
+		panic(fmt.Sprintf("init app paths for error logger: %v", err))
+	}
+	_, errorPath := buildLogPaths(paths)
 	//引入第三方库 Lumberjack 加入日志切割功能
 	lumberWriteSyncer := &lumberjack.Logger{
-		Filename:   "./logs/error.log",
+		Filename:   errorPath,
 		MaxSize:    10, // megabytes
 		MaxBackups: 100,
 		MaxAge:     28,    // days

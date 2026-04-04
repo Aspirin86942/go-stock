@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	assistantweb "go-stock/ai-assistant-web"
+	"go-stock/backend/apppath"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	log "go-stock/backend/logger"
@@ -68,7 +69,14 @@ func main() {
 		}
 	}()
 
-	checkDir("data")
+	runtimePaths, err := apppath.Ensure()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "初始化运行时目录失败: %v\n", err)
+		os.Exit(1)
+	}
+	if BuildKey == "" {
+		BuildKey = "cc1e0d684e32f176c56ff1fcf384dcd9"
+	}
 	data.SponsorDecryptKeyHex = BuildKey
 	db.Init("")
 	if err := ensureBundledStockSearchData(); err != nil {
@@ -186,7 +194,7 @@ func main() {
 		BackgroundColour:         backgroundColour,
 		Assets:                   assets,
 		Menu:                     AppMenu,
-		Logger:                   logger.NewFileLogger("./logs/wails.log"),
+		Logger:                   logger.NewFileLogger(runtimePaths.WailsLogPath),
 		LogLevel:                 logger.DEBUG,
 		LogLevelProduction:       logger.INFO,
 		OnStartup:                app.startup,
@@ -207,7 +215,7 @@ func main() {
 			WindowIsTranslucent:  false,
 			DisableWindowIcon:    false,
 			// DisableFramelessWindowDecorations: false,
-			WebviewUserDataPath: "",
+			WebviewUserDataPath: runtimePaths.WebviewDir,
 		},
 		// Mac platform specific options
 		Mac: &mac.Options{
@@ -457,17 +465,6 @@ func initStockData(ctx context.Context) {
 	//		db.Dao.Create(stock)
 	//	}
 	//}
-}
-
-func checkDir(dir string) {
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		os.Mkdir(dir, os.ModePerm)
-		log.SugaredLogger.Info("create dir: " + dir)
-	}
-	if BuildKey == "" {
-		BuildKey = "cc1e0d684e32f176c56ff1fcf384dcd9"
-	}
 }
 
 // PanicHandler 捕获 panic 的包装函数
