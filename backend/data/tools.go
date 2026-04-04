@@ -153,6 +153,36 @@ func Tools(tools []Tool) []Tool {
 			},
 		},
 	})
+	tools = append(tools, Tool{
+		Type: "function",
+		Function: ToolFunction{
+			Name:        "GetStockChipDistribution",
+			Description: "计算股票筹码分布并输出摘要与明细。默认使用前复权(qfq)日K，默认样本天数 240，默认精度因子 accuracyFactor=150。支持一次查询多只，将并行请求后合并结果。",
+			Parameters: &FunctionParameters{
+				Type: "object",
+				Properties: map[string]any{
+					"stockCode": map[string]any{
+						"type":        "string",
+						"description": "股票代码。A股如 000001.SZ、600000.SH；港股如 00700.HK。多只时可用英文逗号分隔。",
+					},
+					"stockCodes": toolSchemaStockCodes,
+					"days": map[string]any{
+						"type":        "integer",
+						"description": "样本日K天数，默认 240。",
+					},
+					"adjustFlag": map[string]any{
+						"type":        "string",
+						"description": "复权类型，仅支持空值、qfq、hfq；默认 qfq。",
+					},
+					"accuracyFactor": map[string]any{
+						"type":        "integer",
+						"description": "价格分桶精度因子，必须为正整数，默认 150。",
+					},
+				},
+				Required: []string{},
+			},
+		},
+	})
 
 	tools = append(tools, Tool{
 		Type: "function",

@@ -1339,6 +1339,51 @@ func GetAllDataTools() []tool.BaseTool {
 	))
 
 	tools = append(tools, NewDataToolWrapper(
+		"GetStockChipDistribution",
+		"获取股票筹码分布（获利比例、平均成本、成本区间与集中度）。基于东方财富日 K 线与换手率在本地计算，支持一次查询多只股票。",
+		map[string]*schema.ParameterInfo{
+			"stockCode": {
+				Type:     "string",
+				Desc:     "股票代码。A股如 000001.SZ、600000.SH；港股如 00700.HK。多只时可用英文逗号分隔。",
+				Required: false,
+			},
+			"stockCodes": {
+				Type:     "array",
+				Desc:     "可选，多只股票代码列表",
+				Required: false,
+			},
+			"days": {
+				Type:     "integer",
+				Desc:     "取最近 N 个交易日数据，默认 240",
+				Required: false,
+			},
+			"adjustFlag": {
+				Type:     "string",
+				Desc:     "复权类型：空值或 qfq=前复权，hfq=后复权；默认 qfq",
+				Required: false,
+			},
+			"accuracyFactor": {
+				Type:     "integer",
+				Desc:     "筹码分布价格桶精度因子，必须为正整数；默认 150",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			req, err := data.ParseChipDistributionToolArgs(args)
+			if err != nil {
+				return err.Error(), nil
+			}
+
+			api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
+			results := make([]string, 0, len(req.StockCodes))
+			for _, code := range req.StockCodes {
+				results = append(results, data.ChipDistributionSection(api, code, req.AdjustFlag, req.Days, req.AccuracyFactor))
+			}
+			return strings.Join(results, "\n"), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
 		"CreateAiRecommendStocks",
 		"创建/保存AI推荐股票记录",
 		map[string]*schema.ParameterInfo{
