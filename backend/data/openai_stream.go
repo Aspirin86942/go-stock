@@ -458,15 +458,7 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 				}
 				Kmap := &[]map[string]any{}
 				for _, kline := range *K {
-					mapk := make(map[string]any, 6)
-					mapk["日期"] = kline.Day
-					mapk["开盘价"] = kline.Open
-					mapk["最高价"] = kline.High
-					mapk["最低价"] = kline.Low
-					mapk["收盘价"] = kline.Close
-					Volume, _ := convertor.ToFloat(kline.Volume)
-					mapk["成交量(万手)"] = Volume / 10000.00 / 100.00
-					*Kmap = append(*Kmap, mapk)
+					*Kmap = append(*Kmap, buildBaseKLineRow(kline))
 				}
 				jsonData, _ := json.Marshal(Kmap)
 				markdownTable, _ := JSONToMarkdownTable(jsonData)

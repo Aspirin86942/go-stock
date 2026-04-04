@@ -48,6 +48,21 @@ func normalizeKLineType(s string) string {
 	}
 }
 
+// buildBaseKLineRow 统一 K 线基础字段，避免工具输出和 AI 上下文预灌入字段不一致。
+func buildBaseKLineRow(k KLineData) map[string]any {
+	vol, _ := convertor.ToFloat(k.Volume)
+	return map[string]any{
+		"日期":      k.Day,
+		"开盘价":     k.Open,
+		"收盘价":     k.Close,
+		"最高价":     k.High,
+		"最低价":     k.Low,
+		"成交量(万手)": vol / 10000 / 100,
+		"成交额(元)":  k.Amount,
+		"换手率(%)":  k.TurnoverRate,
+	}
+}
+
 func EastMoneyKLineSection(api *EastMoneyKLineApi, stockCode, kLineType, adjustFlag string, limit int) string {
 	if !api.ValidateStockCode(stockCode) {
 		return stockCode + "：股票代码无效，请使用正确格式（如 000001.SZ、600000.SH、00700.HK）。"
@@ -68,19 +83,11 @@ func EastMoneyKLineSection(api *EastMoneyKLineApi, stockCode, kLineType, adjustF
 	}
 	rows := make([]map[string]any, 0, len(*list))
 	for _, k := range *list {
-		vol, _ := convertor.ToFloat(k.Volume)
-		rows = append(rows, map[string]any{
-			"日期":      k.Day,
-			"开盘价":     k.Open,
-			"收盘价":     k.Close,
-			"最高价":     k.High,
-			"最低价":     k.Low,
-			"成交量(万手)": vol / 10000 / 100,
-			"涨跌幅(%)":  k.ChangePercent,
-			"涨跌额":     k.ChangeValue,
-			"振幅(%)":   k.Amplitude,
-			"换手率(%)":  k.TurnoverRate,
-		})
+		row := buildBaseKLineRow(k)
+		row["涨跌幅(%)"] = k.ChangePercent
+		row["涨跌额"] = k.ChangeValue
+		row["振幅(%)"] = k.Amplitude
+		rows = append(rows, row)
 	}
 	jsonData, _ := json.Marshal(rows)
 	markdownTable, err := JSONToMarkdownTable(jsonData)
@@ -192,19 +199,10 @@ func EastMoneyKLineWithMASection(api *EastMoneyKLineApi, stockCode, kLineType st
 	}
 	rows := make([]map[string]any, 0, len(*list))
 	for _, k := range *list {
-		vol, _ := convertor.ToFloat(k.Volume)
-		row := map[string]any{
-			"日期":      k.Day,
-			"开盘价":     k.Open,
-			"收盘价":     k.Close,
-			"最高价":     k.High,
-			"最低价":     k.Low,
-			"成交量(万手)": vol / 10000 / 100,
-			"涨跌幅(%)":  k.ChangePercent,
-			"涨跌额":     k.ChangeValue,
-			"振幅(%)":   k.Amplitude,
-			"换手率(%)":  k.TurnoverRate,
-		}
+		row := buildBaseKLineRow(k)
+		row["涨跌幅(%)"] = k.ChangePercent
+		row["涨跌额"] = k.ChangeValue
+		row["振幅(%)"] = k.Amplitude
 		for _, label := range maLabels {
 			p := strings.TrimPrefix(label, "MA")
 			if v, ok := k.MA[p]; ok && v != "" {

@@ -1,0 +1,3 @@
+publish_process
+$env:PATH = (Join-Path $env:LOCALAPPDATA 'NSIS3\Bin') + ';' + $env:PATH
+& 'C:\Users\Aspir\go\bin\wails.exe' build --clean --platform windows/amd64 --nsis

@@ -3,7 +3,9 @@ package data
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"go-stock/backend/db"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,6 +80,13 @@ type ToolFunction struct {
 	Parameters  *FunctionParameters `json:"parameters"`
 }
 
+type streamedToolCall struct {
+	ID        string
+	Type      string
+	Name      string
+	Arguments strings.Builder
+}
+
 // appendToolMessages 统一向 messages 追加一次工具调用的 assistant/tool 两条消息
 func appendToolMessages(
 	messages *[]map[string]any,
@@ -105,6 +114,43 @@ func appendToolMessages(
 		"content":      toolContent,
 		"tool_call_id": callID,
 	})
+}
+
+func hasToolResultMessage(messages []map[string]interface{}) bool {
+	for _, message := range messages {
+		role, _ := message["role"].(string)
+		if role == "tool" {
+			return true
+		}
+	}
+	return false
+}
+
+func isFunctionCallingUnsupported(msg string) bool {
+	msg = strings.TrimSpace(msg)
+	return strings.Contains(msg, "Function call is not supported") ||
+		strings.Contains(msg, "does not support function calling")
+}
+
+func unsupportedFunctionCallingMessage(model string) string {
+	if strings.TrimSpace(model) == "" {
+		model = "当前模型"
+	}
+	return fmt.Sprintf("当前模型不支持工具调用（%s），已停止本次工具模式分析。请关闭“工具调用”，或切换到支持 function calling 的模型后重试。", model)
+}
+
+func orderedStreamedToolCalls(calls map[int]*streamedToolCall) []*streamedToolCall {
+	indexes := make([]int, 0, len(calls))
+	for index := range calls {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+
+	result := make([]*streamedToolCall, 0, len(indexes))
+	for _, index := range indexes {
+		result = append(result, calls[index])
+	}
+	return result
 }
 
 // thsResultToMarkdown 将通联/同花顺搜索结果统一转换为 markdown 表格
@@ -337,6 +383,9 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 		"messages":    messages,
 		"tools":       tools,
 	}
+	if len(tools) > 0 && !hasToolResultMessage(messages) {
+		bodyMap["tool_choice"] = "required"
+	}
 	if thinkingMode {
 		bodyMap["thinking"] = map[string]any{
 			"type": thinking,
@@ -364,12 +413,9 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 	}
 
 	scanner := bufio.NewScanner(body)
-	functions := map[string]string{}
-	currentFuncName := ""
-	currentCallId := ""
+	pendingToolCalls := map[int]*streamedToolCall{}
 	var currentAIContent strings.Builder
 	var reasoningContentText strings.Builder
-	var contentText strings.Builder
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -405,8 +451,6 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 			if err := json.Unmarshal([]byte(data), &streamResponse); err == nil {
 				for _, choice := range streamResponse.Choices {
 					if content := choice.Delta.Content; content != "" {
-						contentText.WriteString(content)
-
 						if content == "###" || content == "##" || content == "#" {
 							currentAIContent.WriteString("\r\n" + content)
 							ch <- map[string]any{
@@ -442,23 +486,35 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 					}
 					if choice.Delta.ToolCalls != nil && len(choice.Delta.ToolCalls) > 0 {
 						for _, call := range choice.Delta.ToolCalls {
-							if call.Type == "function" {
-								functions[call.Function.Name] = ""
-								currentFuncName = call.Function.Name
-								currentCallId = call.Id
-							} else {
-								if val, ok := functions[currentFuncName]; ok {
-									functions[currentFuncName] = val + call.Function.Arguments
-								} else {
-									functions[currentFuncName] = call.Function.Arguments
-								}
+							pending, ok := pendingToolCalls[call.Index]
+							if !ok {
+								pending = &streamedToolCall{}
+								pendingToolCalls[call.Index] = pending
+							}
+							if call.Id != "" {
+								pending.ID = call.Id
+							}
+							if call.Type != "" {
+								pending.Type = call.Type
+							}
+							if call.Function.Name != "" {
+								pending.Name = call.Function.Name
+							}
+							if call.Function.Arguments != "" {
+								pending.Arguments.WriteString(call.Function.Arguments)
 							}
 						}
 					}
 
 					if choice.FinishReason == "tool_calls" {
-						//logger.SugaredLogger.Infof("functions: %+v", functions)
-						for funcName, funcArguments := range functions {
+						for _, pending := range orderedStreamedToolCalls(pendingToolCalls) {
+							funcName := pending.Name
+							funcArguments := pending.Arguments.String()
+							callID := pending.ID
+							if funcName == "" {
+								logger.SugaredLogger.Warn("skip tool call with empty function name")
+								continue
+							}
 							// 优先使用注册的 ToolHandler 处理
 							if handler, ok := toolHandlers[funcName]; ok {
 								if hErr := handler(o, funcArguments, &ToolContext{
@@ -466,7 +522,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 									Messages:             &messages,
 									CurrentAIContent:     &currentAIContent,
 									ReasoningContentText: &reasoningContentText,
-									CurrentCallID:        currentCallId,
+									CurrentCallID:        callID,
 									FuncName:             funcName,
 									Ch:                   ch,
 									StreamResponseID:     streamResponse.Id,
@@ -486,6 +542,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 							// 其余未拆分到独立 handler 的工具，走下面的分支逻辑
 
 						}
+						pendingToolCalls = map[int]*streamedToolCall{}
 						AskAiWithTools(o, err, messages, ch, question, tools, thinkingMode)
 					}
 
@@ -520,18 +577,14 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 						msg = res.Error.Message
 					}
 
-					if msg == "Function call is not supported for this model." {
-						var newMessages []map[string]any
-						for _, message := range messages {
-							if message["role"] == "tool" {
-								continue
-							}
-							if _, ok := message["tool_calls"]; ok {
-								continue
-							}
-							newMessages = append(newMessages, message)
+					if isFunctionCallingUnsupported(msg) {
+						logger.SugaredLogger.Warnf("model %s does not support tool calling", o.Model)
+						ch <- map[string]any{
+							"code":     0,
+							"question": question,
+							"content":  unsupportedFunctionCallingMessage(o.Model),
 						}
-						AskAi(o, err, newMessages, ch, question, thinkingMode)
+						return
 					} else {
 						ch <- map[string]any{
 							"code":     0,
