@@ -2,9 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -80,25 +80,41 @@ func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
 		t.Fatalf("read db log: %v", err)
 	}
 
-	traceID := extractTraceID(string(taskLog), "task.execute_started")
-	if traceID == "" {
-		t.Fatalf("expected task trace id, got %s", string(taskLog))
+	taskEvent := findLogEventByName(t, string(taskLog), "task.execute_started")
+	aiEvent := findLogEventByName(t, string(aiLog), "ai.trace_probe")
+	dbEvent := findLogEventByName(t, string(dbLog), "db.trace_probe")
+	traceID := requireStringField(t, taskEvent, "trace_id")
+	if requireStringField(t, aiEvent, "trace_id") != traceID {
+		t.Fatalf("expected ai.trace_probe to reuse %s, got %#v", traceID, aiEvent)
 	}
-	if !strings.Contains(string(aiLog), traceID) || !strings.Contains(string(dbLog), traceID) {
-		t.Fatalf("expected ai/db logs to reuse %s, got ai=%s db=%s", traceID, string(aiLog), string(dbLog))
+	if requireStringField(t, dbEvent, "trace_id") != traceID {
+		t.Fatalf("expected db.trace_probe to reuse %s, got %#v", traceID, dbEvent)
 	}
 }
 
-func extractTraceID(content string, event string) string {
-	re := regexp.MustCompile(`"trace_id":"([^"]+)"`)
+func findLogEventByName(t *testing.T, content string, event string) map[string]any {
+	t.Helper()
 	for _, line := range strings.Split(strings.TrimSpace(content), "\n") {
-		if !strings.Contains(line, `"`+"event"+`":"`+event+`"`) {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		matches := re.FindStringSubmatch(line)
-		if len(matches) == 2 {
-			return matches[1]
+		entry := map[string]any{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("parse log line for %s: %v\nline=%s", event, err, line)
+		}
+		if entry["event"] == event {
+			return entry
 		}
 	}
-	return ""
+	t.Fatalf("expected event %s in log: %s", event, content)
+	return nil
+}
+
+func requireStringField(t *testing.T, entry map[string]any, key string) string {
+	t.Helper()
+	value, ok := entry[key].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		t.Fatalf("expected string field %s in %#v", key, entry)
+	}
+	return value
 }
