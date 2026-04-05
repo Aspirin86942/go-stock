@@ -140,6 +140,36 @@ func TestResponseRecorder_SpillsStreamedPayloadWithoutKeepingWholeBuffer(t *test
 	}
 }
 
+func TestHTTPMiddleware_StreamedPayloadHonorsMaxTotal(t *testing.T) {
+	buf := &bytes.Buffer{}
+	runtime := newRuntimeForTest(buf)
+	runtime.AttachPayloadStore(NewPayloadStore(t.TempDir(), 16, 32))
+
+	handler := runtime.HTTPMiddleware("ai-assistant-web", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatalf("expected middleware to preserve flusher")
+		}
+
+		_, _ = w.Write([]byte(strings.Repeat("a", 8)))
+		flusher.Flush()
+		_, _ = w.Write([]byte(strings.Repeat("b", 40)))
+		flusher.Flush()
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/chat/summary-stream", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	line := buf.String()
+	if !strings.Contains(line, "response_payload_error") || !strings.Contains(line, "maxTotal") {
+		t.Fatalf("expected maxTotal overflow to be logged, got %s", line)
+	}
+	if strings.Contains(line, "response_payload_file") {
+		t.Fatalf("expected overflowed streamed payload not to expose spill file, got %s", line)
+	}
+}
+
 type basicResponseWriter struct {
 	header http.Header
 	status int

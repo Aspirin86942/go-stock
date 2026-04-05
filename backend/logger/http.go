@@ -29,14 +29,15 @@ type flushableResponseRecorder struct {
 }
 
 type responseCapture struct {
-	store   *PayloadStore
-	kind    string
-	inline  bytes.Buffer
-	hasher  hash.Hash
-	size    int
-	file    *os.File
-	path    string
-	spilled bool
+	store     *PayloadStore
+	kind      string
+	inline    bytes.Buffer
+	hasher    hash.Hash
+	size      int
+	file      *os.File
+	path      string
+	spilled   bool
+	spillSize int64
 }
 
 func newResponseRecorder(base http.ResponseWriter, store *PayloadStore, kind string) *responseRecorder {
@@ -130,20 +131,15 @@ func (c *responseCapture) Write(body []byte) error {
 		return nil
 	}
 
-	if _, err := c.hasher.Write(body); err != nil {
-		return fmt.Errorf("hash response payload: %w", err)
-	}
-
-	nextSize := c.size + len(body)
-	if !c.spilled && nextSize > c.inlineLimit() {
+	if !c.spilled && c.size+len(body) > c.inlineLimit() {
 		if err := c.startSpill(); err != nil {
 			return err
 		}
 	}
 
 	if c.spilled {
-		if _, err := c.file.Write(body); err != nil {
-			return fmt.Errorf("append spilled payload: %w", err)
+		if err := c.appendSpill(body); err != nil {
+			return err
 		}
 	} else {
 		if _, err := c.inline.Write(body); err != nil {
@@ -151,7 +147,10 @@ func (c *responseCapture) Write(body []byte) error {
 		}
 	}
 
-	c.size = nextSize
+	if _, err := c.hasher.Write(body); err != nil {
+		return fmt.Errorf("hash response payload: %w", err)
+	}
+	c.size += len(body)
 	return nil
 }
 
@@ -203,13 +202,39 @@ func (c *responseCapture) startSpill() error {
 		return nil
 	}
 
+	if c.store != nil {
+		c.store.mu.Lock()
+		defer c.store.mu.Unlock()
+	}
+	return c.startSpillLocked()
+}
+
+func (c *responseCapture) startSpillLocked() error {
+	if c.spilled {
+		return nil
+	}
+
+	if err := c.ensureCapacityLocked(int64(c.inline.Len())); err != nil {
+		return err
+	}
+
 	file, path, err := c.createSpillFile()
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(c.inline.Bytes()); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("spill inline payload to %s: %w", path, err)
+	if c.inline.Len() > 0 {
+		written, err := file.Write(c.inline.Bytes())
+		if err != nil {
+			_ = file.Close()
+			_ = os.Remove(path)
+			return fmt.Errorf("spill inline payload to %s: %w", path, err)
+		}
+		if written != c.inline.Len() {
+			_ = file.Close()
+			_ = os.Remove(path)
+			return fmt.Errorf("spill inline payload to %s: short write %d/%d", path, written, c.inline.Len())
+		}
+		c.spillSize = int64(written)
 	}
 
 	c.inline.Reset()
@@ -217,6 +242,83 @@ func (c *responseCapture) startSpill() error {
 	c.path = path
 	c.spilled = true
 	return nil
+}
+
+func (c *responseCapture) appendSpill(body []byte) error {
+	if c.store != nil {
+		c.store.mu.Lock()
+		defer c.store.mu.Unlock()
+	}
+	return c.appendSpillLocked(body)
+}
+
+func (c *responseCapture) appendSpillLocked(body []byte) error {
+	if err := c.ensureCapacityLocked(int64(len(body))); err != nil {
+		c.abortSpill()
+		return err
+	}
+
+	written, err := c.file.Write(body)
+	if err != nil {
+		c.abortSpill()
+		return fmt.Errorf("append spilled payload: %w", err)
+	}
+	if written != len(body) {
+		c.abortSpill()
+		return fmt.Errorf("append spilled payload: short write %d/%d", written, len(body))
+	}
+
+	c.spillSize += int64(written)
+	return nil
+}
+
+func (c *responseCapture) ensureCapacityLocked(extra int64) error {
+	if c.store == nil || c.store.maxTotal <= 0 || extra <= 0 {
+		return nil
+	}
+
+	used, err := c.store.currentPayloadUsage()
+	if err != nil {
+		return err
+	}
+	currentFileUsage := c.currentFileUsage()
+	baseUsage := used - currentFileUsage
+	if baseUsage < 0 {
+		baseUsage = 0
+	}
+	next := baseUsage + c.spillSize + extra
+	if next > c.store.maxTotal {
+		return fmt.Errorf("payload exceeds maxTotal limit: used=%d payload=%d limit=%d", baseUsage+c.spillSize, extra, c.store.maxTotal)
+	}
+	return nil
+}
+
+func (c *responseCapture) currentFileUsage() int64 {
+	if c.path == "" {
+		return 0
+	}
+	info, err := os.Stat(c.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0
+		}
+		return c.spillSize
+	}
+	return info.Size()
+}
+
+func (c *responseCapture) abortSpill() {
+	if c.file != nil {
+		_ = c.file.Close()
+		c.file = nil
+	}
+	if c.path != "" {
+		_ = os.Remove(c.path)
+	}
+	c.path = ""
+	c.spilled = false
+	c.spillSize = 0
+	c.inline.Reset()
 }
 
 func (c *responseCapture) createSpillFile() (*os.File, string, error) {
