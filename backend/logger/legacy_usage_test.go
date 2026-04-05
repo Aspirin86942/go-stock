@@ -40,21 +40,46 @@ func TestNoLegacyLoggerUsageInNonTestGoFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %s: %v", relativePath, err)
 		}
-		loggerAliases := findImportAliases(fileNode, "go-stock/backend/logger")
+		violations = append(violations, collectLegacyUsageViolations(fset, fileNode, relativePath)...)
+	}
 
-		ast.Inspect(fileNode, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
+	if len(violations) > 0 {
+		t.Fatalf("legacy logger usage is forbidden in Task 6 scope:\n%s", strings.Join(violations, "\n"))
+	}
+}
 
-			if isSugaredLoggerSelector(call.Fun, loggerAliases) {
-				position := fset.Position(call.Pos())
+func TestCollectLegacyUsageViolations_FlagsSugaredLoggerValueUsage(t *testing.T) {
+	fset := token.NewFileSet()
+	fileNode, err := parser.ParseFile(fset, "sample.go", `package sample
+import logger "go-stock/backend/logger"
+func demo() any {
+	_ = logger.SugaredLogger
+	return logger.SugaredLogger
+}
+`, 0)
+	if err != nil {
+		t.Fatalf("parse sample file: %v", err)
+	}
+
+	violations := collectLegacyUsageViolations(fset, fileNode, "sample.go")
+	if len(violations) != 2 {
+		t.Fatalf("expected 2 violations for SugaredLogger value usage, got %d: %#v", len(violations), violations)
+	}
+}
+
+func collectLegacyUsageViolations(fset *token.FileSet, fileNode *ast.File, relativePath string) []string {
+	loggerAliases := findImportAliases(fileNode, "go-stock/backend/logger")
+
+	var violations []string
+	ast.Inspect(fileNode, func(node ast.Node) bool {
+		switch current := node.(type) {
+		case *ast.SelectorExpr:
+			if isSugaredLoggerSelector(current, loggerAliases) {
+				position := fset.Position(current.Pos())
 				violations = append(violations, relativePath+":"+itoa(position.Line)+":"+itoa(position.Column)+": SugaredLogger")
-				return true
 			}
-
-			selector, ok := call.Fun.(*ast.SelectorExpr)
+		case *ast.CallExpr:
+			selector, ok := current.Fun.(*ast.SelectorExpr)
 			if !ok {
 				return true
 			}
@@ -67,16 +92,14 @@ func TestNoLegacyLoggerUsageInNonTestGoFiles(t *testing.T) {
 			target := ident.Name + "." + selector.Sel.Name
 			switch target {
 			case "fmt.Printf", "log.Fatalf", "log.Printf", "log.Println", "log.Print":
-				position := fset.Position(call.Pos())
+				position := fset.Position(current.Pos())
 				violations = append(violations, relativePath+":"+itoa(position.Line)+":"+itoa(position.Column)+": "+target)
 			}
-			return true
-		})
-	}
+		}
+		return true
+	})
 
-	if len(violations) > 0 {
-		t.Fatalf("legacy logger usage is forbidden in Task 6 scope:\n%s", strings.Join(violations, "\n"))
-	}
+	return violations
 }
 
 func isSugaredLoggerSelector(expr ast.Expr, loggerAliases map[string]struct{}) bool {
@@ -85,12 +108,18 @@ func isSugaredLoggerSelector(expr ast.Expr, loggerAliases map[string]struct{}) b
 		return false
 	}
 
+	pkgIdent, ok := selector.X.(*ast.Ident)
+	if ok {
+		_, matched := loggerAliases[pkgIdent.Name]
+		return matched && selector.Sel.Name == "SugaredLogger"
+	}
+
 	rootSelector, ok := selector.X.(*ast.SelectorExpr)
 	if !ok {
 		return false
 	}
 
-	pkgIdent, ok := rootSelector.X.(*ast.Ident)
+	pkgIdent, ok = rootSelector.X.(*ast.Ident)
 	if !ok {
 		return false
 	}
