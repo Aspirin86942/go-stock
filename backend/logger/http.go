@@ -357,6 +357,7 @@ func (rt *Runtime) HTTPMiddleware(module string, next http.Handler) http.Handler
 			rt.ForSink(SinkHTTP, module).WithTrace(trace).Warn(
 				"http.request.body.read_failed",
 				"failed to read http request body",
+				String("error_class", "http_error"),
 				String("method", req.Method),
 				String("path", req.URL.Path),
 				String("error_message", readErr.Error()),

@@ -195,11 +195,13 @@ func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
 
 	entries := parseJSONLogEntries(t, buf.String())
 	traceByEvent := map[string]string{}
+	errorClassByEvent := map[string]string{}
 	for _, entry := range entries {
 		event, _ := entry["event"].(string)
 		traceID, _ := entry["trace_id"].(string)
 		if event == "http.request.body.read_failed" || event == "http.request.handler_trace" || event == "http.request.completed" {
 			traceByEvent[event] = traceID
+			errorClassByEvent[event], _ = entry["error_class"].(string)
 		}
 	}
 
@@ -214,6 +216,9 @@ func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
 	}
 	if traceByEvent["http.request.handler_trace"] != traceByEvent["http.request.completed"] {
 		t.Fatalf("expected handler context trace to match completed trace, got %#v", traceByEvent)
+	}
+	if errorClassByEvent["http.request.body.read_failed"] != "http_error" {
+		t.Fatalf("expected read_failed to include error_class=http_error, got %#v", errorClassByEvent["http.request.body.read_failed"])
 	}
 }
 
