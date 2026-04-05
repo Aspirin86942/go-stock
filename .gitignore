@@ -118,3 +118,4 @@ frontend/package.json.md5
 !frontend/dist/
 frontend/dist/*
 !frontend/dist/placeholder.txt
+artifacts/testlogs/
