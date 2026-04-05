@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"go-stock/backend/apppath"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
@@ -64,6 +65,17 @@ func Start() error {
 	autoMigrate()
 	data.InitAnalyzeSentiment()
 
+	handler, err := newHandler(logger.Default())
+	if err != nil {
+		return err
+	}
+
+	addr := getAddr()
+	logger.SugaredLogger.Infof("ai-assistant-web started at: %s", addr)
+	return http.ListenAndServe(addr, handler)
+}
+
+func newHandler(runtimeLogger *logger.Runtime) (http.Handler, error) {
 	a := &app{}
 	mux := http.NewServeMux()
 
@@ -77,14 +89,18 @@ func Start() error {
 
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
-		logger.SugaredLogger.Fatalf("load static files failed: %v", err)
+		return nil, fmt.Errorf("load static files: %w", err)
 	}
 	staticServer := http.FileServer(http.FS(subFS))
 	mux.Handle("/", staticServer)
 
-	addr := getAddr()
-	logger.SugaredLogger.Infof("ai-assistant-web started at: %s", addr)
-	return http.ListenAndServe(addr, withCORS(mux))
+	if runtimeLogger == nil {
+		runtimeLogger = logger.Default()
+	}
+	if runtimeLogger == nil {
+		return withCORS(mux), nil
+	}
+	return runtimeLogger.HTTPMiddleware("ai-assistant-web", withCORS(mux)), nil
 }
 
 func (a *app) health(w http.ResponseWriter, _ *http.Request) {

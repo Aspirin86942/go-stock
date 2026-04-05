@@ -2,13 +2,12 @@ package db
 
 import (
 	"go-stock/backend/apppath"
+	runtimelogger "go-stock/backend/logger"
 	"log"
-	"os"
 	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 var Dao *gorm.DB
@@ -18,16 +17,6 @@ func defaultSQLiteDSN(stockDBPath string) string {
 }
 
 func Init(sqlitePath string) {
-	dbLogger := logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags),
-		logger.Config{
-			SlowThreshold:             time.Second * 3,
-			Colorful:                  false,
-			IgnoreRecordNotFoundError: true,
-			ParameterizedQueries:      false,
-			LogLevel:                  logger.Silent,
-		},
-	)
 	var openDb *gorm.DB
 	var err error
 	if sqlitePath == "" {
@@ -37,12 +26,7 @@ func Init(sqlitePath string) {
 		}
 		sqlitePath = defaultSQLiteDSN(paths.StockDBPath)
 	}
-	openDb, err = gorm.Open(sqlite.Open(sqlitePath), &gorm.Config{
-		Logger:                                   dbLogger,
-		DisableForeignKeyConstraintWhenMigrating: true,
-		SkipDefaultTransaction:                   true,
-		PrepareStmt:                              true,
-	})
+	openDb, err = gorm.Open(sqlite.Open(sqlitePath), newGormConfig(runtimelogger.Default()))
 
 	if err != nil {
 		log.Fatalf("db connection error is %s", err.Error())
@@ -63,4 +47,13 @@ func Init(sqlitePath string) {
 	dbCon.SetConnMaxLifetime(time.Hour)
 	Dao = openDb
 	AutoMigrate()
+}
+
+func newGormConfig(runtime *runtimelogger.Runtime) *gorm.Config {
+	return &gorm.Config{
+		Logger:                                   runtimelogger.NewGormLogger(runtime, 3*time.Second),
+		DisableForeignKeyConstraintWhenMigrating: true,
+		SkipDefaultTransaction:                   true,
+		PrepareStmt:                              true,
+	}
 }
