@@ -1,0 +1,30 @@
+name: Test External
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  test-external:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Run external tests
+        shell: pwsh
+        run: ./scripts/testing/external.ps1
+      - name: Upload external test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-external-logs
+          path: artifacts/testlogs
+          if-no-files-found: ignore

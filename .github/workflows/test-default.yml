@@ -1,0 +1,33 @@
+name: Test Default
+
+on:
+  pull_request:
+  push:
+    tags-ignore:
+      - '*-release'
+      - '*-dev'
+      - '*-pre'
+
+jobs:
+  test-default:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Run default tests
+        shell: pwsh
+        run: ./scripts/testing/default.ps1
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-default-logs
+          path: artifacts/testlogs
+          if-no-files-found: ignore

@@ -1,0 +1,28 @@
+name: Release Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Run release smoke checks
+        shell: pwsh
+        run: ./scripts/testing/release-smoke.ps1
+      - name: Upload release smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-logs
+          path: artifacts/testlogs
+          if-no-files-found: ignore
