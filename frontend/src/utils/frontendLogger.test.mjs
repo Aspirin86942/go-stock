@@ -43,6 +43,17 @@ test('buildFrontendErrorPayload auto fills route from window location', () => {
   }
 })
 
+test('buildFrontendErrorPayload keeps traceId when provided', () => {
+  const payload = buildFrontendErrorPayload({
+    page: 'orders.vue',
+    route: '/orders',
+    message: 'failed',
+    traceId: 'trace-123',
+  })
+
+  assert.equal(payload.traceId, 'trace-123')
+})
+
 test('installFrontendErrorHandlers is idempotent and registers listeners once', () => {
   __resetFrontendErrorHandlersForTest()
   const previousWindow = globalThis.window
@@ -64,6 +75,47 @@ test('installFrontendErrorHandlers is idempotent and registers listeners once', 
     assert.equal((listeners.get('error') || []).length, 1)
     assert.equal((listeners.get('unhandledrejection') || []).length, 1)
   } finally {
+    globalThis.window = previousWindow
+    __resetFrontendErrorHandlersForTest()
+  }
+})
+
+test('console.error proxy keeps original output and emits once for the same error', () => {
+  __resetFrontendErrorHandlersForTest()
+  const previousWindow = globalThis.window
+  const previousConsoleError = console.error
+  const listeners = new Map()
+  const emitted = []
+  const consoleLogs = []
+
+  globalThis.window = {
+    location: { hash: '#/stock', pathname: '/stock' },
+    runtime: {
+      EventsEmit: (...args) => {
+        emitted.push(args)
+      },
+    },
+    addEventListener: (name, handler) => {
+      listeners.set(name, handler)
+    },
+  }
+  console.error = (...args) => {
+    consoleLogs.push(args)
+  }
+
+  try {
+    installFrontendErrorHandlers('main.js')
+    const repeatedError = new Error('same-console-error')
+
+    console.error(repeatedError)
+    console.error(repeatedError)
+
+    assert.equal(consoleLogs.length, 2)
+    assert.equal(emitted.length, 1)
+    assert.equal(emitted[0][0], 'frontendError')
+    assert.equal(emitted[0][1].message, 'same-console-error')
+  } finally {
+    console.error = previousConsoleError
     globalThis.window = previousWindow
     __resetFrontendErrorHandlersForTest()
   }
