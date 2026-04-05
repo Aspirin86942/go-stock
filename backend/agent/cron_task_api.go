@@ -18,6 +18,8 @@ import (
 
 type CronTaskApi struct{}
 
+var taskExecutorOverrides = map[string]func(context.Context, *models.CronTask) error{}
+
 func NewCronTaskApi() *CronTaskApi {
 	return &CronTaskApi{}
 }
@@ -238,6 +240,10 @@ func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) er
 }
 
 func (a *CronTaskApi) executeTaskByType(ctx context.Context, task *models.CronTask) error {
+	if override, ok := taskExecutorOverrides[task.TaskType]; ok {
+		return override(ctx, task)
+	}
+
 	switch task.TaskType {
 	case "stock_analysis":
 		return a.executeStockAnalysis(ctx, task)
