@@ -9,7 +9,6 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
-	"log"
 	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
@@ -70,9 +69,16 @@ func (a *App) startup(ctx context.Context) {
 	// 创建 macOS 托盘
 	go func() {
 		// 使用 Beeep 库替代 Windows 的托盘库
+		trace := appLifecycleTrace("darwin-startup-notify")
 		err := beeep.Notify("go-stock", "应用程序已启动", "")
 		if err != nil {
-			log.Fatalf("系统通知失败: %v", err)
+			if log := appLifecycleLogger("app.darwin"); log != nil {
+				log.WithTrace(trace).Error(
+					"lifecycle.startup.notify_failed",
+					"startup notification failed",
+					logger.Err(err),
+				)
+			}
 		}
 	}()
 	go setUpScreen(a)
@@ -104,7 +110,13 @@ func setUpScreen(a *App) {
 func OnSecondInstanceLaunch(secondInstanceData options.SecondInstanceData) {
 	err := beeep.Notify("go-stock", "程序已经在运行了", "")
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		if log := appLifecycleLogger("app.darwin"); log != nil {
+			log.WithTrace(appLifecycleTrace("second-instance")).Error(
+				"lifecycle.second_instance_notify_failed",
+				"notify second instance launch failed",
+				logger.Err(err),
+			)
+		}
 	}
 	time.Sleep(time.Second * 3)
 }
@@ -117,11 +129,24 @@ func MonitorStockPrices(a *App) {
 
 	// 如果所有市场都不在交易时间，则提前返回
 	if !isAStockOpen && !isHKStockOpen && !isUSStockOpen {
-		logger.SugaredLogger.Debugf("当前所有市场均未开市，跳过价格监控")
+		if log := appLifecycleLogger("app.darwin"); log != nil {
+			log.WithTrace(appLifecycleTrace("monitor-stock-prices")).Info(
+				"stock.monitor.skipped",
+				"skip stock price monitor because all markets are closed",
+			)
+		}
 		return
 	}
 
-	logger.SugaredLogger.Debugf("市场状态 - A股: %v, 港股: %v, 美股: %v", isAStockOpen, isHKStockOpen, isUSStockOpen)
+	if log := appLifecycleLogger("app.darwin"); log != nil {
+		log.WithTrace(appLifecycleTrace("monitor-stock-prices")).Info(
+			"stock.monitor.market_state",
+			"evaluated market state before monitoring",
+			logger.Any("a_stock_open", isAStockOpen),
+			logger.Any("hk_stock_open", isHKStockOpen),
+			logger.Any("us_stock_open", isUSStockOpen),
+		)
+	}
 
 	dest := &[]data.FollowedStock{}
 	db.Dao.Model(&data.FollowedStock{}).Find(dest)
@@ -156,7 +181,13 @@ func MonitorStockPrices(a *App) {
 		// 发送通知显示实时数据
 		err := beeep.Notify("go-stock", title, "")
 		if err != nil {
-			logger.SugaredLogger.Errorf("发送通知失败: %v", err)
+			if log := appLifecycleLogger("app.darwin"); log != nil {
+				log.WithTrace(appLifecycleTrace("monitor-stock-prices")).Error(
+					"stock.monitor_notify_failed",
+					"send stock monitor notification failed",
+					logger.Err(err),
+				)
+			}
 		}
 	}
 
@@ -167,12 +198,23 @@ func MonitorStockPrices(a *App) {
 // onReady 在应用程序准备好时调用
 func onReady(a *App) {
 	// 初始化操作
-	logger.SugaredLogger.Infof("onReady")
+	if log := appLifecycleLogger("app.darwin"); log != nil {
+		log.WithTrace(appLifecycleTrace("darwin-on-ready")).Info(
+			"lifecycle.ready",
+			"darwin app ready hook started",
+		)
+	}
 
 	// 使用 Beeep 发送通知
 	err := beeep.Notify("go-stock", "应用程序已准备就绪", "")
 	if err != nil {
-		log.Fatalf("系统通知失败: %v", err)
+		if log := appLifecycleLogger("app.darwin"); log != nil {
+			log.WithTrace(appLifecycleTrace("darwin-on-ready")).Error(
+				"lifecycle.ready_notify_failed",
+				"ready notification failed",
+				logger.Err(err),
+			)
+		}
 	}
 
 	// 显示应用窗口

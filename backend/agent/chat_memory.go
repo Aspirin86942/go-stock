@@ -43,7 +43,15 @@ func (s *ChatMemoryService) AddAssistantMessage(content string) error {
 func (s *ChatMemoryService) GetHistoryMessages() ([]*schema.Message, error) {
 	memories, err := db.GetRecentChatMemory(s.sessionID, s.maxMemory)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetChatMemoryList failed: %v", err)
+		if log := aiLogger("agent.chat_memory"); log != nil {
+			log.WithTrace(moduleTrace("chat-memory-history")).Error(
+				"agent.chat_memory.list_failed",
+				"load chat memory history failed",
+				logger.String("session_id", s.sessionID),
+				logger.Int("max_memory", s.maxMemory),
+				logger.Err(err),
+			)
+		}
 		return nil, err
 	}
 
@@ -67,7 +75,15 @@ func (s *ChatMemoryService) GetHistoryMessages() ([]*schema.Message, error) {
 func (s *ChatMemoryService) GetHistory() ([]string, error) {
 	memories, err := db.GetRecentChatMemory(s.sessionID, s.maxMemory)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetChatMemoryList failed: %v", err)
+		if log := aiLogger("agent.chat_memory"); log != nil {
+			log.WithTrace(moduleTrace("chat-memory-history-text")).Error(
+				"agent.chat_memory.list_failed",
+				"load chat memory history text failed",
+				logger.String("session_id", s.sessionID),
+				logger.Int("max_memory", s.maxMemory),
+				logger.Err(err),
+			)
+		}
 		return nil, err
 	}
 

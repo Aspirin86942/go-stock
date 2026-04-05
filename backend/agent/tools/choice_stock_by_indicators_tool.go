@@ -5,12 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-stock/backend/data"
+	"go-stock/backend/logger"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/random"
 )
+
+func toolModuleLogger(module string) *logger.Logger {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return nil
+	}
+	return runtimeLogger.ForSink(logger.SinkAI, module)
+}
+
+func toolTrace(source string) logger.TraceContext {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return logger.TraceContext{Source: source}
+	}
+	return runtimeLogger.NewTrace(source)
+}
 
 // @Author spark
 // @Date 2025/8/5 11:17

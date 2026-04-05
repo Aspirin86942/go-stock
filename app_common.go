@@ -153,7 +153,13 @@ func (a *App) GetAllStocks(page int, pageSize int, name string, technicalIndicat
 func (a *App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.SugaredLogger.Errorf("ChatWithAgent panic: %v", r)
+			if log := appLifecycleLogger("app.agent"); log != nil {
+				log.WithTrace(appLifecycleTrace("chat-with-agent")).Error(
+					"agent.chat.panic",
+					"chat with agent panicked",
+					logger.Any("panic_value", r),
+				)
+			}
 		}
 	}()
 

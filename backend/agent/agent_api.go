@@ -27,15 +27,29 @@ func NewStockAiAgentApi() *StockAiAgent {
 }
 
 func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId int, thinkingMode bool) *StockAiAgent {
+	trace := moduleTrace("new-stock-ai-agent")
 	defer func() {
 		if r := recover(); r != nil {
-			logger.SugaredLogger.Errorf("panic in newStockAiAgent: %v", r)
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Error(
+					"agent.new_stock_ai_agent_panic",
+					"panic while creating stock ai agent",
+					logger.Int("ai_config_id", aiConfigId),
+					logger.Any("panic_value", r),
+				)
+			}
 		}
 	}()
 
 	settingConfig := data.GetSettingConfig()
 	if settingConfig == nil {
-		logger.SugaredLogger.Errorf("settingConfig is nil")
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.setting_config_missing",
+				"setting config is nil while creating stock ai agent",
+				logger.Int("ai_config_id", aiConfigId),
+			)
+		}
 		return nil
 	}
 
@@ -43,11 +57,23 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 		return uint(aiConfigId) == item.ID
 	})
 	if !ok {
-		logger.SugaredLogger.Errorf("ai config not found for id: %d", aiConfigId)
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.ai_config_not_found",
+				"ai config not found",
+				logger.Int("ai_config_id", aiConfigId),
+			)
+		}
 		return nil
 	}
 	if aiConfig == nil {
-		logger.SugaredLogger.Errorf("aiConfig is nil for id: %d", aiConfigId)
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.ai_config_nil",
+				"ai config resolved to nil",
+				logger.Int("ai_config_id", aiConfigId),
+			)
+		}
 		return nil
 	}
 
@@ -59,7 +85,13 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 
 	agentInstance := GetStockAiAgent(ctx, *aiConfig)
 	if agentInstance == nil {
-		logger.SugaredLogger.Errorf("failed to create agent for config id: %d", aiConfigId)
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.instance_create_failed",
+				"failed to create stock ai agent",
+				logger.Int("ai_config_id", aiConfigId),
+			)
+		}
 		return nil
 	}
 
@@ -74,12 +106,20 @@ func (receiver StockAiAgent) Chat(question string, aiConfigId int, sysPromptId *
 }
 
 func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool) chan *schema.Message {
+	trace := moduleTrace("chat-with-context")
 	ch := make(chan *schema.Message, 1024)
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logger.SugaredLogger.Errorf("panic in ChatWithContext: %v", r)
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.chat_context_panic",
+						"panic in chat with context",
+						logger.Int("ai_config_id", aiConfigId),
+						logger.Any("panic_value", r),
+					)
+				}
 				ch <- &schema.Message{
 					Role:    schema.Assistant,
 					Content: fmt.Sprintf("❌ 内部错误: %v", r),
@@ -90,7 +130,13 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 
 		stockAiAgent := receiver.newStockAiAgent(&ctx, aiConfigId, thinkingMode)
 		if stockAiAgent == nil {
-			logger.SugaredLogger.Errorf("stockAiAgent is nil")
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Error(
+					"agent.chat_context_agent_nil",
+					"stock ai agent is nil",
+					logger.Int("ai_config_id", aiConfigId),
+				)
+			}
 			ch <- &schema.Message{
 				Role:    schema.Assistant,
 				Content: "❌ AI 配置不存在或无效，请检查 AI 配置",
@@ -106,7 +152,14 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			var err error
 			historyMessages, err = memoryService.GetHistoryMessages()
 			if err != nil {
-				logger.SugaredLogger.Errorf("failed to get history messages: %v", err)
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.history_messages_failed",
+						"failed to get history messages",
+						logger.String("session_id", stockAiAgent.sessionID),
+						logger.Err(err),
+					)
+				}
 				historyMessages = nil
 			}
 		}
@@ -131,7 +184,14 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 
 		if memoryService != nil {
 			if err := memoryService.AddUserMessage(question); err != nil {
-				logger.SugaredLogger.Errorf("failed to save user message: %v", err)
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.user_message_save_failed",
+						"failed to save user message",
+						logger.String("session_id", stockAiAgent.sessionID),
+						logger.Err(err),
+					)
+				}
 			}
 		}
 
@@ -147,7 +207,13 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.SugaredLogger.Errorf("panic in processMessageFuture: %v", r)
+					if log := aiLogger("agent.api"); log != nil {
+						log.WithTrace(trace).Error(
+							"agent.process_message_future_panic",
+							"panic while processing message future",
+							logger.Any("panic_value", r),
+						)
+					}
 				}
 				wg.Done()
 			}()
@@ -158,7 +224,13 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			defer close(ch)
 
 			if stockAiAgent.Agent == nil {
-				logger.SugaredLogger.Errorf("stockAiAgent.Agent is nil")
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.chat_context_agent_impl_nil",
+						"stock ai agent implementation is nil",
+						logger.Int("ai_config_id", aiConfigId),
+					)
+				}
 				ch <- &schema.Message{
 					Role:    schema.Assistant,
 					Content: "❌ Agent 实例无效",
@@ -168,7 +240,14 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 
 			sr, err := stockAiAgent.Stream(ctx, messages, agentOption...)
 			if err != nil {
-				logger.SugaredLogger.Errorf("stream error: %v", err)
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.stream_create_failed",
+						"create stream from agent failed",
+						logger.Int("ai_config_id", aiConfigId),
+						logger.Err(err),
+					)
+				}
 				errMsg := fmt.Sprintf("❌ Agent 调用失败：%v", err)
 				if strings.Contains(err.Error(), "reasoning_content") || strings.Contains(err.Error(), "thinking is enabled") {
 					errMsg += "\n\n**可能原因**：当前模型开启了 thinking/reasoning 模式，但该模式与 Agent 工具调用不兼容。\n\n**解决方案**：请在 AI 配置中关闭 thinking 模式，或切换到支持工具调用的模型（如 deepseek-chat、gpt-4o 等）。"
@@ -180,7 +259,13 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 				return
 			}
 			if sr == nil {
-				logger.SugaredLogger.Errorf("stream result is nil")
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.stream_nil",
+						"stream result is nil",
+						logger.Int("ai_config_id", aiConfigId),
+					)
+				}
 				ch <- &schema.Message{
 					Role:    schema.Assistant,
 					Content: "❌ 流式响应无效",
@@ -196,10 +281,23 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 				msg, err := sr.Recv()
 				if err != nil {
 					if errors.Is(err, io.EOF) {
-						logger.SugaredLogger.Infof("stream finished with EOF")
+						if log := aiLogger("agent.api"); log != nil {
+							log.WithTrace(trace).Info(
+								"agent.stream_finished",
+								"agent stream finished with eof",
+								logger.Int("ai_config_id", aiConfigId),
+							)
+						}
 						break
 					}
-					logger.SugaredLogger.Errorf("failed to recv: %v", err)
+					if log := aiLogger("agent.api"); log != nil {
+						log.WithTrace(trace).Error(
+							"agent.stream_recv_failed",
+							"receive message from agent stream failed",
+							logger.Int("ai_config_id", aiConfigId),
+							logger.Err(err),
+						)
+					}
 					ch <- &schema.Message{
 						Role:    schema.Assistant,
 						Content: fmt.Sprintf("❌ 接收消息失败：%v", err),
@@ -213,7 +311,14 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 
 			if fullResponse.Len() != 0 && memoryService != nil {
 				if err := memoryService.AddAssistantMessage(fullResponse.String()); err != nil {
-					logger.SugaredLogger.Errorf("failed to save assistant message: %v", err)
+					if log := aiLogger("agent.api"); log != nil {
+						log.WithTrace(trace).Error(
+							"agent.assistant_message_save_failed",
+							"failed to save assistant message",
+							logger.String("session_id", stockAiAgent.sessionID),
+							logger.Err(err),
+						)
+					}
 				}
 			}
 		}()
@@ -227,32 +332,60 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 func safeSend(ch chan *schema.Message, msg *schema.Message) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.SugaredLogger.Errorf("panic when sending to channel: %v", r)
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(moduleTrace("safe-send")).Error(
+					"agent.channel_send_panic",
+					"panic when sending message to channel",
+					logger.Any("panic_value", r),
+				)
+			}
 		}
 	}()
 	select {
 	case ch <- msg:
 	default:
-		logger.SugaredLogger.Warnf("channel full, message dropped")
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(moduleTrace("safe-send")).Warn(
+				"agent.channel_full",
+				"message channel is full and message was dropped",
+			)
+		}
 	}
 }
 
 func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message) {
+	trace := moduleTrace("process-message-future")
 	if msgFuture == nil || ch == nil {
-		logger.SugaredLogger.Errorf("msgFuture or ch is nil")
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.message_future_invalid",
+				"message future or channel is nil",
+			)
+		}
 		return
 	}
 
 	iter := msgFuture.GetMessageStreams()
 	if iter == nil {
-		logger.SugaredLogger.Errorf("message stream iterator is nil")
+		if log := aiLogger("agent.api"); log != nil {
+			log.WithTrace(trace).Error(
+				"agent.message_stream_iterator_nil",
+				"message stream iterator is nil",
+			)
+		}
 		return
 	}
 
 	for {
 		sr, ok, err := iter.Next()
 		if err != nil {
-			logger.SugaredLogger.Errorf("failed to get next message stream: %v", err)
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Error(
+					"agent.message_stream_next_failed",
+					"failed to get next message stream",
+					logger.Err(err),
+				)
+			}
 			return
 		}
 		if !ok {
@@ -277,7 +410,13 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				logger.SugaredLogger.Errorf("failed to recv from message stream: %v", err)
+				if log := aiLogger("agent.api"); log != nil {
+					log.WithTrace(trace).Error(
+						"agent.message_stream_recv_failed",
+						"failed to receive from message stream",
+						logger.Err(err),
+					)
+				}
 				return
 			}
 			if msg == nil {
@@ -342,7 +481,14 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 		}
 
 		if reasoningBuilder.Len() > 0 {
-			fmt.Printf("\n[Reasoning]\n%s\n", reasoningBuilder.String())
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Info(
+					"agent.reasoning_chunk",
+					"received reasoning content chunk",
+					logger.Int("length", reasoningBuilder.Len()),
+					logger.String("content", reasoningBuilder.String()),
+				)
+			}
 			safeSend(ch, &schema.Message{
 				Role:    schema.Assistant,
 				Content: "\r\n",
@@ -353,7 +499,14 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 			for idx := 0; idx < len(toolCallsMap); idx++ {
 				if builder, exists := toolCallsMap[idx]; exists {
 					name := toolCallNames[idx]
-					fmt.Printf("\n[ToolCall] %s(%s)\n", name, builder.String())
+					if log := aiLogger("agent.api"); log != nil {
+						log.WithTrace(trace).Info(
+							"agent.tool_call",
+							"received tool call chunk",
+							logger.String("tool_name", name),
+							logger.String("arguments", builder.String()),
+						)
+					}
 					safeSend(ch, &schema.Message{
 						Role:    schema.Assistant,
 						Content: fmt.Sprintf("\r\n```\r\n开始调用工具： %s(%s)\r\n```\r\n", name, builder.String()),
@@ -363,7 +516,14 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 		}
 
 		if toolResult != nil {
-			fmt.Printf("\n[ToolResult] %s:\n%s\n", toolResult.name, truncateString(toolResult.content, 300))
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Info(
+					"agent.tool_result",
+					"received tool result chunk",
+					logger.String("tool_name", toolResult.name),
+					logger.String("content", truncateString(toolResult.content, 300)),
+				)
+			}
 			safeSend(ch, &schema.Message{
 				Role:    schema.Assistant,
 				Content: "\r\n",
@@ -371,7 +531,14 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 		}
 
 		if contentBuilder.Len() > 0 && len(toolCallsMap) == 0 {
-			fmt.Printf("\n[FinalAnswer]\n%s\n", contentBuilder.String())
+			if log := aiLogger("agent.api"); log != nil {
+				log.WithTrace(trace).Info(
+					"agent.final_answer",
+					"received final answer chunk",
+					logger.Int("length", contentBuilder.Len()),
+					logger.String("content", contentBuilder.String()),
+				)
+			}
 			//safeSend(ch, &schema.Message{
 			//	Role:    schema.Assistant,
 			//	Content: "agent-DONE",

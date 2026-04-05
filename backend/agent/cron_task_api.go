@@ -92,7 +92,13 @@ func (a *CronTaskApi) List(query *models.CronTaskQuery) *models.CronTaskPageResp
 
 	err := dbQuery.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&tasks).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("查询定时任务列表失败:%s", err.Error())
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(moduleTrace("cron-task-list")).Error(
+				"task.list_failed",
+				"query cron task list failed",
+				logger.Err(err),
+			)
+		}
 		return nil
 	}
 
@@ -144,7 +150,14 @@ func (a *CronTaskApi) CalculateNextRunTimes(cronExpr string, count int) []time.T
 
 	schedule, err := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow).Parse(cronExpr)
 	if err != nil {
-		logger.SugaredLogger.Errorf("解析 Cron 表达式失败：%v", err)
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(moduleTrace("cron-task-parse")).Error(
+				"task.cron_parse_failed",
+				"parse cron expression failed",
+				logger.String("cron_expr", cronExpr),
+				logger.Err(err),
+			)
+		}
 		return []time.Time{}
 	}
 
@@ -170,7 +183,16 @@ func (a *CronTaskApi) SearchTasks(keyword string) []models.CronTask {
 }
 
 func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("开始执行定时任务：%s (ID: %d)", task.Name, task.ID)
+	trace := moduleTrace("cron-task-execute")
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.execute_started",
+			"started cron task execution",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+			logger.String("task_type", task.TaskType),
+		)
+	}
 
 	now := time.Now()
 	nextRunAt := a.CalculateNextRunTime(task.CronExpr)
@@ -179,14 +201,29 @@ func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) er
 	err := a.executeTaskByType(ctx, task)
 	if err != nil {
 		runResult = "失败: " + err.Error()
-		logger.SugaredLogger.Errorf("执行定时任务失败：%s, 错误：%v", task.Name, err)
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(trace).Error(
+				"task.execute_failed",
+				"cron task execution failed",
+				logger.Uint("task_id", task.ID),
+				logger.String("task_name", task.Name),
+				logger.Err(err),
+			)
+		}
 	} else {
 		runResult = "成功"
 	}
 
 	err2 := a.UpdateRunInfo(task.ID, now, &nextRunAt, runResult)
 	if err2 != nil {
-		logger.SugaredLogger.Errorf("更新任务运行信息失败：%v", err2)
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(trace).Error(
+				"task.update_run_info_failed",
+				"update cron task run info failed",
+				logger.Uint("task_id", task.ID),
+				logger.Err(err2),
+			)
+		}
 	}
 
 	return err
@@ -211,7 +248,13 @@ func (a *CronTaskApi) executeTaskByType(ctx context.Context, task *models.CronTa
 	case "custom":
 		return a.executeCustomTask(ctx, task)
 	default:
-		logger.SugaredLogger.Warnf("未知任务类型：%s", task.TaskType)
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(moduleTrace("cron-task-dispatch")).Warn(
+				"task.unknown_type",
+				"unknown cron task type",
+				logger.String("task_type", task.TaskType),
+			)
+		}
 		return fmt.Errorf("未知任务类型：%s", task.TaskType)
 	}
 }
@@ -225,7 +268,15 @@ func (a *CronTaskApi) CalculateNextRunTime(cronExpr string) time.Time {
 }
 
 func (a *CronTaskApi) executeStockAnalysis(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("执行股票分析任务：%s", task.Name)
+	trace := moduleTrace("cron-task-stock-analysis")
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.stock_analysis_started",
+			"started stock analysis task",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+		)
+	}
 	var params struct {
 		PromptId    int    `json:"promptId"`
 		AiConfigId  int    `json:"aiConfigId"`
@@ -237,7 +288,14 @@ func (a *CronTaskApi) executeStockAnalysis(ctx context.Context, task *models.Cro
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Error(
+					"task.stock_analysis_params_invalid",
+					"parse stock analysis task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -251,7 +309,14 @@ func (a *CronTaskApi) executeStockAnalysis(ctx context.Context, task *models.Cro
 	for msg := range msgs {
 		content.WriteString(msg["content"].(string))
 	}
-	logger.SugaredLogger.Infof("content:%s", content.String())
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.stock_analysis_completed",
+			"stock analysis task produced content",
+			logger.Uint("task_id", task.ID),
+			logger.Int("content_length", content.Len()),
+		)
+	}
 	data.NewDeepSeekOpenAi(ctx, params.AiConfigId).SaveAIResponseResult(params.StockCode, params.StockName, content.String(), "", prompt)
 	return nil
 }
@@ -265,7 +330,14 @@ func (a *CronTaskApi) executeFundAnalysis(ctx context.Context, task *models.Cron
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(moduleTrace("cron-task-fund-analysis")).Error(
+					"task.fund_analysis_params_invalid",
+					"parse fund analysis task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -275,7 +347,14 @@ func (a *CronTaskApi) executeFundAnalysis(ctx context.Context, task *models.Cron
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			logger.SugaredLogger.Infof("分析基金：%s", fundCode)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(moduleTrace("cron-task-fund-analysis")).Info(
+					"task.fund_analysis_item",
+					"analyzing fund",
+					logger.Uint("task_id", task.ID),
+					logger.String("fund_code", fundCode),
+				)
+			}
 		}
 	}
 
@@ -288,7 +367,13 @@ func (a *CronTaskApi) executeNewsFetch(ctx context.Context, task *models.CronTas
 		return ctx.Err()
 	default:
 		data.NewMarketNewsApi().TelegraphList(30)
-		logger.SugaredLogger.Info("新闻抓取完成")
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(moduleTrace("cron-task-news-fetch")).Info(
+				"task.news_fetch_completed",
+				"news fetch task completed",
+				logger.Uint("task_id", task.ID),
+			)
+		}
 		return nil
 	}
 }
@@ -303,7 +388,14 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(moduleTrace("cron-task-stock-monitor")).Error(
+					"task.stock_monitor_params_invalid",
+					"parse stock monitor task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -313,7 +405,14 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			logger.SugaredLogger.Infof("监控股票：%s", stockCode)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(moduleTrace("cron-task-stock-monitor")).Info(
+					"task.stock_monitor_item",
+					"monitoring stock",
+					logger.Uint("task_id", task.ID),
+					logger.String("stock_code", stockCode),
+				)
+			}
 		}
 	}
 
@@ -321,12 +420,27 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 }
 
 func (a *CronTaskApi) executeCustomTask(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("执行自定义任务：%s", task.Name)
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(moduleTrace("cron-task-custom")).Info(
+			"task.custom_started",
+			"started custom task",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+		)
+	}
 	return nil
 }
 
 func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("执行市场分析任务：%s", task.Name)
+	trace := moduleTrace("cron-task-market-analysis")
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.market_analysis_started",
+			"started market analysis task",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+		)
+	}
 	var params struct {
 		PromptId    int  `json:"promptId"`
 		AiConfigId  int  `json:"aiConfigId"`
@@ -336,7 +450,14 @@ func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.Cr
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Error(
+					"task.market_analysis_params_invalid",
+					"parse market analysis task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -352,20 +473,42 @@ func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.Cr
 		}
 		content.WriteString(msg.Content)
 	}
-	logger.SugaredLogger.Infof("content:%s", content.String())
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.market_analysis_completed",
+			"market analysis task produced content",
+			logger.Uint("task_id", task.ID),
+			logger.Int("content_length", content.Len()),
+		)
+	}
 	data.NewDeepSeekOpenAi(ctx, params.AiConfigId).SaveAIResponseResult("市场分析", "市场分析", content.String(), "", prompt)
 	return nil
 }
 
 func (a *CronTaskApi) executeGlobalStockIndexCache(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("执行全球指数缓存任务：%s", task.Name)
+	trace := moduleTrace("cron-task-global-index-cache")
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.global_index_cache_started",
+			"started global stock index cache task",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+		)
+	}
 	var params struct {
 		CrawlTimeOut uint `json:"crawlTimeOut"`
 	}
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Error(
+					"task.global_index_cache_params_invalid",
+					"parse global stock index cache task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -376,10 +519,24 @@ func (a *CronTaskApi) executeGlobalStockIndexCache(ctx context.Context, task *mo
 }
 
 func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.CronTask) error {
-	logger.SugaredLogger.Infof("执行异动数据保存任务：%s", task.Name)
+	trace := moduleTrace("cron-task-stock-change-save")
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.stock_change_save_started",
+			"started stock change save task",
+			logger.Uint("task_id", task.ID),
+			logger.String("task_name", task.Name),
+		)
+	}
 
 	if !isTradingTime() {
-		logger.SugaredLogger.Info("当前不在A股交易时间，跳过异动数据保存")
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(trace).Info(
+				"task.stock_change_save_skipped",
+				"skip stock change save outside trading hours",
+				logger.Uint("task_id", task.ID),
+			)
+		}
 		return nil
 	}
 
@@ -391,7 +548,14 @@ func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.C
 	if task.Params != "" {
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
-			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Error(
+					"task.stock_change_save_params_invalid",
+					"parse stock change save task params failed",
+					logger.Uint("task_id", task.ID),
+					logger.Err(err),
+				)
+			}
 			return err
 		}
 	}
@@ -403,24 +567,59 @@ func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.C
 	api := data.NewStockChangesApi()
 	result := api.GetStockChanges(params.ChangeTypes, 0, 500)
 	if result == nil || len(result.Data) == 0 {
-		logger.SugaredLogger.Info("没有获取到异动数据")
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(trace).Info(
+				"task.stock_change_save_empty",
+				"no stock change data fetched",
+				logger.Uint("task_id", task.ID),
+			)
+		}
 		return nil
 	}
 
 	savedCount, err := data.NewStockChangeHistoryService().SaveStockChangesWithDedup(result.Data)
 	if err != nil {
-		logger.SugaredLogger.Errorf("保存异动数据失败：%v", err)
+		if log := taskLogger("agent.cron_task"); log != nil {
+			log.WithTrace(trace).Error(
+				"task.stock_change_save_failed",
+				"save stock change data failed",
+				logger.Uint("task_id", task.ID),
+				logger.Err(err),
+			)
+		}
 		return err
 	}
 
-	logger.SugaredLogger.Infof("成功保存 %d 条异动数据（去重后）", savedCount)
+	if log := taskLogger("agent.cron_task"); log != nil {
+		log.WithTrace(trace).Info(
+			"task.stock_change_save_completed",
+			"saved stock change data successfully",
+			logger.Uint("task_id", task.ID),
+			logger.Int("saved_count", savedCount),
+		)
+	}
 
 	if params.DeleteDays > 0 {
 		err = data.NewStockChangeHistoryService().DeleteOldData(params.DeleteDays)
 		if err != nil {
-			logger.SugaredLogger.Warnf("删除旧数据失败：%v", err)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Warn(
+					"task.stock_change_cleanup_failed",
+					"delete old stock change data failed",
+					logger.Uint("task_id", task.ID),
+					logger.Int("delete_days", params.DeleteDays),
+					logger.Err(err),
+				)
+			}
 		} else {
-			logger.SugaredLogger.Infof("已删除 %d 天前的历史数据", params.DeleteDays)
+			if log := taskLogger("agent.cron_task"); log != nil {
+				log.WithTrace(trace).Info(
+					"task.stock_change_cleanup_completed",
+					"deleted old stock change history data",
+					logger.Uint("task_id", task.ID),
+					logger.Int("delete_days", params.DeleteDays),
+				)
+			}
 		}
 	}
 

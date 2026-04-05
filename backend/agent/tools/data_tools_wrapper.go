@@ -48,7 +48,14 @@ func (t *DataToolWrapper) Info(ctx context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *DataToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	logger.SugaredLogger.Infof("Tool %s called with args: %s", t.name, argumentsInJSON)
+	if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
+		log.WithTrace(toolTrace("tool-data-wrapper")).Info(
+			"tool.data_wrapper.called",
+			"data tool wrapper called",
+			logger.String("tool_name", t.name),
+			logger.String("arguments", argumentsInJSON),
+		)
+	}
 	return t.handler(argumentsInJSON)
 }
 
@@ -2628,7 +2635,13 @@ func getMarketDataContent() (string, error) {
 		content.WriteString("今日无新股申购\r\n")
 	}
 
-	logger.SugaredLogger.Debug("%s", content.String())
+	if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
+		log.WithTrace(toolTrace("tool-market-data")).Info(
+			"tool.market_data.generated",
+			"generated market data content",
+			logger.Int("content_length", content.Len()),
+		)
+	}
 	return content.String(), nil
 }
 

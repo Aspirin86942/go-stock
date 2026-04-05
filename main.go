@@ -273,13 +273,49 @@ func main() {
 
 }
 
+func mainModuleLog() *log.Logger {
+	runtimeLog := log.Default()
+	if runtimeLog == nil {
+		return nil
+	}
+	return runtimeLog.ForSink(log.SinkApp, "main")
+}
+
+func mainModuleTrace(source string) log.TraceContext {
+	runtimeLog := log.Default()
+	if runtimeLog == nil {
+		return log.TraceContext{Source: source}
+	}
+	return runtimeLog.NewTrace(source)
+}
+
 func cacheCookies(url string) {
-	log.SugaredLogger.Info("预缓存东财 Cookie...")
+	trace := mainModuleTrace("cache-cookies")
+	if logger := mainModuleLog(); logger != nil {
+		logger.WithTrace(trace).Info(
+			"startup.cookie_cache_started",
+			"pre-caching eastmoney cookies",
+			log.String("url", url),
+		)
+	}
 	_, err := data.FetchEastMoneyCookiesViaChromedp("", 3*time.Minute, url)
 	if err != nil {
-		log.SugaredLogger.Warnf("预缓存东财 Cookie 失败：%v", err)
+		if logger := mainModuleLog(); logger != nil {
+			logger.WithTrace(trace).Warn(
+				"startup.cookie_cache_failed",
+				"pre-cache eastmoney cookies failed",
+				log.String("url", url),
+				log.Err(err),
+			)
+		}
 	} else {
-		log.SugaredLogger.Info("东财 Cookie 预缓存完成")
+		if logger := mainModuleLog(); logger != nil {
+			logger.WithTrace(trace).Info(
+				"startup.cookie_cache_completed",
+				"pre-cache eastmoney cookies completed",
+				log.String("url", url),
+			)
+		}
 	}
 }
 
@@ -298,7 +334,13 @@ func updateMultipleModel() {
 		aiConfig.TimeOut = oldSettings.OpenAiApiTimeOut
 		err := db.Dao.Model(aiConfig).Create(aiConfig).Error
 		if err != nil {
-			log.SugaredLogger.Error(err.Error())
+			if logger := mainModuleLog(); logger != nil {
+				logger.WithTrace(mainModuleTrace("update-multiple-model")).Error(
+					"startup.ai_config_migration_failed",
+					"migrate legacy ai config failed",
+					log.Err(err),
+				)
+			}
 		}
 	}
 }
@@ -356,9 +398,20 @@ func initGlobalStockIndexCacheTask() {
 		}
 		err := db.Dao.Create(task).Error
 		if err != nil {
-			log.SugaredLogger.Errorf("创建 global_stock_index_cache 定时任务失败：%v", err)
+			if logger := mainModuleLog(); logger != nil {
+				logger.WithTrace(mainModuleTrace("init-global-stock-index-cache-task")).Error(
+					"startup.global_index_task_create_failed",
+					"create global stock index cache task failed",
+					log.Err(err),
+				)
+			}
 		} else {
-			log.SugaredLogger.Info("创建 global_stock_index_cache 定时任务成功")
+			if logger := mainModuleLog(); logger != nil {
+				logger.WithTrace(mainModuleTrace("init-global-stock-index-cache-task")).Info(
+					"startup.global_index_task_created",
+					"created global stock index cache task",
+				)
+			}
 		}
 	}
 
@@ -371,10 +424,22 @@ func initStockDataUS(ctx context.Context) {
 	var v []models.StockInfoUS
 	err := json.Unmarshal(stocksBinUS, &v)
 	if err != nil {
-		log.SugaredLogger.Error(err.Error())
+		if logger := mainModuleLog(); logger != nil {
+			logger.WithTrace(mainModuleTrace("init-stock-data-us")).Error(
+				"startup.stock_data_us_unmarshal_failed",
+				"unmarshal bundled us stock data failed",
+				log.Err(err),
+			)
+		}
 		return
 	}
-	log.SugaredLogger.Infof("init stock data us %d", len(v))
+	if logger := mainModuleLog(); logger != nil {
+		logger.WithTrace(mainModuleTrace("init-stock-data-us")).Info(
+			"startup.stock_data_us_loaded",
+			"loaded bundled us stock data",
+			log.Int("count", len(v)),
+		)
+	}
 	var total int64
 	db.Dao.Model(&models.StockInfoUS{}).Count(&total)
 	if total != int64(len(v)) {
@@ -397,10 +462,22 @@ func initStockDataHK(ctx context.Context) {
 	var v []models.StockInfoHK
 	err := json.Unmarshal(stocksBinHK, &v)
 	if err != nil {
-		log.SugaredLogger.Error(err.Error())
+		if logger := mainModuleLog(); logger != nil {
+			logger.WithTrace(mainModuleTrace("init-stock-data-hk")).Error(
+				"startup.stock_data_hk_unmarshal_failed",
+				"unmarshal bundled hk stock data failed",
+				log.Err(err),
+			)
+		}
 		return
 	}
-	log.SugaredLogger.Infof("init stock data hk %d", len(v))
+	if logger := mainModuleLog(); logger != nil {
+		logger.WithTrace(mainModuleTrace("init-stock-data-hk")).Info(
+			"startup.stock_data_hk_loaded",
+			"loaded bundled hk stock data",
+			log.Int("count", len(v)),
+		)
+	}
 	var total int64
 	db.Dao.Model(&models.StockInfoHK{}).Count(&total)
 	if total != int64(len(v)) {
@@ -431,11 +508,22 @@ func initStockData(ctx context.Context) {
 		go runtime.EventsEmit(ctx, "loadingMsg", "done")
 	}()
 	fields := "ts_code,symbol,name,area,industry,cnspell,market,list_date,act_name,act_ent_type,fullname,exchange,list_status,curr_type,enname,delist_date,is_hs"
-	log.SugaredLogger.Info("init stock data")
+	if logger := mainModuleLog(); logger != nil {
+		logger.WithTrace(mainModuleTrace("init-stock-data")).Info(
+			"startup.stock_data_init_started",
+			"initialize stock data from bundled snapshot",
+		)
+	}
 	res := &data.TushareStockBasicResponse{}
 	err := json.Unmarshal(stocksBin, res)
 	if err != nil {
-		log.SugaredLogger.Error(err.Error())
+		if logger := mainModuleLog(); logger != nil {
+			logger.WithTrace(mainModuleTrace("init-stock-data")).Error(
+				"startup.stock_data_unmarshal_failed",
+				"unmarshal bundled stock data failed",
+				log.Err(err),
+			)
+		}
 		return
 	}
 
@@ -502,8 +590,7 @@ func PanicHandler() {
 	if r := recover(); r != nil {
 		runtimeLog := log.Default()
 		if runtimeLog == nil {
-			fmt.Printf("Recovered from panic: %v\n", r)
-			debug.PrintStack()
+			_, _ = fmt.Fprintf(os.Stderr, "Recovered from panic: %v\n%s", r, string(debug.Stack()))
 			return
 		}
 		runtimeLog.ForSink(log.SinkPanic, "panic").WithTrace(runtimeLog.NewTrace("panic")).Error(

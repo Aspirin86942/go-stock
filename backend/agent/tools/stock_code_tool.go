@@ -37,25 +37,61 @@ func (q QueryStockCodeInfo) Info(ctx context.Context) (*schema.ToolInfo, error) 
 }
 
 func (q QueryStockCodeInfo) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	logger.SugaredLogger.Infof("QueryStockCodeInfo called with args: %s", argumentsInJSON)
+	trace := toolTrace("tool-query-stock-code")
+	if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+		log.WithTrace(trace).Info(
+			"tool.stock_code.called",
+			"query stock code tool called",
+			logger.String("arguments", argumentsInJSON),
+		)
+	}
 	parms := map[string]any{}
 	err := json.Unmarshal([]byte(argumentsInJSON), &parms)
 	if err != nil {
-		logger.SugaredLogger.Errorf("QueryStockCodeInfo unmarshal error: %v", err)
+		if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+			log.WithTrace(trace).Error(
+				"tool.stock_code.arguments_invalid",
+				"unmarshal stock code tool args failed",
+				logger.Err(err),
+			)
+		}
 		return "", err
 	}
 	searchWord, ok := parms["searchWord"].(string)
 	if !ok {
-		logger.SugaredLogger.Errorf("QueryStockCodeInfo searchWord not found in args")
+		if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+			log.WithTrace(trace).Warn(
+				"tool.stock_code.search_word_missing",
+				"search word not found in tool args",
+			)
+		}
 		return "未找到股票信息", nil
 	}
-	logger.SugaredLogger.Infof("QueryStockCodeInfo searching for: %s", searchWord)
+	if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+		log.WithTrace(trace).Info(
+			"tool.stock_code.searching",
+			"searching stock code info",
+			logger.String("search_word", searchWord),
+		)
+	}
 	stockList := data.NewStockDataApi().GetStockList(searchWord)
 	marshal, err := json.Marshal(stockList)
 	if err != nil {
-		logger.SugaredLogger.Errorf("QueryStockCodeInfo marshal error: %v", err)
+		if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+			log.WithTrace(trace).Error(
+				"tool.stock_code.marshal_failed",
+				"marshal stock code tool result failed",
+				logger.Err(err),
+			)
+		}
 		return "", err
 	}
-	logger.SugaredLogger.Infof("QueryStockCodeInfo result length: %d", len(marshal))
+	if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
+		log.WithTrace(trace).Info(
+			"tool.stock_code.completed",
+			"stock code tool completed",
+			logger.Int("result_length", len(marshal)),
+		)
+	}
 	return string(marshal), nil
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/robfig/cron/v3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go.uber.org/zap"
 )
 
 // App struct
@@ -77,6 +78,32 @@ func NewApp() *App {
 		AiTools:            tools,
 		stockAlertLastSent: make(map[string]time.Time),
 		priceAtAlertReset:  make(map[string]float64),
+	}
+}
+
+func appCoreLog() *logger.Logger {
+	return appLifecycleLogger("app.core")
+}
+
+func appTrace(source string) logger.TraceContext {
+	return appLifecycleTrace(source)
+}
+
+func appInfo(source, event, message string, fields ...zap.Field) {
+	if log := appCoreLog(); log != nil {
+		log.WithTrace(appTrace(source)).Info(event, message, fields...)
+	}
+}
+
+func appWarn(source, event, message string, fields ...zap.Field) {
+	if log := appCoreLog(); log != nil {
+		log.WithTrace(appTrace(source)).Warn(event, message, fields...)
+	}
+}
+
+func appError(source, event, message string, fields ...zap.Field) {
+	if log := appCoreLog(); log != nil {
+		log.WithTrace(appTrace(source)).Error(event, message, fields...)
 	}
 }
 
@@ -131,7 +158,7 @@ func (a *App) CheckUpdate(flag int) {
 		SetResult(releaseVersion).
 		Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
 	if err != nil {
-		logger.SugaredLogger.Errorf("get github release version error:%s", err.Error())
+		appError("check-update", "update.release_fetch_failed", "get github release version failed", logger.Err(err))
 		return
 	}
 	//logger.SugaredLogger.Infof("releaseVersion:%+v", releaseVersion.TagName)
@@ -202,7 +229,7 @@ func (a *App) CheckUpdate(flag int) {
 
 		err = update.Apply(bytes.NewReader(body), update.Options{})
 		if err != nil {
-			logger.SugaredLogger.Error("更新失败: ", err.Error())
+			appError("check-update", "update.apply_failed", "apply update failed", logger.Err(err))
 			go runtime.EventsEmit(a.ctx, "updateVersion", releaseVersion)
 			return
 		} else {
@@ -240,7 +267,7 @@ func (a *App) syncNews() {
 	body := resp.RawBody()
 	defer body.Close()
 	if err != nil {
-		logger.SugaredLogger.Errorf("syncNews error:%s", err.Error())
+		appError("sync-news", "news.sync_failed", "sync news request failed", logger.Err(err))
 	}
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
@@ -365,7 +392,7 @@ func (a *App) domReady(ctx context.Context) {
 			MonitorStockPrices(a)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+			appError("dom-ready", "cron.monitor_stock_prices_add_failed", "add MonitorStockPrices cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("MonitorStockPrices", id)
 		}
@@ -378,7 +405,7 @@ func (a *App) domReady(ctx context.Context) {
 			go runtime.EventsEmit(a.ctx, "newTelegraph", news)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+			appError("dom-ready", "cron.telegraph_add_failed", "add GetNewTelegraph cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("GetNewTelegraph", entryID)
 		}
@@ -391,7 +418,7 @@ func (a *App) domReady(ctx context.Context) {
 			go runtime.EventsEmit(a.ctx, "newSinaNews", news)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+			appError("dom-ready", "cron.sina_news_add_failed", "add newSinaNews cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("newSinaNews", entryIDSina)
 		}
@@ -404,7 +431,7 @@ func (a *App) domReady(ctx context.Context) {
 			go runtime.EventsEmit(a.ctx, "tradingViewNews", news)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+			appError("dom-ready", "cron.trading_view_add_failed", "add tradingViewNews cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("tradingViewNews", entryIDTradingViewNews)
 		}
@@ -422,7 +449,7 @@ func (a *App) domReady(ctx context.Context) {
 				MonitorFundPrices(a)
 			})
 			if err != nil {
-				logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+				appError("dom-ready", "cron.monitor_fund_add_failed", "add MonitorFundPrices cron failed", logger.Err(err))
 			} else {
 				a.setCronEntry("MonitorFundPrices", id)
 			}
@@ -433,7 +460,7 @@ func (a *App) domReady(ctx context.Context) {
 			MonitorAiRecommendStockPrices(a)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc MonitorAiRecommendStockPrices error:%s", err.Error())
+			appError("dom-ready", "cron.monitor_ai_stock_add_failed", "add MonitorAiRecommendStockPrices cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("MonitorAiRecommendStockPrices", idAiStock)
 		}
@@ -443,7 +470,7 @@ func (a *App) domReady(ctx context.Context) {
 			MonitorFollowedStockCostPrices(a)
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc MonitorFollowedStockCostPrices error:%s", err.Error())
+			appError("dom-ready", "cron.monitor_cost_price_add_failed", "add MonitorFollowedStockCostPrices cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("MonitorFollowedStockCostPrices", idCostPrice)
 		}
@@ -470,7 +497,7 @@ func (a *App) domReady(ctx context.Context) {
 			}
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
+			appError("dom-ready", "cron.refresh_telegraph_add_failed", "add refreshTelegraphList cron failed", logger.Err(err))
 		} else {
 			a.setCronEntry("refreshTelegraphList", id)
 		}
@@ -493,11 +520,11 @@ func (a *App) domReady(ctx context.Context) {
 		go syncAllStockInfo(a.ctx)
 
 		a.cron.AddFunc("0 0 2 * * *", func() {
-			logger.SugaredLogger.Errorf("Checking for updates...")
+			appInfo("dom-ready", "cron.check_stock_base_info_started", "scheduled stock base info check started")
 			a.CheckStockBaseInfo(a.ctx)
 		})
 		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
-			logger.SugaredLogger.Errorf("Checking for updates...")
+			appInfo("dom-ready", "cron.check_update_started", "scheduled update check started")
 			a.CheckUpdate(0)
 		})
 		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
@@ -529,7 +556,7 @@ func (a *App) domReady(ctx context.Context) {
 		}
 		entryID, err := a.cron.AddFunc(*follow.Cron, a.AddCronTask(follow))
 		if err != nil {
-			logger.SugaredLogger.Errorf("添加自动分析任务失败:%s cron=%s entryID:%v", follow.Name, *follow.Cron, entryID)
+			appError("dom-ready", "cron.auto_task_add_failed", "add auto analysis cron task failed", logger.String("task_name", follow.Name), logger.String("cron_expr", *follow.Cron))
 			continue
 		}
 		a.setCronEntry(follow.StockCode, entryID)
@@ -552,7 +579,7 @@ func syncAllStockInfo(ctx context.Context) {
 		}
 		err := db.Dao.CreateInBatches(&datas, 1000).Error
 		if err != nil {
-			logger.SugaredLogger.Errorf("db.Dao.CreateInBatches error:%s", err.Error())
+			appError("sync-all-stock-info", "stock.sync_batch_insert_failed", "create all stock info batch failed", logger.Err(err))
 		}
 	}
 }
@@ -570,7 +597,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	db.Dao.Unscoped().Model(&data.StockBasic{}).Where("1=1").Delete(&data.StockBasic{})
 	err := db.Dao.CreateInBatches(stockBasics, 400).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("保存StockBasic股票基础信息失败:%s", err.Error())
+		appError("check-stock-base-info", "stock.base_info_save_failed", "save stock basic info failed", logger.Err(err))
 	}
 
 	//count := int64(0)
@@ -603,7 +630,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	db.Dao.Unscoped().Model(&models.StockInfoHK{}).Where("1=1").Delete(&models.StockInfoHK{})
 	err = db.Dao.CreateInBatches(stockHKBasics, 400).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("保存StockInfoHK股票基础信息失败:%s", err.Error())
+		appError("check-stock-base-info", "stock.hk_base_info_save_failed", "save stock hk basic info failed", logger.Err(err))
 	}
 
 	//for _, stock := range *stockHKBasics {
@@ -629,7 +656,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	db.Dao.Unscoped().Model(&models.StockInfoUS{}).Where("1=1").Delete(&models.StockInfoUS{})
 	err = db.Dao.CreateInBatches(stockUSBasics, 400).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("保存StockInfoUS股票基础信息失败:%s", err.Error())
+		appError("check-stock-base-info", "stock.us_base_info_save_failed", "save stock us basic info failed", logger.Err(err))
 	}
 	//for _, stock := range *stockUSBasics {
 	//	stockInfo := &models.StockInfoUS{
@@ -819,18 +846,18 @@ func IsUSTradingTime(date time.Time) bool {
 func MonitorFundPrices(a *App) {
 	// 检查 A 股是否开市（基金交易时间与 A 股一致）
 	if !isTradingTime(time.Now()) {
-		logger.SugaredLogger.Debugf("当前 A 股未开市，跳过基金价格监控")
+		appInfo("monitor-fund-prices", "fund.monitor_skipped", "skip fund price monitor because A-share market is closed")
 		return
 	}
 
-	logger.SugaredLogger.Debugf("A 股市场已开市，开始基金价格监控")
+	appInfo("monitor-fund-prices", "fund.monitor_started", "start fund price monitor because A-share market is open")
 
 	dest := &[]data.FollowedFund{}
 	db.Dao.Model(&data.FollowedFund{}).Find(dest)
 	for _, follow := range *dest {
 		_, err := data.NewFundApi().CrawlFundBasic(follow.Code)
 		if err != nil {
-			logger.SugaredLogger.Errorf("获取基金基本信息失败，基金代码：%s，错误信息：%s", follow.Code, err.Error())
+			appError("monitor-fund-prices", "fund.basic_info_fetch_failed", "crawl fund basic info failed", logger.String("fund_code", follow.Code), logger.Err(err))
 			continue
 		}
 		data.NewFundApi().CrawlFundNetEstimatedUnit(follow.Code)
@@ -845,7 +872,7 @@ func MonitorAiRecommendStockPrices(a *App) {
 	isUSStockOpen := IsUSTradingTime(time.Now())
 
 	if !isAStockOpen && !isHKStockOpen && !isUSStockOpen {
-		logger.SugaredLogger.Debugf("当前所有市场均未开市，跳过 AI 推荐股票价格监控")
+		appInfo("monitor-ai-recommend-stock-prices", "stock.ai_recommend_monitor_skipped", "skip ai recommend stock price monitor because all markets are closed")
 		return
 	}
 
@@ -869,13 +896,13 @@ func MonitorAiRecommendStockPrices(a *App) {
 	}
 
 	if len(stockCodes) == 0 {
-		logger.SugaredLogger.Debugf("没有设置预警价格的 AI 推荐股票，跳过价格监控")
+		appInfo("monitor-ai-recommend-stock-prices", "stock.ai_recommend_monitor_empty", "skip ai recommend stock price monitor because no alert price is configured")
 		return
 	}
 
 	stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
 	if err != nil || stockData == nil || len(*stockData) == 0 {
-		logger.SugaredLogger.Errorf("获取 AI 推荐股票实时数据失败: %v", err)
+		appError("monitor-ai-recommend-stock-prices", "stock.ai_recommend_realtime_failed", "get ai recommend stock realtime data failed", logger.Err(err))
 		return
 	}
 
@@ -998,7 +1025,7 @@ func MonitorFollowedStockCostPrices(a *App) {
 	isUSStockOpen := IsUSTradingTime(time.Now())
 
 	if !isAStockOpen && !isHKStockOpen && !isUSStockOpen {
-		logger.SugaredLogger.Debugf("当前所有市场均未开市，跳过自选股成本价监控")
+		appInfo("monitor-followed-stock-cost-prices", "stock.cost_monitor_skipped", "skip followed stock cost price monitor because all markets are closed")
 		return
 	}
 
@@ -1019,7 +1046,7 @@ func MonitorFollowedStockCostPrices(a *App) {
 
 	stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
 	if err != nil || stockData == nil || len(*stockData) == 0 {
-		logger.SugaredLogger.Errorf("获取自选股实时数据失败: %v", err)
+		appError("monitor-followed-stock-cost-prices", "stock.cost_realtime_failed", "get followed stock realtime data failed", logger.Err(err))
 		return
 	}
 
@@ -1305,7 +1332,7 @@ func (a *App) SendDingDingMessage(message string, stockCode string) string {
 	}
 	err := a.cache.Set([]byte(stockCode), []byte("1"), 60*5)
 	if err != nil {
-		logger.SugaredLogger.Errorf("set cache error:%s", err.Error())
+		appError("send-dingding", "notify.dingding_cache_set_failed", "set dingding cache failed", logger.String("stock_code", stockCode), logger.Err(err))
 		return ""
 	}
 	return data.NewDingDingAPI().SendDingDingMessage(message)
@@ -1330,7 +1357,7 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 	}
 	err := a.cache.Set([]byte(stockCode), []byte("1"), getMsgTypeTTL(msgType))
 	if err != nil {
-		logger.SugaredLogger.Errorf("set cache error:%s", err.Error())
+		appError("send-dingding-by-type", "notify.dingding_cache_set_failed", "set dingding cache by type failed", logger.String("stock_code", stockCode), logger.Int("message_type", msgType), logger.Err(err))
 		return ""
 	}
 	stockInfo := &data.StockInfo{}
@@ -1505,12 +1532,12 @@ func (a *App) ExportConfig() string {
 		DefaultFilename:      "config.json",
 	})
 	if err != nil {
-		logger.SugaredLogger.Errorf("导出配置文件失败:%s", err.Error())
+		appError("export-config", "config.export_dialog_failed", "export config dialog failed", logger.Err(err))
 		return err.Error()
 	}
 	err = os.WriteFile(file, []byte(config), os.ModePerm)
 	if err != nil {
-		logger.SugaredLogger.Errorf("导出配置文件失败:%s", err.Error())
+		appError("export-config", "config.export_write_failed", "write exported config failed", logger.String("file", file), logger.Err(err))
 		return err.Error()
 	}
 	return "导出成功:" + file
@@ -1971,11 +1998,11 @@ func (a *App) FetchAiModels(baseUrl, apiKey string) []string {
 		SetResult(&respData).
 		Get("/models")
 	if err != nil {
-		logger.SugaredLogger.Errorf("FetchAiModels error: %v", err)
+		appError("fetch-ai-models", "ai.models_request_failed", "fetch ai models failed", logger.Err(err))
 		return []string{}
 	}
 	if resp.IsError() {
-		logger.SugaredLogger.Errorf("FetchAiModels http error: %s", resp.Status())
+		appError("fetch-ai-models", "ai.models_http_error", "fetch ai models returned http error", logger.String("status", resp.Status()))
 		return []string{}
 	}
 
@@ -2000,12 +2027,12 @@ func (a *App) InitCronTasks() {
 		entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
 			err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
 			if err != nil {
-				logger.SugaredLogger.Errorf("启动任务失败：%v %s", err, taskCopy.Name)
+				appError("init-cron-tasks", "cron.task_start_failed", "execute initial cron task failed", logger.String("task_name", taskCopy.Name), logger.Err(err))
 				return
 			}
 		})
 		if err != nil {
-			logger.SugaredLogger.Errorf("自动创建定时任务失败：%v %s", err, taskCopy.Name)
+			appError("init-cron-tasks", "cron.task_add_failed", "auto create cron task failed", logger.String("task_name", taskCopy.Name), logger.Err(err))
 			continue
 		}
 		a.setCronEntry(convertor.ToString(taskCopy.ID)+"_"+taskCopy.Name, entryID)
@@ -2037,7 +2064,7 @@ func (a *App) CreateCronTask(task *models.CronTask) string {
 	entryID, err := a.cron.AddFunc(task.CronExpr, func() {
 		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
 		if err != nil {
-			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+			appError("run-cron-task", "cron.task_execute_failed", "execute cron task failed", logger.String("task_name", task.Name), logger.Err(err))
 			return
 		}
 	})
@@ -2056,7 +2083,7 @@ func (a *App) UpdateCronTask(task *models.CronTask) string {
 	entryID, err := a.cron.AddFunc(task.CronExpr, func() {
 		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
 		if err != nil {
-			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+			appError("run-cron-task-now", "cron.task_execute_failed", "execute cron task immediately failed", logger.String("task_name", task.Name), logger.Err(err))
 			return
 		}
 	})
@@ -2126,7 +2153,7 @@ func (a *App) EnableCronTask(id uint, enable bool) string {
 			entryID, err := a.cron.AddFunc(task.CronExpr, func() {
 				err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
 				if err != nil {
-					logger.SugaredLogger.Errorf("%s 执行任务失败：%v", task.Name, err)
+					appError("batch-run-cron-tasks", "cron.task_execute_failed", "execute cron task in batch failed", logger.String("task_name", task.Name), logger.Err(err))
 					return
 				}
 			})
@@ -2158,7 +2185,7 @@ func (a *App) ExecuteCronTaskNow(id uint) string {
 	go func() {
 		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
 		if err != nil {
-			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+			appError("trigger-cron-task", "cron.task_execute_failed", "trigger cron task failed", logger.String("task_name", task.Name), logger.Err(err))
 		}
 	}()
 

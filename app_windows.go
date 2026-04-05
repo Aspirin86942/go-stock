@@ -101,7 +101,13 @@ func OnSecondInstanceLaunch(secondInstanceData options.SecondInstanceData) {
 	}
 	err := notification.Push()
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		if log := appLifecycleLogger("app.windows"); log != nil {
+			log.WithTrace(appLifecycleTrace("second-instance")).Error(
+				"lifecycle.second_instance_notify_failed",
+				"notify second instance launch failed",
+				logger.Err(err),
+			)
+		}
 	}
 	time.Sleep(time.Second * 3)
 }

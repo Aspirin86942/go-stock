@@ -46,7 +46,14 @@ func (q QueryMarketNews) InvokableRun(ctx context.Context, argumentsInJSON strin
 		list := gjson.Get(string(bytes), "items")
 		//logger.SugaredLogger.Debugf("value: %+v,list: %+v", date.String(), list)
 		list.ForEach(func(key, value gjson.Result) bool {
-			logger.SugaredLogger.Debugf("key: %+v,value: %+v", key.String(), gjson.Get(value.String(), "title"))
+			if log := toolModuleLogger("agent.tool.market_news"); log != nil {
+				log.WithTrace(toolTrace("tool-market-news")).Info(
+					"tool.market_news.item",
+					"parsed market news item",
+					logger.String("item_index", key.String()),
+					logger.String("title", gjson.Get(value.String(), "title").String()),
+				)
+			}
 			md.WriteString("\n- " + gjson.Get(value.String(), "title").String())
 			return true
 		})

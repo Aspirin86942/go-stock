@@ -16,8 +16,40 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+func moduleLogger(sink logger.Sink, module string) *logger.Logger {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return nil
+	}
+	return runtimeLogger.ForSink(sink, module)
+}
+
+func moduleTrace(source string) logger.TraceContext {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return logger.TraceContext{Source: source}
+	}
+	return runtimeLogger.NewTrace(source)
+}
+
+func aiLogger(module string) *logger.Logger {
+	return moduleLogger(logger.SinkAI, module)
+}
+
+func taskLogger(module string) *logger.Logger {
+	return moduleLogger(logger.SinkTask, module)
+}
+
 func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent {
-	logger.SugaredLogger.Infof("GetStockAiAgent aiConfig: %v", aiConfig)
+	if log := aiLogger("agent.core"); log != nil {
+		log.WithTrace(moduleTrace("get-stock-ai-agent")).Info(
+			"agent.config.loaded",
+			"loaded ai agent config",
+			logger.Uint("ai_config_id", aiConfig.ID),
+			logger.String("model_name", aiConfig.ModelName),
+			logger.String("base_url", aiConfig.BaseUrl),
+		)
+	}
 	temperature := float32(aiConfig.Temperature)
 	var toolableChatModel model.ToolCallingChatModel
 	var err error
@@ -56,7 +88,14 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 	}
 
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		if log := aiLogger("agent.core"); log != nil {
+			log.WithTrace(moduleTrace("get-stock-ai-agent")).Error(
+				"agent.model_init_failed",
+				"initialize tool-calling model failed",
+				logger.Uint("ai_config_id", aiConfig.ID),
+				logger.Err(err),
+			)
+		}
 		return nil
 	}
 
@@ -88,7 +127,14 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 		},
 	})
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		if log := aiLogger("agent.core"); log != nil {
+			log.WithTrace(moduleTrace("get-stock-ai-agent")).Error(
+				"agent.compose_failed",
+				"compose react agent failed",
+				logger.Uint("ai_config_id", aiConfig.ID),
+				logger.Err(err),
+			)
+		}
 		return nil
 	}
 	return agent
