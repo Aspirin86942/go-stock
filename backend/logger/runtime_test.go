@@ -82,6 +82,31 @@ func TestPayloadStore_ReturnsErrorWhenTotalWouldExceedMaxTotal(t *testing.T) {
 	}
 }
 
+func TestPayloadStore_SanitizesKindInSpillFilename(t *testing.T) {
+	store := NewPayloadStore(filepath.Join(t.TempDir(), "logs"), 8, 5<<20)
+
+	ref, err := store.Save(`..\..\evil:kind/name`, bytes.Repeat([]byte("x"), 64))
+	if err != nil {
+		t.Fatalf("save payload: %v", err)
+	}
+	base := filepath.Base(ref.File)
+	if strings.Contains(base, `\`) || strings.Contains(base, "/") || strings.Contains(base, "..") || strings.Contains(base, ":") {
+		t.Fatalf("expected sanitized spill filename, got %q", base)
+	}
+}
+
+func TestAttachPayloadStore_NilDoesNotOverrideExisting(t *testing.T) {
+	runtime := &Runtime{}
+	original := NewPayloadStore(filepath.Join(t.TempDir(), "logs"), 16, 1024)
+
+	runtime.AttachPayloadStore(original)
+	runtime.AttachPayloadStore(nil)
+
+	if runtime.payloads != original {
+		t.Fatalf("expected existing payload store to remain unchanged")
+	}
+}
+
 func TestGoWithRecover_WritesPanicEvent(t *testing.T) {
 	buf := &lockedBuffer{}
 	runtime := newRuntimeForTest(buf)
@@ -97,6 +122,9 @@ func TestGoWithRecover_WritesPanicEvent(t *testing.T) {
 		if strings.Contains(line, `"event":"logger-test"`) &&
 			strings.Contains(line, `"error_class":"panic"`) &&
 			strings.Contains(line, `"app_session_id":"session-test"`) &&
+			strings.Contains(line, `"source":"panic"`) &&
+			!strings.Contains(line, `"trace_id":""`) &&
+			!strings.Contains(line, `"span_id":""`) &&
 			strings.Contains(line, `"panic_value":"boom"`) &&
 			strings.Contains(line, `"stack":"`) {
 			return

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -26,6 +27,7 @@ type PayloadStore struct {
 	root        string
 	inlineLimit int
 	maxTotal    int64
+	mu          sync.Mutex
 }
 
 func NewPayloadStore(root string, inlineLimit int, maxTotal int64) *PayloadStore {
@@ -46,6 +48,9 @@ func (s *PayloadStore) Save(kind string, body []byte) (PayloadRef, error) {
 		ref.Inline = string(body)
 		return ref, nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.maxTotal > 0 {
 		used, err := s.currentPayloadUsage()
 		if err != nil {
