@@ -96,6 +96,7 @@ func (a *CronTaskApi) List(query *models.CronTaskQuery) *models.CronTaskPageResp
 			log.WithTrace(moduleTrace("cron-task-list")).Error(
 				"task.list_failed",
 				"query cron task list failed",
+				logger.String("error_class", "task_error"),
 				logger.Err(err),
 			)
 		}
@@ -159,6 +160,7 @@ func (a *CronTaskApi) CalculateNextRunTimes(cronExpr string, count int) []time.T
 				"task.cron_parse_failed",
 				"parse cron expression failed",
 				logger.String("cron_expr", cronExpr),
+				logger.String("error_class", "task_error"),
 				logger.Err(err),
 			)
 		}
@@ -226,6 +228,7 @@ func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) er
 				"task.update_run_info_failed",
 				"update cron task run info failed",
 				logger.Uint("task_id", task.ID),
+				logger.String("error_class", "task_error"),
 				logger.Err(err2),
 			)
 		}
@@ -298,6 +301,7 @@ func (a *CronTaskApi) executeStockAnalysis(ctx context.Context, task *models.Cro
 					"task.stock_analysis_params_invalid",
 					"parse stock analysis task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -340,6 +344,7 @@ func (a *CronTaskApi) executeFundAnalysis(ctx context.Context, task *models.Cron
 					"task.fund_analysis_params_invalid",
 					"parse fund analysis task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -398,6 +403,7 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 					"task.stock_monitor_params_invalid",
 					"parse stock monitor task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -460,6 +466,7 @@ func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.Cr
 					"task.market_analysis_params_invalid",
 					"parse market analysis task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -511,6 +518,7 @@ func (a *CronTaskApi) executeGlobalStockIndexCache(ctx context.Context, task *mo
 					"task.global_index_cache_params_invalid",
 					"parse global stock index cache task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -558,6 +566,7 @@ func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.C
 					"task.stock_change_save_params_invalid",
 					"parse stock change save task params failed",
 					logger.Uint("task_id", task.ID),
+					logger.String("error_class", "task_error"),
 					logger.Err(err),
 				)
 			}
@@ -589,6 +598,7 @@ func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.C
 				"task.stock_change_save_failed",
 				"save stock change data failed",
 				logger.Uint("task_id", task.ID),
+				logger.String("error_class", "task_error"),
 				logger.Err(err),
 			)
 		}
