@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -29,4 +30,25 @@ func TestNewGormConfig_UsesStructuredLogger(t *testing.T) {
 	if gormLog.LogMode(gormlogger.Warn) == nil {
 		t.Fatalf("expected gorm logger LogMode to return a logger")
 	}
+}
+
+func TestPanicInit_PanicsWithWrappedError(t *testing.T) {
+	rootErr := errors.New("open db failed")
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatalf("expected panicInit to panic")
+		}
+
+		panicErr, ok := recovered.(error)
+		if !ok {
+			t.Fatalf("expected recovered value to be error, got %T", recovered)
+		}
+		if !errors.Is(panicErr, rootErr) {
+			t.Fatalf("expected panic error to wrap root error, got %v", panicErr)
+		}
+	}()
+
+	panicInit(nil, "db.init.failed", "open db failed", rootErr)
 }
