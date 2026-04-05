@@ -29,6 +29,16 @@ func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
 
 	// ExecuteTask 会在末尾调用 UpdateRunInfo，需要最小 sqlite 初始化避免 db.Dao 为空。
 	db.Init(filepath.Join(rootDir, "test.db"))
+	sqlDB, err := db.Dao.DB()
+	if err != nil {
+		t.Fatalf("open sql db handle: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+	})
+	if err := db.Dao.AutoMigrate(&models.CronTask{}); err != nil {
+		t.Fatalf("migrate cron task table: %v", err)
+	}
 
 	taskExecutorOverrides["trace_probe"] = func(ctx context.Context, task *models.CronTask) error {
 		runtime.ForSink(logger.SinkAI, "trace-probe.ai").WithTrace(runtime.TraceOrNew(ctx, "ai")).Info(
@@ -45,10 +55,12 @@ func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
 
 	api := NewCronTaskApi()
 	task := &models.CronTask{
-		ID:       1,
 		Name:     "trace probe",
 		TaskType: "trace_probe",
 		CronExpr: "0 * * * * *",
+	}
+	if err := db.Dao.Create(task).Error; err != nil {
+		t.Fatalf("seed cron task row: %v", err)
 	}
 
 	if err := api.ExecuteTask(context.Background(), task); err != nil {
