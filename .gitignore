@@ -118,5 +118,6 @@ frontend/package.json.md5
 !frontend/dist/
 frontend/dist/*
 !frontend/dist/placeholder.txt
+frontend/auto-imports.d.ts
 artifacts/testlogs/
 artifacts/coverage/
