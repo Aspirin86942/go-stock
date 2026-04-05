@@ -73,10 +73,22 @@ export function installFrontendErrorHandlers(page) {
   }
   handlersInstalled = true
 
-  window.onerror = function (message, source, lineno, colno, error) {
-    emitFrontendError({ page, message, source, lineno, colno, error })
-    return true
-  }
+  window.addEventListener('error', (event) => {
+    const message = event?.message
+    const error = event?.error
+    if (isResizeObserverNoise(message) || isResizeObserverNoise(error?.message) || isResizeObserverNoise(error?.stack)) {
+      event.preventDefault?.()
+      return
+    }
+    emitFrontendError({
+      page,
+      message,
+      source: event?.filename,
+      lineno: event?.lineno,
+      colno: event?.colno,
+      error,
+    })
+  })
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event?.reason
@@ -85,11 +97,17 @@ export function installFrontendErrorHandlers(page) {
       event.preventDefault()
       return
     }
-    emitFrontendError({
+    const emitted = emitFrontendError({
       page,
       message: reason?.message || 'unhandledrejection',
       error: reason instanceof Error ? reason : new Error(String(reason)),
     })
-    event.preventDefault()
+    if (emitted) {
+      console.error('Unhandled promise rejection:', reason)
+    }
   })
+}
+
+export function __resetFrontendErrorHandlersForTest() {
+  handlersInstalled = false
 }
