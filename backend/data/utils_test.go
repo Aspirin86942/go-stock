@@ -1,9 +1,10 @@
 package data
 
 import (
-	"github.com/duke-git/lancet/v2/slice"
 	"go-stock/backend/logger"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -39,9 +40,27 @@ func TestConvertStockCodeToTushareCode(t *testing.T) {
 	logger.SugaredLogger.Infof("ConvertTushareCodeToStockCode(%s)", ConvertTushareCodeToStockCode("000802.SZ"))
 }
 func TestReplaceSensitiveWords(t *testing.T) {
-	txt := "新 希 望习近平"
-	txt2 := ReplaceSensitiveWords(txt)
-	logger.SugaredLogger.Infof("ReplaceSensitiveWords(%s)", txt2)
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	tempDir := t.TempDir()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
 
-	os.WriteFile("words.txt", []byte(slice.Join(SensitiveWords, "\n")), 0644)
+	txt := "新 希 望习近平"
+	got := ReplaceSensitiveWords(txt)
+	if strings.Contains(got, "习近平") {
+		t.Fatalf("expected sensitive words to be removed, got %q", got)
+	}
+	if RemoveAllBlankChar(got) != "新希望" {
+		t.Fatalf("expected filtered text to keep non-sensitive content after whitespace normalization, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(tempDir, "words.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected ReplaceSensitiveWords test not to write words.txt, stat err=%v", err)
+	}
 }
