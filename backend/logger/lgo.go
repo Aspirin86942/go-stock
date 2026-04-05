@@ -9,7 +9,6 @@ import (
 
 var CoreLogger *zap.Logger
 var SugaredLogger *zap.SugaredLogger
-var Logger *zap.Logger
 
 func init() {
 	InitLogger()
@@ -23,6 +22,5 @@ func InitLogger() {
 
 	runtime := MustInit(DefaultConfig(paths))
 	CoreLogger = runtime.getSinkLogger(SinkApp)
-	Logger = CoreLogger
-	SugaredLogger = Logger.Sugar()
+	SugaredLogger = CoreLogger.Sugar()
 }

@@ -36,7 +36,7 @@ type Config struct {
 	EnableStdout bool
 }
 
-type ModuleLogger struct {
+type Logger struct {
 	runtime *Runtime
 	sink    Sink
 	module  string

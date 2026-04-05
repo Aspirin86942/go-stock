@@ -6,8 +6,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func (r *Runtime) ForSink(sink Sink, module string) *ModuleLogger {
-	return &ModuleLogger{runtime: r, sink: sink, module: module}
+func (r *Runtime) ForSink(sink Sink, module string) *Logger {
+	return &Logger{runtime: r, sink: sink, module: module}
 }
 
 func String(key, value string) zap.Field {
@@ -38,25 +38,25 @@ func Err(err error) zap.Field {
 	return zap.NamedError("error", err)
 }
 
-func (l *ModuleLogger) WithTrace(trace TraceContext) *ModuleLogger {
+func (l *Logger) WithTrace(trace TraceContext) *Logger {
 	clone := *l
 	clone.trace = trace
 	return &clone
 }
 
-func (l *ModuleLogger) Info(event, message string, fields ...zap.Field) {
+func (l *Logger) Info(event, message string, fields ...zap.Field) {
 	l.base(event).Info(message, fields...)
 }
 
-func (l *ModuleLogger) Warn(event, message string, fields ...zap.Field) {
+func (l *Logger) Warn(event, message string, fields ...zap.Field) {
 	l.base(event).Warn(message, fields...)
 }
 
-func (l *ModuleLogger) Error(event, message string, fields ...zap.Field) {
+func (l *Logger) Error(event, message string, fields ...zap.Field) {
 	l.base(event).Error(message, fields...)
 }
 
-func (l *ModuleLogger) base(event string) *zap.Logger {
+func (l *Logger) base(event string) *zap.Logger {
 	return l.runtime.getSinkLogger(l.sink).With(
 		zap.String("module", l.module),
 		zap.String("event", event),
