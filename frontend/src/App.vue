@@ -771,19 +771,6 @@ onBeforeUnmount(() => {
   EventsOff("newsPush")
 })
 
-window.onerror = function (msg, source, lineno, colno, error) {
-  // 将错误信息发送给后端
-  EventsEmit("frontendError", {
-    page: "App.vue",
-    message: msg,
-    source: source,
-    lineno: lineno,
-    colno: colno,
-    error: error ? error.stack : null,
-  });
-  return true;
-};
-
 onBeforeMount(() => {
   GetVersionInfo().then(result => {
     if(result.officialStatement){

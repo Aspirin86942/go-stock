@@ -329,18 +329,6 @@ function importConfig() {
 }
 
 
-window.onerror = function (event, source, lineno, colno, error) {
-  EventsEmit("frontendError", {
-    page: "settings.vue",
-    message: event,
-    source: source,
-    lineno: lineno,
-    colno: colno,
-    error: error ? error.stack : null
-  });
-  return true;
-};
-
 const showManagePromptsModal = ref(false)
 const promptTypeOptions = [
   {label: "模型系统Prompt", value: '模型系统Prompt'},

@@ -1893,26 +1893,6 @@ function getHeight() {
   return document.documentElement.clientHeight
 }
 
-window.onerror = function (msg, source, lineno, colno, error) {
-  // 将错误信息发送给后端
-  EventsEmit("frontendError", {
-    page: "stock.vue",
-    message: msg,
-    source: source,
-    lineno: lineno,
-    colno: colno,
-    error: error ? error.stack : null,
-    data: data,
-    results: results,
-    followList: followList,
-    stockList: stockList,
-    stocks: stocks,
-    formModel: formModel,
-  });
-  message.error("发生错误:" + msg)
-  return true;
-};
-
 function saveAsImage(name, code) {
   Environment().then(env => {
     switch (env.platform) {
