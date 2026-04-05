@@ -22,6 +22,62 @@ import (
 
 var ShanghaiTimezone = time.FixedZone("CST", 8*60*60)
 
+func appLifecycleLogger(module string) *logger.Logger {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return nil
+	}
+	return runtimeLogger.ForSink(logger.SinkApp, module)
+}
+
+func appLifecycleTrace(source string) logger.TraceContext {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return logger.TraceContext{Source: source}
+	}
+	return runtimeLogger.NewTrace(source)
+}
+
+// logFrontendRuntimeError 统一记录前端运行时错误，保留页面、路由和堆栈等关键上下文。
+func logFrontendRuntimeError(optionalData []interface{}) {
+	runtimeLogger := logger.Default()
+	if runtimeLogger == nil {
+		return
+	}
+
+	payload := logger.NormalizeFrontendError(optionalData)
+	frontendLog := runtimeLogger.ForSink(logger.SinkFrontend, "frontend")
+	trace := runtimeLogger.NewTrace("wails-frontend")
+
+	if payload.Extra != nil {
+		frontendLog.WithTrace(trace).Error(
+			"frontend.error",
+			"frontend runtime error",
+			logger.String("page", payload.Page),
+			logger.String("route", payload.Route),
+			logger.String("error_message", payload.Message),
+			logger.String("source", payload.Source),
+			logger.Int("lineno", payload.Line),
+			logger.Int("colno", payload.Column),
+			logger.String("stack", payload.Stack),
+			logger.Any("extra", payload.Extra),
+		)
+		return
+	}
+
+	frontendLog.WithTrace(trace).Error(
+		"frontend.error",
+		"frontend runtime error",
+		logger.String("page", payload.Page),
+		logger.String("route", payload.Route),
+		logger.String("error_message", payload.Message),
+		logger.String("source", payload.Source),
+		logger.Int("lineno", payload.Line),
+		logger.Int("colno", payload.Column),
+		logger.String("stack", payload.Stack),
+	)
+}
+
 func GetShanghaiTime() time.Time {
 	return time.Now().In(ShanghaiTimezone)
 }

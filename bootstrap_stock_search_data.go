@@ -15,6 +15,10 @@ import (
 
 const bundledStockSeedBatchSize = 50
 
+func bundledStockSeedLogger() *logger.Logger {
+	return logger.Default().ForSink(logger.SinkApp, "bootstrap_stock_search_data")
+}
+
 // 正式版首次启动可能会落到 build/bin/data/stock.db，新库为空时需要用随包基础数据回填搜索候选。
 func ensureBundledStockSearchData() error {
 	if err := migrateStockSearchTables(); err != nil {
@@ -80,7 +84,11 @@ func seedBundledAStockData(payload []byte) error {
 		inserted++
 	}
 
-	logger.SugaredLogger.Infof("seed bundled A-share stock data: %d", inserted)
+	bundledStockSeedLogger().Info(
+		"bundled_stock_seed.a_share",
+		"seeded bundled A-share stock data",
+		logger.Int("inserted", inserted),
+	)
 	return nil
 }
 
@@ -104,7 +112,11 @@ func seedBundledHKStockData(payload []byte) error {
 		return fmt.Errorf("seed bundled HK stock data: %w", err)
 	}
 
-	logger.SugaredLogger.Infof("seed bundled HK stock data: %d", len(stocks))
+	bundledStockSeedLogger().Info(
+		"bundled_stock_seed.hk",
+		"seeded bundled HK stock data",
+		logger.Int("inserted", len(stocks)),
+	)
 	return nil
 }
 
@@ -128,6 +140,10 @@ func seedBundledUSStockData(payload []byte) error {
 		return fmt.Errorf("seed bundled US stock data: %w", err)
 	}
 
-	logger.SugaredLogger.Infof("seed bundled US stock data: %d", len(stocks))
+	bundledStockSeedLogger().Info(
+		"bundled_stock_seed.us",
+		"seeded bundled US stock data",
+		logger.Int("inserted", len(stocks)),
+	)
 	return nil
 }

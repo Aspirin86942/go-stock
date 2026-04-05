@@ -30,12 +30,18 @@ const (
 // startup is called at application startup
 func (a *App) startup(ctx context.Context) {
 	defer PanicHandler()
+	startupLog := appLifecycleLogger("app.windows")
+	startupTrace := appLifecycleTrace("wails-startup")
 	runtime.EventsOn(ctx, "frontendError", func(optionalData ...interface{}) {
-		logger.SugaredLogger.Errorf("Frontend error: %v\n", optionalData)
+		logFrontendRuntimeError(optionalData)
 	})
-	//logger.SugaredLogger.Infof("Version:%s", Version)
 	// Perform your setup here
 	a.ctx = ctx
+	startupLog.WithTrace(startupTrace).Info(
+		"lifecycle.startup",
+		"wails startup",
+		logger.String("version", Version),
+	)
 
 	// 应用启动时自动创建已启用的定时任务
 	a.InitCronTasks()
@@ -200,6 +206,8 @@ func onReady(a *App) {
 // Returning true will cause the application to continue, false will continue shutdown as normal.
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	defer PanicHandler()
+	beforeCloseLog := appLifecycleLogger("app.windows")
+	beforeCloseTrace := appLifecycleTrace("wails-before-close")
 
 	// 记录当前窗口大小，供下次启动时还原
 	if a.ctx != nil {
@@ -211,6 +219,12 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 			cfg.WindowHeight = h
 			data.UpdateConfig(cfg)
 			//logger.SugaredLogger.Infof("save window size: %dx%d", w, h)
+			beforeCloseLog.WithTrace(beforeCloseTrace).Info(
+				"lifecycle.before_close.window_saved",
+				"saved window size before close",
+				logger.Int("width", w),
+				logger.Int("height", h),
+			)
 		}
 	}
 
@@ -224,10 +238,18 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	})
 
 	if err != nil {
-		logger.SugaredLogger.Errorf("dialog error:%s", err.Error())
+		beforeCloseLog.WithTrace(beforeCloseTrace).Error(
+			"lifecycle.before_close.dialog_failed",
+			"close confirmation dialog failed",
+			logger.Err(err),
+		)
 		return false
 	}
-	logger.SugaredLogger.Debugf("dialog:%s", dialog)
+	beforeCloseLog.WithTrace(beforeCloseTrace).Info(
+		"lifecycle.before_close.dialog_result",
+		"close confirmation dialog handled",
+		logger.String("dialog", dialog),
+	)
 	if dialog == "No" {
 		return true
 	} else {

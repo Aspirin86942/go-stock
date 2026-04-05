@@ -314,6 +314,8 @@ func GetSource(tags []string) string {
 // domReady is called after front-end resources have been loaded
 func (a *App) domReady(ctx context.Context) {
 	defer PanicHandler()
+	domReadyLog := appLifecycleLogger("app")
+	domReadyTrace := appLifecycleTrace("wails-dom-ready")
 	defer func() {
 		// 增加延迟确保前端已准备好接收事件
 		go func() {
@@ -321,6 +323,10 @@ func (a *App) domReady(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "loadingMsg", "done")
 		}()
 	}()
+	domReadyLog.WithTrace(domReadyTrace).Info(
+		"lifecycle.dom_ready",
+		"frontend resources loaded",
+	)
 
 	//if stocksBin != nil && len(stocksBin) > 0 {
 	//	go runtime.EventsEmit(a.ctx, "loadingMsg", "检查A股基础信息...")
@@ -1226,6 +1232,8 @@ func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 // shutdown is called at application termination
 func (a *App) shutdown(ctx context.Context) {
 	defer PanicHandler()
+	shutdownLog := appLifecycleLogger("app")
+	shutdownTrace := appLifecycleTrace("wails-shutdown")
 	// 记录当前窗口大小，供下次启动时还原
 	if a.ctx != nil {
 		if w, h := runtime.WindowGetSize(a.ctx); w > 0 && h > 0 {
@@ -1233,10 +1241,18 @@ func (a *App) shutdown(ctx context.Context) {
 			cfg.WindowWidth = w
 			cfg.WindowHeight = h
 			data.UpdateConfig(cfg)
-			//logger.SugaredLogger.Infof("save window size: %dx%d", w, h)
+			shutdownLog.WithTrace(shutdownTrace).Info(
+				"lifecycle.shutdown.window_saved",
+				"saved window size during shutdown",
+				logger.Int("width", w),
+				logger.Int("height", h),
+			)
 		}
 	}
-	//logger.SugaredLogger.Infof("application shutdown Version:%s", Version)
+	shutdownLog.WithTrace(shutdownTrace).Info(
+		"lifecycle.shutdown",
+		"application shutdown",
+	)
 }
 
 // Greet returns a greeting for the given name

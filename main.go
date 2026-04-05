@@ -19,7 +19,7 @@ import (
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/slice"
 	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/logger"
+	wailslogger "github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -62,25 +62,44 @@ var OFFICIAL_STATEMENT string
 var BuildKey string
 
 func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.SugaredLogger.Error("panic: ", r)
-			log.SugaredLogger.Error("stack: ", string(debug.Stack()))
-		}
-	}()
-
 	runtimePaths, err := apppath.Ensure()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化运行时目录失败: %v\n", err)
 		os.Exit(1)
 	}
+	runtimeLog := log.MustInit(log.DefaultConfig(runtimePaths))
+	runtimeLog.AttachPayloadStore(log.NewPayloadStore(runtimePaths.LogsDir, 32*1024, 5<<30))
+	appLog := runtimeLog.ForSink(log.SinkApp, "main")
+	panicLog := runtimeLog.ForSink(log.SinkPanic, "main")
+	bootstrapTrace := runtimeLog.NewTrace("bootstrap")
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicLog.WithTrace(bootstrapTrace).Error(
+				"startup.panic",
+				"panic recovered during bootstrap",
+				log.Any("panic_value", recovered),
+				log.String("stack", string(debug.Stack())),
+			)
+		}
+	}()
+	appLog.WithTrace(bootstrapTrace).Info(
+		"startup.begin",
+		"starting app",
+		log.String("version", Version),
+		log.String("commit", VersionCommit),
+	)
+
 	if BuildKey == "" {
 		BuildKey = "cc1e0d684e32f176c56ff1fcf384dcd9"
 	}
 	data.SponsorDecryptKeyHex = BuildKey
 	db.Init("")
 	if err := ensureBundledStockSearchData(); err != nil {
-		log.SugaredLogger.Errorf("初始化内置股票搜索数据失败: %v", err)
+		appLog.WithTrace(bootstrapTrace).Error(
+			"startup.seed_bundled_stock_search_data",
+			"initialize bundled stock search data failed",
+			log.Err(err),
+		)
 	}
 	data.InitAnalyzeSentiment()
 	go AutoMigrate()
@@ -89,10 +108,6 @@ func main() {
 	//	Name: "默认分组",
 	//	Sort: 0,
 	//})
-
-	log.SugaredLogger.Info("starting...")
-	log.SugaredLogger.Infof("version: %s  commit: %s", Version, VersionCommit)
-	//log.SugaredLogger.Infof("build key: %s", BuildKey)
 
 	// 程序启动时预缓存东财 Cookie
 	//go func() {
@@ -133,12 +148,14 @@ func main() {
 	//FileMenu.AddText("退出", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
 	//	runtime.Quit(app.ctx)
 	//})
-	log.SugaredLogger.Info("version: " + Version)
-	log.SugaredLogger.Info("commit: " + VersionCommit)
 	// 根据屏幕分辨率自适应窗口尺寸
 	width, height, _, _, err := getScreenResolution()
 	if err != nil {
-		log.SugaredLogger.Error("get screen resolution error")
+		appLog.WithTrace(bootstrapTrace).Error(
+			"startup.screen_resolution",
+			"get screen resolution failed, using fallback size",
+			log.Err(err),
+		)
 		// 获取失败时给一个合理的默认值
 		width = 1412
 		height = 834
@@ -163,14 +180,22 @@ func main() {
 		appWidth = width * 5 / 10
 		appHeight = height * 5 / 10
 	}
-	log.SugaredLogger.Info("screen resolution: " + convertor.ToString(width) + "x" + convertor.ToString(height))
-	log.SugaredLogger.Info("window size: " + convertor.ToString(appWidth) + "x" + convertor.ToString(appHeight))
+	appLog.WithTrace(bootstrapTrace).Info(
+		"startup.window_metrics",
+		"calculated initial window metrics",
+		log.String("screen_resolution", convertor.ToString(width)+"x"+convertor.ToString(height)),
+		log.String("window_size", convertor.ToString(appWidth)+"x"+convertor.ToString(appHeight)),
+	)
 
 	// 作为 go-stock 子组件启动独立 Web 服务
 	// 端口默认由 AI_ASSISTANT_WEB_ADDR 决定。
 	go func() {
 		if err := assistantweb.Start(); err != nil {
-			log.SugaredLogger.Errorf("ai-assistant-web start error: %v", err)
+			appLog.WithTrace(bootstrapTrace).Error(
+				"startup.ai_assistant_web",
+				"start ai-assistant-web failed",
+				log.Err(err),
+			)
 		}
 	}()
 
@@ -194,9 +219,9 @@ func main() {
 		BackgroundColour:         backgroundColour,
 		Assets:                   assets,
 		Menu:                     AppMenu,
-		Logger:                   logger.NewFileLogger(runtimePaths.WailsLogPath),
-		LogLevel:                 logger.DEBUG,
-		LogLevelProduction:       logger.INFO,
+		Logger:                   log.NewWailsLogger(runtimeLog, "wails"),
+		LogLevel:                 wailslogger.DEBUG,
+		LogLevelProduction:       wailslogger.INFO,
 		OnStartup:                app.startup,
 		OnDomReady:               app.domReady,
 		OnBeforeClose:            app.beforeClose,
@@ -238,7 +263,12 @@ func main() {
 	})
 
 	if err != nil {
-		log.SugaredLogger.Fatal(err)
+		appLog.WithTrace(bootstrapTrace).Error(
+			"startup.wails_run",
+			"wails run failed",
+			log.Err(err),
+		)
+		os.Exit(1)
 	}
 
 }
@@ -470,7 +500,17 @@ func initStockData(ctx context.Context) {
 // PanicHandler 捕获 panic 的包装函数
 func PanicHandler() {
 	if r := recover(); r != nil {
-		fmt.Printf("Recovered from panic: %v\n", r)
-		debug.PrintStack()
+		runtimeLog := log.Default()
+		if runtimeLog == nil {
+			fmt.Printf("Recovered from panic: %v\n", r)
+			debug.PrintStack()
+			return
+		}
+		runtimeLog.ForSink(log.SinkPanic, "panic").WithTrace(runtimeLog.NewTrace("panic")).Error(
+			"panic.recovered",
+			"panic recovered",
+			log.Any("panic_value", r),
+			log.String("stack", string(debug.Stack())),
+		)
 	}
 }

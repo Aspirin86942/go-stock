@@ -77,6 +77,24 @@ func TestForSinkError_RoutesToErrorSink(t *testing.T) {
 	}
 }
 
+func TestNormalizeFrontendError_PreservesRouteAndStack(t *testing.T) {
+	payload := NormalizeFrontendError([]interface{}{
+		map[string]interface{}{
+			"page":    "stock.vue",
+			"route":   "/stock",
+			"message": "ResizeObserver loop limit exceeded",
+			"error":   "stack-line-1",
+		},
+	})
+
+	if payload.Page != "stock.vue" || payload.Route != "/stock" {
+		t.Fatalf("expected normalized frontend payload, got %#v", payload)
+	}
+	if payload.Stack != "stack-line-1" {
+		t.Fatalf("expected stack to be preserved, got %#v", payload)
+	}
+}
+
 func newRuntimeForTest(writer io.Writer) *Runtime {
 	testCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),

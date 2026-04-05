@@ -22,12 +22,18 @@ import (
 // startup 在应用程序启动时调用
 func (a *App) startup(ctx context.Context) {
 	defer PanicHandler()
+	startupLog := appLifecycleLogger("app.darwin")
+	startupTrace := appLifecycleTrace("wails-startup")
 	runtime.EventsOn(ctx, "frontendError", func(optionalData ...interface{}) {
-		logger.SugaredLogger.Errorf("Frontend error: %v\n", optionalData)
+		logFrontendRuntimeError(optionalData)
 	})
-	logger.SugaredLogger.Infof("Version:%s", Version)
 	// Perform your setup here
 	a.ctx = ctx
+	startupLog.WithTrace(startupTrace).Info(
+		"lifecycle.startup",
+		"wails startup",
+		logger.String("version", Version),
+	)
 
 	// 应用启动时自动创建已启用的定时任务
 	a.InitCronTasks()
@@ -70,7 +76,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}()
 	go setUpScreen(a)
-	logger.SugaredLogger.Infof(" application startup Version:%s", Version)
+	startupLog.WithTrace(startupTrace).Info("lifecycle.startup.ready", "startup hooks registered")
 }
 
 func setUpScreen(a *App) {
@@ -178,17 +184,23 @@ func onReady(a *App) {
 // beforeClose 在应用程序关闭前调用，显示确认对话框
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	defer PanicHandler()
+	beforeCloseLog := appLifecycleLogger("app.darwin")
+	beforeCloseTrace := appLifecycleTrace("wails-before-close")
 
 	// 记录当前窗口大小，供下次启动时还原
 	if a.ctx != nil {
 		w, h := runtime.WindowGetSize(ctx)
-		logger.SugaredLogger.Infof(" window size: %dx%d", w, h)
 		if w > 0 && h > 0 {
 			cfg := data.GetSettingConfig()
 			cfg.WindowWidth = w
 			cfg.WindowHeight = h
 			data.UpdateConfig(cfg)
-			logger.SugaredLogger.Infof("save window size: %dx%d", w, h)
+			beforeCloseLog.WithTrace(beforeCloseTrace).Info(
+				"lifecycle.before_close.window_saved",
+				"saved window size before close",
+				logger.Int("width", w),
+				logger.Int("height", h),
+			)
 		}
 	}
 
@@ -203,11 +215,19 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	})
 
 	if err != nil {
-		logger.SugaredLogger.Errorf("dialog error:%s", err.Error())
+		beforeCloseLog.WithTrace(beforeCloseTrace).Error(
+			"lifecycle.before_close.dialog_failed",
+			"close confirmation dialog failed",
+			logger.Err(err),
+		)
 		return false
 	}
 
-	logger.SugaredLogger.Debugf("dialog:%s", dialog)
+	beforeCloseLog.WithTrace(beforeCloseTrace).Info(
+		"lifecycle.before_close.dialog_result",
+		"close confirmation dialog handled",
+		logger.String("dialog", dialog),
+	)
 	if dialog == "取消" {
 		return true // 如果选择了取消，不关闭应用
 	} else {
