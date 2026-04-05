@@ -121,6 +121,50 @@ test('console.error proxy keeps original output and emits once for the same erro
   }
 })
 
+test('console.error proxy emits twice for same message with different context args', () => {
+  __resetFrontendErrorHandlersForTest()
+  const previousWindow = globalThis.window
+  const previousConsoleError = console.error
+  const listeners = new Map()
+  const emitted = []
+  const consoleLogs = []
+
+  globalThis.window = {
+    location: { hash: '#/stock', pathname: '/stock' },
+    runtime: {
+      EventsEmit: (...args) => {
+        emitted.push(args)
+      },
+    },
+    addEventListener: (name, handler) => {
+      listeners.set(name, handler)
+    },
+  }
+  console.error = (...args) => {
+    consoleLogs.push(args)
+  }
+
+  try {
+    installFrontendErrorHandlers('main.js')
+    const logWithContext = (requestId) => {
+      console.error('request failed', { requestId })
+    }
+
+    logWithContext(1)
+    logWithContext(2)
+    logWithContext(1)
+
+    assert.equal(consoleLogs.length, 3)
+    assert.equal(emitted.length, 2)
+    assert.equal(emitted[0][0], 'frontendError')
+    assert.equal(emitted[1][0], 'frontendError')
+  } finally {
+    console.error = previousConsoleError
+    globalThis.window = previousWindow
+    __resetFrontendErrorHandlersForTest()
+  }
+})
+
 test('non-ResizeObserver rejection is emitted and not silently swallowed', () => {
   __resetFrontendErrorHandlersForTest()
   const previousWindow = globalThis.window

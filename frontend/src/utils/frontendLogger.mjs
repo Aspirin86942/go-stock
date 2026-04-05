@@ -58,7 +58,8 @@ function cleanupExpiredFingerprints(nowMs) {
   }
 }
 
-function buildErrorFingerprint(payload) {
+function buildErrorFingerprint(payload, dedupeContext = '') {
+  const fingerprintError = dedupeContext ? '' : (payload.error || '')
   return [
     payload.page || '',
     payload.route || '',
@@ -66,12 +67,13 @@ function buildErrorFingerprint(payload) {
     payload.source || '',
     payload.lineno || 0,
     payload.colno || 0,
-    payload.error || '',
+    fingerprintError,
     payload.traceId || '',
+    dedupeContext || '',
   ].join('|')
 }
 
-function shouldDedupeFrontendError(error, payload) {
+function shouldDedupeFrontendError(error, payload, dedupeContext = '') {
   const nowMs = Date.now()
   cleanupExpiredFingerprints(nowMs)
 
@@ -83,7 +85,7 @@ function shouldDedupeFrontendError(error, payload) {
     }
   }
 
-  const fingerprint = buildErrorFingerprint(payload)
+  const fingerprint = buildErrorFingerprint(payload, dedupeContext)
   const lastFingerprintAt = recentFingerprints.get(fingerprint)
   recentFingerprints.set(fingerprint, nowMs)
   return typeof lastFingerprintAt === 'number' && nowMs - lastFingerprintAt <= ERROR_DEDUPE_WINDOW_MS
@@ -109,7 +111,59 @@ function buildConsoleErrorInput(page, args) {
     page,
     message: message || 'console.error',
     error: error || new Error((message || 'console.error').toString()),
+    dedupeContext: buildConsoleArgsFingerprint(args),
   }
+}
+
+function stableSerializeForFingerprint(value, visited = new WeakSet()) {
+  if (value === null) {
+    return 'null'
+  }
+  if (value === undefined) {
+    return 'undefined'
+  }
+
+  const type = typeof value
+  if (type === 'string') {
+    return JSON.stringify(value)
+  }
+  if (type === 'number' || type === 'boolean' || type === 'bigint') {
+    return String(value)
+  }
+  if (type === 'symbol') {
+    return value.toString()
+  }
+  if (type === 'function') {
+    return `[Function:${value.name || 'anonymous'}]`
+  }
+
+  if (value instanceof Error) {
+    return `Error:${value.name}:${value.message}:${value.stack || ''}`
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerializeForFingerprint(item, visited)).join(',')}]`
+  }
+
+  if (type === 'object') {
+    if (visited.has(value)) {
+      return '[Circular]'
+    }
+    visited.add(value)
+    const keys = Object.keys(value).sort()
+    const body = keys.map((key) => `${JSON.stringify(key)}:${stableSerializeForFingerprint(value[key], visited)}`).join(',')
+    visited.delete(value)
+    return `{${body}}`
+  }
+
+  return String(value)
+}
+
+function buildConsoleArgsFingerprint(args) {
+  if (!Array.isArray(args) || args.length === 0) {
+    return ''
+  }
+  return args.map((item) => stableSerializeForFingerprint(item)).join('|')
 }
 
 function installConsoleErrorProxy(page) {
@@ -148,7 +202,7 @@ export function emitFrontendError(input) {
   if (isResizeObserverNoise(payload.message) || isResizeObserverNoise(payload.error)) {
     return false
   }
-  if (shouldDedupeFrontendError(input?.error, payload)) {
+  if (shouldDedupeFrontendError(input?.error, payload, input?.dedupeContext || '')) {
     return false
   }
   EventsEmit('frontendError', payload)
