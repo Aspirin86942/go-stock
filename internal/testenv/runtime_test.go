@@ -90,6 +90,26 @@ func TestNewLoggerRuntime_UsesArtifactsDirEnvAndWritesMetadataFields(t *testing.
 	}
 }
 
+func TestResolveArtifactsRoot_AnchorsRelativeOverrideAtRepoRoot(t *testing.T) {
+	got := resolveArtifactsRoot(func(string) string {
+		return filepath.Join("artifacts", "testlogs", "task-3")
+	})
+	want := filepath.Join(repoRoot(), "artifacts", "testlogs", "task-3")
+	if filepath.Clean(got) != filepath.Clean(want) {
+		t.Fatalf("expected relative override to resolve under repo root %q, got %q", want, got)
+	}
+}
+
+func TestResolveArtifactsRoot_StripsParentTraversalFromRelativeOverride(t *testing.T) {
+	got := resolveArtifactsRoot(func(string) string {
+		return filepath.Join("..", "tmp", "logs")
+	})
+	want := filepath.Join(repoRoot(), "tmp", "logs")
+	if filepath.Clean(got) != filepath.Clean(want) {
+		t.Fatalf("expected traversal segments to be stripped under repo root %q, got %q", want, got)
+	}
+}
+
 func parseLastJSONEntry(t *testing.T, content []byte) map[string]any {
 	t.Helper()
 

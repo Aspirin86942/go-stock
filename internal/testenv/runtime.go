@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -80,13 +81,34 @@ func NewLoggerRuntime(t *testing.T, suite string) (*logger.Runtime, RuntimeArtif
 func resolveArtifactsRoot(getenv func(string) string) string {
 	root := strings.TrimSpace(getenv(ArtifactsDirEnv))
 	if root == "" {
-		return filepath.Join("artifacts", "testlogs")
+		return filepath.Join(repoRoot(), "artifacts", "testlogs")
 	}
-	return filepath.Clean(root)
+	if filepath.IsAbs(root) {
+		return filepath.Clean(root)
+	}
+	segments := make([]string, 0)
+	for _, segment := range strings.Split(filepath.ToSlash(filepath.Clean(root)), "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			continue
+		}
+		segments = append(segments, segment)
+	}
+	if len(segments) == 0 {
+		return filepath.Join(repoRoot(), "artifacts", "testlogs")
+	}
+	return filepath.Join(append([]string{repoRoot()}, segments...)...)
 }
 
 func makeTestRunID() string {
 	return fmt.Sprintf("%s-%d", time.Now().UTC().Format("20060102-150405.000000000"), os.Getpid())
+}
+
+func repoRoot() string {
+	_, file, _, ok := goruntime.Caller(0)
+	if !ok {
+		return filepath.Clean(".")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
 func sanitizePathFragment(value string) string {
