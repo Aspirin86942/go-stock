@@ -4,7 +4,7 @@
 package data
 
 import (
-	"go-stock/backend/logger"
+	"go-stock/internal/testenv"
 	"testing"
 
 	"github.com/go-toast/toast"
@@ -15,19 +15,18 @@ import (
 // @Desc
 // -----------------------------------------------------------------------------------
 
-func TestAlert(t *testing.T) {
-	requireIntegrationTest(t)
+func TestReleaseSmoke_Alert(t *testing.T) {
+	testenv.RequireReleaseSmokeTest(t)
 	notification := toast.Notification{
 		AppID:    "go-stock",
-		Title:    "Hello, World!",
-		Message:  "This is a toast notification.",
+		Title:    "go-stock smoke",
+		Message:  "release smoke alert",
 		Icon:     "../../build/appicon.png",
 		Duration: "short",
 		Audio:    toast.Default,
 	}
 	err := notification.Push()
 	if err != nil {
-		logger.SugaredLogger.Error(err)
-		return
+		t.Fatalf("send darwin alert: %v", err)
 	}
 }

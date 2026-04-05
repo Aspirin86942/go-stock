@@ -109,6 +109,56 @@ func TestReleaseSmokeGateDecision_RequiresDedicatedEnv(t *testing.T) {
 	}
 }
 
+func TestManualGateDecision_RequiresDedicatedEnv(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		env         map[string]string
+		shortMode   bool
+		wantEnabled bool
+		wantReason  string
+	}{
+		{
+			name: "short mode skips manual tests",
+			env: map[string]string{
+				ManualEnv: "1",
+			},
+			shortMode:   true,
+			wantEnabled: false,
+			wantReason:  "skipping manual test in short mode",
+		},
+		{
+			name: "manual env enables tests",
+			env: map[string]string{
+				ManualEnv: "1",
+			},
+			wantEnabled: true,
+		},
+		{
+			name:        "missing manual env disables tests",
+			env:         map[string]string{},
+			wantEnabled: false,
+			wantReason:  "skipping manual test; set GO_STOCK_RUN_MANUAL_TESTS=1 to enable",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			enabled, reason := manualGateDecision(getenvFromMap(tc.env), tc.shortMode)
+			if enabled != tc.wantEnabled {
+				t.Fatalf("enabled = %v, want %v", enabled, tc.wantEnabled)
+			}
+			if reason != tc.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tc.wantReason)
+			}
+		})
+	}
+}
+
 func getenvFromMap(env map[string]string) func(string) string {
 	return func(key string) string {
 		return env[key]

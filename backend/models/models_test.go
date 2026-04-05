@@ -8,7 +8,6 @@ import (
 	"github.com/duke-git/lancet/v2/strutil"
 
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"go-stock/backend/models"
 )
 
@@ -32,22 +31,30 @@ type StockInfoData struct {
 func TestStockInfoHK(t *testing.T) {
 	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
-	db.Dao.AutoMigrate(&models.StockInfoHK{})
-	bs, _ := os.ReadFile("../../build/hk.json")
-	v := &StockInfoHKResp{}
-	err := json.Unmarshal(bs, v)
+	if err := db.Dao.AutoMigrate(&models.StockInfoHK{}); err != nil {
+		t.Fatalf("migrate stock_info_hk: %v", err)
+	}
+	bs, err := os.ReadFile("../../build/hk.json")
 	if err != nil {
-		return
+		t.Fatalf("read hk fixture: %v", err)
+	}
+	v := &StockInfoHKResp{}
+	if err := json.Unmarshal(bs, v); err != nil {
+		t.Fatalf("unmarshal hk fixture: %v", err)
+	}
+	if v.StockInfos == nil || len(*v.StockInfos) == 0 {
+		t.Fatalf("expected hk stock infos to be non-empty")
 	}
 	hks := &[]models.StockInfoHK{}
 	for i, data := range *v.StockInfos {
-		logger.SugaredLogger.Infof("第%d条数据: %+v", i, data)
+		t.Logf("第%d条数据: %+v", i, data)
 		hk := &models.StockInfoHK{
 			Code:  strutil.PadStart(data.C, 5, "0") + ".HK",
 			EName: data.N,
 		}
 		*hks = append(*hks, *hk)
 	}
-	db.Dao.Create(&hks)
-
+	if err := db.Dao.Create(&hks).Error; err != nil {
+		t.Fatalf("create hk rows: %v", err)
+	}
 }

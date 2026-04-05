@@ -5,8 +5,8 @@ import (
 	"errors"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -25,7 +25,8 @@ func TestGetStockAiAgent(t *testing.T) {
 	ctx := context.Background()
 	db.Init("../../data/stock.db")
 	config := data.GetSettingConfig()
-	aiAgent := GetStockAiAgent(&ctx, *config.AiConfigs[0])
+	aiConfig := requireFirstAIConfig(t, config)
+	aiAgent := GetStockAiAgent(&ctx, *aiConfig)
 
 	opt := []agent.AgentOption{
 		//agent.WithComposeOptions(compose.WithCallbacks(&tool_logger.LoggerCallback{})),
@@ -35,7 +36,7 @@ func TestGetStockAiAgent(t *testing.T) {
 	sr, err := aiAgent.Stream(ctx, []*schema.Message{
 		{
 			Role:    schema.System,
-			Content: config.Settings.Prompt + "",
+			Content: config.Settings.Prompt,
 		},
 		{
 			Role:    schema.User,
@@ -43,8 +44,7 @@ func TestGetStockAiAgent(t *testing.T) {
 		},
 	}, opt...)
 	if err != nil {
-		logger.SugaredLogger.Errorf("stream error: %v", err)
-		return
+		t.Fatalf("stream error: %v", err)
 	}
 
 	defer sr.Close() // remember to close the stream
@@ -57,11 +57,9 @@ func TestGetStockAiAgent(t *testing.T) {
 				// finish
 				break
 			}
-			// error
-			logger.SugaredLogger.Errorf("failed to recv: %v", err)
-			return
+			t.Fatalf("recv stream chunk: %v", err)
 		}
-		logger.SugaredLogger.Infof("stream recv: %v", msg)
+		t.Logf("stream recv: %#v", msg)
 		if msg.ReasoningContent != "" {
 			md.WriteString(msg.ReasoningContent)
 		}
@@ -69,20 +67,42 @@ func TestGetStockAiAgent(t *testing.T) {
 			md.WriteString(msg.Content)
 		}
 	}
-	logger.SugaredLogger.Info(md.String())
-	//logger.SugaredLogger.Infof("stream done:\n%s", md.String())
+	if md.Len() == 0 {
+		t.Fatalf("expected streamed agent output to be non-empty")
+	}
+	outputPath := filepath.Join(t.TempDir(), "result.md")
+	if err := fileutil.WriteStringToFile(outputPath, md.String(), false); err != nil {
+		t.Fatalf("write streamed result to %s: %v", outputPath, err)
+	}
 }
 
 func TestAgent(t *testing.T) {
 	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
+	aiConfig := requireFirstAIConfig(t, data.GetSettingConfig())
 
 	md := strings.Builder{}
-	ch := NewStockAiAgentApi().Chat("分析一下立讯精密", 2, nil)
+	ch := NewStockAiAgentApi().Chat("分析一下立讯精密", int(aiConfig.ID), nil)
 	for message := range ch {
-		logger.SugaredLogger.Infof("res:%s", message.String())
+		t.Logf("res=%s", message.String())
 		md.WriteString(message.String())
 	}
-	logger.SugaredLogger.Info(md.String())
-	fileutil.WriteStringToFile("../../data/result.md", md.String(), false)
+	if md.Len() == 0 {
+		t.Fatalf("expected chat output to be non-empty")
+	}
+}
+
+func requireFirstAIConfig(t *testing.T, config *data.SettingConfig) *data.AIConfig {
+	t.Helper()
+
+	if config == nil || len(config.AiConfigs) == 0 {
+		t.Skip("skipping external agent test: no AI config available")
+	}
+	for _, item := range config.AiConfigs {
+		if item != nil {
+			return item
+		}
+	}
+	t.Skip("skipping external agent test: AI config entries are nil")
+	return nil
 }

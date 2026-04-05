@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
+
 	"go-stock/internal/testenv"
 )
 
@@ -41,5 +43,28 @@ func TestReleaseSmoke_FrontendBridgeWritesStructuredLog(t *testing.T) {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("expected frontend log to contain %s, got %s", want, string(content))
 		}
+	}
+}
+
+func TestReleaseSmoke_AgentMessageBridgeUsesFrontendFieldNames(t *testing.T) {
+	testenv.RequireReleaseSmokeTest(t)
+
+	payload := agentMessageToFrontendMap(&schema.Message{
+		Role:             schema.Assistant,
+		Content:          "bridge ok",
+		ReasoningContent: "thinking",
+	})
+
+	if got, _ := payload["role"].(string); got != string(schema.Assistant) {
+		t.Fatalf("expected role=%q, got %#v", string(schema.Assistant), payload["role"])
+	}
+	if got, _ := payload["content"].(string); got != "bridge ok" {
+		t.Fatalf("expected content to round-trip, got %#v", payload["content"])
+	}
+	if got, _ := payload["reasoning_content"].(string); got != "thinking" {
+		t.Fatalf("expected reasoning_content to use frontend field name, got %#v", payload["reasoning_content"])
+	}
+	if _, exists := payload["ReasoningContent"]; exists {
+		t.Fatalf("expected frontend bridge payload not to expose Go field names, got %#v", payload)
 	}
 }

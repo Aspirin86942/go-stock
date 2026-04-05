@@ -31,3 +31,10 @@ jobs:
           name: test-default-logs
           path: artifacts/testlogs
           if-no-files-found: ignore
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-default-coverage
+          path: artifacts/coverage
+          if-no-files-found: ignore

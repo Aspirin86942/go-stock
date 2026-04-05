@@ -3,12 +3,11 @@ package data
 import (
 	"context"
 	"go-stock/backend/db"
-	log "go-stock/backend/logger"
 	"testing"
 )
 
 func TestNewDeepSeekOpenAiConfig(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	InitAnalyzeSentiment()
 
@@ -49,7 +48,7 @@ func TestNewDeepSeekOpenAiConfig(t *testing.T) {
 }
 
 func TestGetTopNewsList(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	news := GetTopNewsList(30)
 	t.Log(news)
 }
@@ -59,15 +58,18 @@ func TestSearchGuShiTongStockInfo(t *testing.T) {
 	db.Init("../../data/stock.db")
 	//SearchGuShiTongStockInfo("hk01810", 60)
 	msgs := SearchGuShiTongStockInfo("sh600745", 60)
+	if len(*msgs) == 0 {
+		t.Skip("skipping SearchGuShiTongStockInfo: upstream crawler returned no messages")
+	}
 	for _, msg := range *msgs {
-		log.SugaredLogger.Infof("%s", msg)
+		t.Logf("message=%s", msg)
 	}
 	//SearchGuShiTongStockInfo("gb_goog", 60)
 
 }
 
 func TestGetZSInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	GetZSInfo("中证银行", "sz399986", 5)
 	GetZSInfo("上海贝岭", "sh600171", 5)

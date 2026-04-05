@@ -1,0 +1,127 @@
+# Test Migration Inventory
+
+## Default (retain in main gate)
+- `app_common_test.go`
+- `app_test.go: TestIsHKTradingTime`
+- `app_test.go: TestIsUSTradingTime`
+- `app_test.go: TestCalculateNextRunTime`
+- `app_test.go: TestGetEffectiveSponsorVip_ReturnsOpenAccess`
+- `backend/logger/core_test.go`
+- `backend/logger/closeout_integration_test.go`
+- `backend/logger/http_test.go`
+- `backend/logger/db_test.go`
+- `backend/agent/cron_task_api_test.go`
+- `backend/agent/trace_reuse_test.go`
+- `ai-assistant-web/server_test.go`
+- `backend/db/db_test.go`
+- `backend/apppath/apppath_test.go`
+
+## External (real network / real provider / real crawl)
+- `app_test.go: TestUpdateCheck`
+- `backend/agent/agent_test.go`
+- `backend/models/models_test.go`
+- `backend/data/openai_api_test.go`
+- `backend/data/market_news_api_test.go`
+- `backend/data/search_stock_api_test.go`
+- `backend/data/eastmoney_kline_api_test.go`
+- `backend/data/crawler_api_test.go`
+- `backend/data/stock_data_api_test.go`
+- `backend/data/stock_sentiment_analysis_test.go`
+
+## Release Smoke
+- `app_release_smoke_test.go`
+- `app_release_smoke_test.go: TestReleaseSmoke_AgentMessageBridgeUsesFrontendFieldNames`
+- `ai-assistant-web/server_test.go: TestReleaseSmoke_HealthRouteStillWorksThroughLoggingMiddleware`
+- `backend/data/alert_windows_api_test.go`
+- `backend/data/alert_darwin_api_test.go`
+- `app_test.go: TestReleaseSmoke_GetScreenResolution`
+
+## Manual / follow-up candidates
+- `app_test.go: TestManual_CheckStockBaseInfo`
+- `app_test.go: TestManual_UpdateStockInfoUSFromJSON`
+- `app_test.go: TestManual_CheckUpdate`
+- `app_test.go: TestManual_GetAiRecommendStocksList`
+- `app_test.go: TestManual_SummaryStockNews`
+- `app_test.go: TestManual_FetchAiModels`
+- `backend/data/crawler_api_test.go: TestHk`
+- `backend/data/crawler_api_test.go: TestGetHtmlWithActions`
+- `backend/data/crawler_api_test.go: TestUpdateUSName`
+- `backend/data/crawler_api_test.go: TestUS`
+- `backend/data/crawler_api_test.go: TestUSSINA`
+- `backend/data/crawler_api_test.go: TestSina`
+- `backend/data/crawler_api_test.go: TestDC`
+- `backend/data/stock_data_api_test.go: TestGetTelegraphSearch`
+- `backend/data/stock_data_api_test.go: TestCailianpressWeb`
+- `backend/data/stock_data_api_test.go: TestGetAllStocks`
+- `backend/data/stock_data_api_test.go: TestFilterStocks`
+- `backend/data/stock_data_api_test.go: TestSearchStockInfoByCode`
+- `backend/data/stock_data_api_test.go: TestSearchStockPriceInfo`
+- `backend/data/stock_data_api_test.go: TestGetStockMinutePriceData`
+- `backend/data/stock_data_api_test.go: TestGetKLineData`
+- `backend/data/stock_data_api_test.go: TestGetHK_KLineData`
+- `backend/data/stock_data_api_test.go: TestGetHKStockInfo`
+- `backend/data/stock_data_api_test.go: TestGetRealTimeStockPriceInfo`
+- `backend/data/stock_data_api_test.go: TestNewStockDataApi`
+- `backend/data/stock_data_api_test.go: TestGetStockBaseInfo`
+- `backend/data/stock_data_api_test.go: TestReadFile`
+- `backend/data/stock_data_api_test.go: TestFollowedList`
+- `backend/data/stock_data_api_test.go: TestStockDataApi_GetIndexBasic`
+- `backend/data/stock_data_api_test.go: TestName`
+- `backend/data/stock_data_api_test.go: TestGetStockMoneyData`
+- `backend/data/stock_data_api_test.go: TestGetStockConceptInfo`
+- `backend/data/stock_data_api_test.go: TestGetStockHistoryMoneyData`
+- `backend/data/stock_data_api_test.go: TestGetIndustryValuation`
+- `backend/data/stock_data_api_test.go: Test11`
+- `backend/data/stock_data_api_test.go: TestGetStockRZRQInfo`
+- `backend/data/stock_data_api_test.go: TestGetMutualTop10Deal`
+- `backend/data/openai_api_test.go: TestNewDeepSeekOpenAiConfig`
+- `backend/data/openai_api_test.go: TestGetTopNewsList`
+- `backend/data/openai_api_test.go: TestGetZSInfo`
+- `backend/data/market_news_api_test.go: TestGlobalStockIndexes`
+- `backend/data/market_news_api_test.go: TestGetIndustryRank`
+- `backend/data/market_news_api_test.go: TestGetIndustryMoneyRankSina`
+- `backend/data/market_news_api_test.go: TestGetMoneyRankSina`
+- `backend/data/market_news_api_test.go: TestGetStockMoneyTrendByDay`
+- `backend/data/market_news_api_test.go: TestLongTiger`
+- `backend/data/market_news_api_test.go: TestStockResearchReport`
+- `backend/data/market_news_api_test.go: TestIndustryResearchReport`
+- `backend/data/market_news_api_test.go: TestEMDictCode`
+- `backend/data/market_news_api_test.go: TestTradingViewNews`
+- `backend/data/market_news_api_test.go: TestXUEQIUHotStock`
+- `backend/data/market_news_api_test.go: TestHotEvent`
+- `backend/data/market_news_api_test.go: TestHotTopic`
+- `backend/data/market_news_api_test.go: TestInvestCalendar`
+- `backend/data/market_news_api_test.go: TestClsCalendar`
+- `backend/data/market_news_api_test.go: TestGetGDP`
+- `backend/data/market_news_api_test.go: TestGetCPI`
+- `backend/data/market_news_api_test.go: TestGetPPI`
+- `backend/data/market_news_api_test.go: TestGetPMI`
+- `backend/data/market_news_api_test.go: TestGetIndustryReportInfo`
+- `backend/data/market_news_api_test.go: TestReutersNew`
+- `backend/data/market_news_api_test.go: TestInteractiveAnswer`
+- `backend/data/market_news_api_test.go: TestGetNewsList2`
+- `backend/data/market_news_api_test.go: TestTelegraphList`
+- `backend/data/market_news_api_test.go: TestProxy`
+- `backend/data/market_news_api_test.go: TestNtfy`
+- `backend/data/market_news_api_test.go: TestGetSecuritiesCompanyOpinion`
+- `backend/data/market_news_api_test.go: TestGetNewsListData`
+- `backend/data/dingding_api_test.go: TestRobot`
+- `backend/data/dingding_api_test.go: TestSendToDingDing`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetWeekKLine`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetMonthKLine`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetAdjustedKLine`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetMinuteKLine`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetLatestKLine`
+- `backend/data/eastmoney_kline_api_test.go: TestEastMoneyKLineApi_GetBatchKLineData`
+- `backend/data/eastmoney_kline_api_test.go: TestGetKLineWithMA`
+- `backend/data/eastmoney_kline_api_test.go: TestFetchEastMoneyKlineViaChromedp`
+- `backend/data/pool_test.go: TestPool`
+- `backend/data/search_stock_api_test.go: TestSearchStock`
+- `backend/data/search_stock_api_test.go: TestGetStockHolderNum`
+- `backend/data/search_stock_api_test.go: TestSearchStockApi_HotStrategy`
+- `backend/data/search_stock_api_test.go: TestSearchStockApi_HotStrategyTable`
+- `backend/data/web_search_api_test.go: TestWebSearchApi_Search`
+- `backend/data/web_search_api_test.go: TestWebSearchApi_SearchToMarkdown`
+- `backend/data/web_search_api_test.go: TestWebSearchApi_SearchToJson`
+- `backend/data/web_search_api_test.go: TestWebSearchApi_Bing`
+- `backend/data/web_search_api_test.go: TestWebSearchApi_Baidu`

@@ -6,7 +6,7 @@ import (
 )
 
 func TestPool(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 
 	pool := NewBrowserPool(1)

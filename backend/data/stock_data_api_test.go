@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/backend/util"
 	"io/ioutil"
@@ -28,51 +27,54 @@ import (
 func TestGetTelegraph(t *testing.T) {
 	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
+	InitAnalyzeSentiment()
 
 	//telegraphs := GetTelegraphList(30)
 	//for _, telegraph := range *telegraphs {
-	//	logger.SugaredLogger.Info(telegraph)
+	//	t.Log(telegraph)
 	//}
 	list := NewMarketNewsApi().GetNewTelegraph(30)
-	for _, telegraph := range *list {
-		logger.SugaredLogger.Infof("telegraph:%+v", telegraph)
-	}
+	requirePositiveLen(t, "telegraph list", len(*list))
+	logValue(t, "first_telegraph", (*list)[0])
 }
 
 func TestGetFinancialReports(t *testing.T) {
 	requireIntegrationTest(t)
 	db.Init("../../data/stock.db")
-	//GetFinancialReports("sz000802", 30)
-	//GetFinancialReports("hk00927", 30)
-	//GetFinancialReports("gb_aapl", 30)
-	GetFinancialReportsByXUEQIU("sz000802", 30)
-	GetFinancialReportsByXUEQIU("gb_aapl", 30)
-	GetFinancialReportsByXUEQIU("hk00927", 30)
+
+	for _, stockCode := range []string{"sz000802", "gb_aapl", "hk00927"} {
+		t.Run(stockCode, func(t *testing.T) {
+			reports := GetFinancialReportsByXUEQIU(stockCode, 30)
+			requirePositiveLen(t, stockCode+" financial reports", len(*reports))
+			requireNotBlank(t, stockCode+" financial report", (*reports)[0])
+			t.Logf("%s financial reports=%d", stockCode, len(*reports))
+		})
+	}
 
 }
 
 func TestGetTelegraphSearch(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	searchWords := "半导体 新能源汽车 机器人"
 	//url := "https://www.cls.cn/searchPage?keyword=%E9%97%BB%E6%B3%B0%E7%A7%91%E6%8A%80&type=telegram"
 	messages := SearchStockInfo(searchWords, "telegram", 30)
 	for _, message := range *messages {
-		logger.SugaredLogger.Info(message)
+		t.Log(message)
 	}
 
 	//https://www.cls.cn/stock?code=sh600745
 }
 func TestCailianpressWeb(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	searchWords := ""
 	res := NewMarketNewsApi().CailianpressWeb(searchWords)
 	md := util.MarkdownTableWithTitle(searchWords+"财联社新闻", res.List)
-	logger.SugaredLogger.Info(md)
+	t.Log(md)
 }
 func TestGetAllStocks(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	db.Dao.AutoMigrate(&models.AllStockInfo{})
 
@@ -88,28 +90,28 @@ func TestGetAllStocks(t *testing.T) {
 		}
 		err := db.Dao.CreateInBatches(&datas, 500).Error
 		if err != nil {
-			logger.SugaredLogger.Errorf("db.Dao.CreateInBatches error:%s", err.Error())
+			t.Fatalf("db.Dao.CreateInBatches error:%s", err.Error())
 		}
 	}
 }
 func TestFilterStocks(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 
 	res := NewStockDataApi().GetAllStocks(1, 100, "", models.TechnicalIndicators{
 		CONCERN_RANK_7DAYS: 50,
 	})
-	logger.SugaredLogger.Infof("%+#v", len((*res).Result.Data))
+	t.Logf("%+#v", len((*res).Result.Data))
 
 }
 func TestSearchStockInfoByCode(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	SearchStockInfoByCode("sh600745")
 }
 
 func TestSearchStockPriceInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	SearchStockPriceInfo("博安生物", "hk06955", 30)
 	SearchStockPriceInfo("上海贝岭", "sh600171", 30)
@@ -121,42 +123,42 @@ func TestSearchStockPriceInfo(t *testing.T) {
 
 }
 func TestGetStockMinutePriceData(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	data, date := NewStockDataApi().GetStockMinutePriceData("sh600171")
-	logger.SugaredLogger.Infof("date:%s", date)
-	logger.SugaredLogger.Infof("%+#v", *data)
+	t.Logf("date:%s", date)
+	t.Logf("%+#v", *data)
 }
 func TestGetKLineData(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	k := NewStockDataApi().GetKLineData("sh600171", "240", 30)
 	//for _, kline := range *k {
-	//	logger.SugaredLogger.Infof("%+#v", kline)
+	//	t.Logf("%+#v", kline)
 	//}
 	jsonData, _ := json.Marshal(*k)
 	markdownTable, err := JSONToMarkdownTable(jsonData)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Marshal error:%s", err.Error())
+		t.Fatalf("json.Marshal error:%s", err.Error())
 	}
-	logger.SugaredLogger.Infof("markdownTable:\n%s", markdownTable)
+	t.Logf("markdownTable:\n%s", markdownTable)
 
 }
 func TestGetHK_KLineData(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	k := NewStockDataApi().GetHK_KLineData("hk01810", "day", 1)
 	jsonData, _ := json.Marshal(*k)
 	markdownTable, err := JSONToMarkdownTable(jsonData)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Marshal error:%s", err.Error())
+		t.Fatalf("json.Marshal error:%s", err.Error())
 	}
-	logger.SugaredLogger.Infof("markdownTable:\n%s", markdownTable)
+	t.Logf("markdownTable:\n%s", markdownTable)
 
 }
 
 func TestGetHKStockInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	//NewStockDataApi().GetHKStockInfo(200)
 	//NewStockDataApi().GetSinaHKStockInfo()
@@ -175,36 +177,36 @@ func TestParseTxStockData(t *testing.T) {
 	str = "v_sz002241=\"51~歌尔股份~002241~21.92~22.27~22.14~109872~40211~69642~21.91~25~21.90~961~21.89~257~21.88~748~21.87~665~21.92~86~21.93~168~21.94~556~21.95~171~21.96~85~~20250509094209~-0.35~-1.57~22.16~21.84~21.92/109872/241183171~109872~24118~0.36~27.78~~22.16~21.84~1.44~675.97~765.22~2.27~24.50~20.04~2.57~1590~21.95~40.80~28.71~~~1.24~24118.3171~0.0000~0~\n~GP-A~-15.07~5.13~1.11~8.18~3.39~30.63~15.70~5.23~15.67~-25.11~3083811231~3490989083~42.72~10.31~3083811231~~~37.23~0.18~~CNY~0~~21.85~1952\";"
 	//str = "v_r_hk09660=\"100~地平线机器人-W~09660~6.860~7.000~7.010~21157200.0~0~0~6.860~0~0~0~0~0~0~0~0~0~6.860~0~0~0~0~0~0~0~0~0~21157200.0~2025/05/09\n09:43:13~-0.140~-2.00~7.030~6.730~6.860~21157200.0~144331073.000~0~35.74~~0~0~4.29~759.8070~905.5401~HORIZONROBOT-W~0.00~10.380~3.320~2.93~11.10~0~0~0~0~0~35.74~7.04~0.19~600~90.56~4.73~GP~19.70~11.51~17.26~48.48~13.58~13200293682.00~11075904412.00~35.74~0.000~6.822~71.93~HKD~1~30\";"
 	info, _ := ParseTxStockData(str)
-	logger.SugaredLogger.Infof("%+#v", info)
+	t.Logf("%+#v", info)
 }
 
 func TestGetRealTimeStockPriceInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	text, texttime := GetRealTimeStockPriceInfo(ctx, "sh600171")
-	logger.SugaredLogger.Infof("res:%s,%s", text, texttime)
+	t.Logf("res:%s,%s", text, texttime)
 
 	text, texttime = GetRealTimeStockPriceInfo(ctx, "sh600438")
-	logger.SugaredLogger.Infof("res:%s,%s", text, texttime)
+	t.Logf("res:%s,%s", text, texttime)
 
 	texttime = strings.ReplaceAll(texttime, "）", "")
 	texttime = strings.ReplaceAll(texttime, "（", "")
 	parts := strings.Split(texttime, " ")
-	logger.SugaredLogger.Infof("parts:%+v", parts)
+	t.Logf("parts:%+v", parts)
 
 	//去除中文字符
 	// 正则表达式匹配中文字符
 	re := regexp.MustCompile(`\p{Han}+`)
 	texttime = re.ReplaceAllString(texttime, "")
 
-	logger.SugaredLogger.Infof("texttime:%s", texttime)
+	t.Logf("texttime:%s", texttime)
 	location, err := time.ParseInLocation("2006-01-02 15:04:05", texttime, time.Local)
 	if err != nil {
 		return
 	}
-	logger.SugaredLogger.Infof("location:%s", location.Format("2006-01-02 15:04:05"))
+	t.Logf("location:%s", location.Format("2006-01-02 15:04:05"))
 }
 
 func TestParseFullSingleStockData(t *testing.T) {
@@ -215,28 +217,28 @@ func TestParseFullSingleStockData(t *testing.T) {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
 		Get(fmt.Sprintf(sinaStockUrl, time.Now().Unix(), "sh600584,sz000938,hk01810,hk00856,gb_aapl,gb_tsla,sb873721,bj430300"))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		t.Fatalf("get sina stock data: %v", err)
 	}
 	data := GB18030ToUTF8(resp.Body())
 	strs := strutil.SplitEx(data, "\n", true)
 	for _, str := range strs {
-		logger.SugaredLogger.Info(str)
+		t.Log(str)
 		stockData, err := ParseFullSingleStockData(str)
 		if err != nil {
-			return
+			t.Fatalf("parse stock data row: %v", err)
 		}
-		logger.SugaredLogger.Infof("%+#v", stockData)
+		t.Logf("%+#v", stockData)
 	}
 
 	result, er := ParseFullSingleStockData("var hq_str_gb_tsla = \"特斯拉,268.8472,-5.55,2025-03-04 22:52:56,-15.8028,270.9300,278.2800,268.1000,488.5400,138.8030,23618295,88214389,864751599149,2.23,120.550000,0.00,0.00,0.00,0.00,3216517037,61,0.0000,0.00,0.00,,Mar 04 09:52AM EST,284.6500,0,1,2025,6458502467.0000,0.0000,0.0000,0.0000,0.0000,284.6500\";")
 	if er != nil {
-		logger.SugaredLogger.Error(er.Error())
+		t.Fatalf("parse static TSLA sample: %v", er)
 	}
-	logger.SugaredLogger.Infof("%+#v", result)
+	t.Logf("%+#v", result)
 }
 
 func TestNewStockDataApi(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	datas, _ := stockDataApi.GetStockCodeRealTimeData("sz002352", "sh600859", "sh600745", "gb_tsla", "hk09660", "hk00700")
@@ -246,7 +248,7 @@ func TestNewStockDataApi(t *testing.T) {
 }
 
 func TestGetStockBaseInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	stockDataApi.GetStockBaseInfo()
@@ -263,6 +265,7 @@ func getSinaCode(code string) string {
 }
 
 func TestReadFile(t *testing.T) {
+	requireManualTest(t)
 	file, err := ioutil.ReadFile("../../stock_basic.json")
 	if err != nil {
 		t.Log(err)
@@ -299,7 +302,7 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestFollowedList(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	stockDataApi.GetFollowList(1)
@@ -307,14 +310,14 @@ func TestFollowedList(t *testing.T) {
 }
 
 func TestStockDataApi_GetIndexBasic(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	stockDataApi.GetIndexBasic()
 }
 
 func TestName(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 
 	stockBasics := &[]StockBasic{}
@@ -323,7 +326,7 @@ func TestName(t *testing.T) {
 		SetResult(stockBasics).
 		Get("http://8.134.249.145:18080/go-stock/stock_basic.json")
 
-	logger.SugaredLogger.Infof("%+v", stockBasics)
+	t.Logf("%+v", stockBasics)
 	//db.Dao.Unscoped().Model(&StockBasic{}).Where("1=1").Delete(&StockBasic{})
 	//err := db.Dao.CreateInBatches(stockBasics, 400).Error
 	//if err != nil {
@@ -332,41 +335,41 @@ func TestName(t *testing.T) {
 
 }
 func TestGetStockMoneyData(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetStockMoneyData()
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle("今日个股资金流向Top50", res.Data.Diff))
+	t.Logf("%s", util.MarkdownTableWithTitle("今日个股资金流向Top50", res.Data.Diff))
 }
 
 func TestGetStockConceptInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetStockConceptInfo("601138.SH")
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle("601138.SH所属概念/板块信息", res.Result.Data))
+	t.Logf("%s", util.MarkdownTableWithTitle("601138.SH所属概念/板块信息", res.Result.Data))
 
 }
 
 func TestGetStockHistoryMoneyData(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetStockHistoryMoneyData("sh601138")
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle("601138.SH历史资金流向一览", res))
+	t.Logf("%s", util.MarkdownTableWithTitle("601138.SH历史资金流向一览", res))
 
 }
 
 func TestGetIndustryValuation(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetIndustryValuation("消费电子")
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle(" 消费电子行业估值", res.Result.Data))
+	t.Logf("%s", util.MarkdownTableWithTitle(" 消费电子行业估值", res.Result.Data))
 }
 
 func Test11(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	url := "https://www.iwencai.com/customized/chart/get-robot-data"
 	body := `{
 		"source": "Ths_iwencai_Xuangu",
@@ -388,24 +391,23 @@ func Test11(t *testing.T) {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36").
 		SetBody(body).Post(url)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
-		return
+		t.Fatalf("post iwencai robot data: %v", err)
 	}
-	logger.SugaredLogger.Infof("%s", resp.String())
+	t.Logf("%s", resp.String())
 }
 
 func TestGetStockRZRQInfo(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetStockRZRQInfo("SZ001389")
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle("SZ001389融资融券信息", res.Result.Data))
+	t.Logf("%s", util.MarkdownTableWithTitle("SZ001389融资融券信息", res.Result.Data))
 }
 
 func TestGetMutualTop10Deal(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	stockDataApi := NewStockDataApi()
 	res := stockDataApi.GetMutualTop10Deal("002", "2026-03-17", 1, 10)
-	logger.SugaredLogger.Infof("%s", util.MarkdownTableWithTitle("SZ000001 mutual top 10 deal", res.Result.Data))
+	t.Logf("%s", util.MarkdownTableWithTitle("SZ000001 mutual top 10 deal", res.Result.Data))
 }

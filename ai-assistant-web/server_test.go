@@ -65,7 +65,18 @@ func TestVipStatus_ReturnsOpenAccess(t *testing.T) {
 }
 
 func TestNewHandler_HealthRouteStillWorksThroughLoggingMiddleware(t *testing.T) {
-	runtime, artifacts := testenv.NewLoggerRuntime(t, "ai-assistant-web")
+	assertHealthRouteStillWorksThroughLoggingMiddleware(t, "ai-assistant-web")
+}
+
+func TestReleaseSmoke_HealthRouteStillWorksThroughLoggingMiddleware(t *testing.T) {
+	testenv.RequireReleaseSmokeTest(t)
+	assertHealthRouteStillWorksThroughLoggingMiddleware(t, "release-smoke-ai-assistant-web")
+}
+
+func assertHealthRouteStillWorksThroughLoggingMiddleware(t *testing.T, suite string) {
+	t.Helper()
+
+	runtime, artifacts := testenv.NewLoggerRuntime(t, suite)
 
 	handler, err := newHandler(runtime)
 	if err != nil {
@@ -93,5 +104,8 @@ func TestNewHandler_HealthRouteStillWorksThroughLoggingMiddleware(t *testing.T) 
 	}
 	if !strings.Contains(string(httpLog), `"execution_mode":"test"`) {
 		t.Fatalf("expected health request log to carry test metadata, got %s", string(httpLog))
+	}
+	if !strings.Contains(string(httpLog), `"status_code":200`) {
+		t.Fatalf("expected health request log to record 200 status, got %s", string(httpLog))
 	}
 }

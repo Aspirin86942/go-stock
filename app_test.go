@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/backend/util"
+	"go-stock/internal/testenv"
 	"strings"
 	"testing"
 	"time"
@@ -29,29 +29,31 @@ func TestIsUSTradingTime(t *testing.T) {
 
 	date := time.Now()
 	hour, minute, _ := date.Clock()
-	logger.SugaredLogger.Infof("当前时间: %d:%d", hour, minute)
+	t.Logf("当前时间: %02d:%02d", hour, minute)
 
-	t.Log(IsUSTradingTime(time.Now()))
+	t.Logf("美股交易时段=%v", IsUSTradingTime(time.Now()))
 }
 
-func TestCheckStockBaseInfo(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_CheckStockBaseInfo(t *testing.T) {
+	testenv.RequireManualTest(t)
 	db.Init("./data/stock.db")
 	NewApp().CheckStockBaseInfo(context.Background())
 }
 
-func TestJson(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_UpdateStockInfoUSFromJSON(t *testing.T) {
+	testenv.RequireManualTest(t)
 	db.Init("./data/stock.db")
 
 	jsonStr := "{\n\t\t\"id\" : 3334,\n\t\t\"created_at\" : \"2025-02-28 16:49:31.8342514+08:00\",\n\t\t\"updated_at\" : \"2025-02-28 16:49:31.8342514+08:00\",\n\t\t\"deleted_at\" : null,\n\t\t\"code\" : \"PUK.US\",\n\t\t\"name\" : \"英国保诚集团\",\n\t\t\"full_name\" : \"\",\n\t\t\"e_name\" : \"\",\n\t\t\"exchange\" : \"NASDAQ\",\n\t\t\"type\" : \"stock\",\n\t\t\"is_del\" : 0,\n\t\t\"bk_name\" : null,\n\t\t\"bk_code\" : null\n\t}"
 
 	v := &models.StockInfoUS{}
-	json.Unmarshal([]byte(jsonStr), v)
-	logger.SugaredLogger.Infof("v:%+v", v)
-
-	db.Dao.Model(v).Updates(v)
-
+	if err := json.Unmarshal([]byte(jsonStr), v); err != nil {
+		t.Fatalf("unmarshal stock info us: %v", err)
+	}
+	t.Logf("stock info us: %+v", v)
+	if err := db.Dao.Model(v).Updates(v).Error; err != nil {
+		t.Fatalf("update stock info us: %v", err)
+	}
 }
 
 func TestUpdateCheck(t *testing.T) {
@@ -64,51 +66,60 @@ func TestUpdateCheck(t *testing.T) {
 		Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
 	//  https://api.github.com/repos/OWNER/REPO/releases/latest
 	if err != nil {
-		logger.SugaredLogger.Errorf("get github release version error:%s", err.Error())
-		return
+		t.Fatalf("get github release version: %v", err)
 	}
-	logger.SugaredLogger.Infof("releaseVersion:%+v", releaseVersion)
+	if strings.TrimSpace(releaseVersion.TagName) == "" {
+		t.Fatalf("expected latest release tag name, got %#v", releaseVersion)
+	}
+	t.Logf("releaseVersion=%+v", releaseVersion)
 }
 
-func TestGetScreenResolution(t *testing.T) {
+func TestReleaseSmoke_GetScreenResolution(t *testing.T) {
+	testenv.RequireReleaseSmokeTest(t)
 	x, y, w, h, err := getScreenResolution()
 	if err != nil {
-		logger.SugaredLogger.Errorf("get screen resolution error:%s", err.Error())
-		return
+		t.Fatalf("get screen resolution: %v", err)
 	}
-	logger.SugaredLogger.Infof("x:%d,y:%d,w:%d,h:%d", x, y, w, h)
+	t.Logf("screen resolution x=%d y=%d w=%d h=%d", x, y, w, h)
 
 }
 
-func TestCheckUpdate(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_CheckUpdate(t *testing.T) {
+	testenv.RequireManualTest(t)
 	db.Init("./data/stock.db")
 	NewApp().CheckUpdate(1)
 }
 
-func TestGetAiRecommendStocksList(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_GetAiRecommendStocksList(t *testing.T) {
+	testenv.RequireManualTest(t)
 	db.Init("./data/stock.db")
 
 	str := "{\"startDate\": \"2026-03-20 00:00:00\", \"endDate\": \"2026-03-27 23:59:59\", \"page\": 1, \"pageSize\": 5000}"
 	query := &models.AiRecommendStocksQuery{}
-	json.Unmarshal([]byte(str), query)
+	if err := json.Unmarshal([]byte(str), query); err != nil {
+		t.Fatalf("unmarshal ai recommend query: %v", err)
+	}
 
 	pageData, err := data.NewAiRecommendStocksService().GetAiRecommendStocksList(query)
-	logger.SugaredLogger.Infof("pageData:%+v", pageData.List)
 	if err != nil {
-		pageData = &models.AiRecommendStocksPageData{}
+		t.Fatalf("get ai recommend stocks list: %v", err)
+	}
+	if pageData == nil || len(pageData.List) == 0 {
+		t.Fatalf("expected ai recommend stocks list to be non-empty")
 	}
 	var dataExport []models.AiRecommendStocksMdExport
 	for _, v := range pageData.List {
 		dataExport = append(dataExport, v.ToMdExportStruct())
 	}
 	content := util.MarkdownTableWithTitle("近期AI分析/推荐股票明细列表", dataExport)
-	logger.SugaredLogger.Infof("content:%s", content)
+	if strings.TrimSpace(content) == "" {
+		t.Fatalf("expected ai recommend markdown to be non-empty")
+	}
+	t.Logf("ai recommend rows=%d", len(pageData.List))
 }
 
-func TestSummaryStockNews(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_SummaryStockNews(t *testing.T) {
+	testenv.RequireManualTest(t)
 	db.Init("./data/stock.db")
 	question := "分析今日的市场行情走势是否和券商的观点一致"
 	app := NewApp()
@@ -116,18 +127,25 @@ func TestSummaryStockNews(t *testing.T) {
 
 	content := &strings.Builder{}
 	for msg := range msgs {
-		logger.SugaredLogger.Infof("msg:%+v", msg)
-		content.WriteString(msg["content"].(string))
+		t.Logf("msg=%+v", msg)
+		segment, ok := msg["content"].(string)
+		if !ok {
+			t.Fatalf("expected content string in stream message, got %#v", msg["content"])
+		}
+		content.WriteString(segment)
 	}
-	logger.SugaredLogger.Infof("content:%s", content.String())
+	if content.Len() == 0 {
+		t.Fatalf("expected summary content to be non-empty")
+	}
+	t.Logf("summary content len=%d", content.Len())
 }
 
 func TestCalculateNextRunTime(t *testing.T) {
 	t.Log(NewApp().CalculateNextRunTime("0 0 0 * * ?"))
 }
 
-func TestFetchAiModels(t *testing.T) {
-	requireIntegrationTest(t)
+func TestManual_FetchAiModels(t *testing.T) {
+	testenv.RequireManualTest(t)
 	app := NewApp()
 	models := app.FetchAiModels("https://ark.cn-beijing.volces.com/api/v3", "")
 	t.Log(models)

@@ -9,6 +9,7 @@ const (
 	ExternalEnv          = "GO_STOCK_RUN_EXTERNAL_TESTS"
 	LegacyIntegrationEnv = "GO_STOCK_RUN_INTEGRATION_TESTS"
 	ReleaseSmokeEnv      = "GO_STOCK_RUN_RELEASE_SMOKE"
+	ManualEnv            = "GO_STOCK_RUN_MANUAL_TESTS"
 )
 
 func RequireExternalTest(t *testing.T) {
@@ -24,6 +25,15 @@ func RequireReleaseSmokeTest(t *testing.T) {
 	t.Helper()
 
 	enabled, reason := releaseSmokeGateDecision(os.Getenv, testing.Short())
+	if !enabled {
+		t.Skip(reason)
+	}
+}
+
+func RequireManualTest(t *testing.T) {
+	t.Helper()
+
+	enabled, reason := manualGateDecision(os.Getenv, testing.Short())
 	if !enabled {
 		t.Skip(reason)
 	}
@@ -47,4 +57,14 @@ func releaseSmokeGateDecision(getenv func(string) string, shortMode bool) (bool,
 		return true, ""
 	}
 	return false, "skipping release smoke test; set GO_STOCK_RUN_RELEASE_SMOKE=1 to enable"
+}
+
+func manualGateDecision(getenv func(string) string, shortMode bool) (bool, string) {
+	if shortMode {
+		return false, "skipping manual test in short mode"
+	}
+	if getenv(ManualEnv) == "1" {
+		return true, ""
+	}
+	return false, "skipping manual test; set GO_STOCK_RUN_MANUAL_TESTS=1 to enable"
 }

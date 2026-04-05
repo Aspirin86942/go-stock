@@ -7,7 +7,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/duke-git/lancet/v2/strutil"
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"os"
 	"strings"
@@ -70,25 +69,27 @@ func TestGetHtml(t *testing.T) {
 	//url = "https://gushitong.baidu.com/stock/ab-600745"
 	//waitVisible = "div.news-item"
 	htmlContent, success := crawlerAPI.GetHtml(url, waitVisible, true)
-	if success {
-		document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-		}
-		var messages []string
-		document.Find(waitVisible).Each(func(i int, selection *goquery.Selection) {
-			text := strutil.RemoveNonPrintable(selection.Text())
-			messages = append(messages, text)
-			logger.SugaredLogger.Infof("搜索到消息-%s: %s", "", text)
-		})
+	if !success {
+		t.Fatalf("GetHtml(%q, %q) failed", url, waitVisible)
 	}
-	//logger.SugaredLogger.Infof("htmlContent:%s", htmlContent)
+	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		t.Fatalf("parse crawled HTML: %v", err)
+	}
+	var messages []string
+	document.Find(waitVisible).Each(func(i int, selection *goquery.Selection) {
+		text := strutil.RemoveNonPrintable(selection.Text())
+		messages = append(messages, text)
+		t.Logf("搜索到消息-%s: %s", "", text)
+	})
+	requirePositiveLen(t, "crawler search messages", len(messages))
+	//t.Logf("htmlContent:%s", htmlContent)
 }
 
 func TestGetHtmlWithActions(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	crawlerAPI := CrawlerApi{}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	crawlerAPI = crawlerAPI.NewCrawler(ctx, CrawlerBaseInfo{
@@ -110,24 +111,26 @@ func TestGetHtmlWithActions(t *testing.T) {
 		chromedp.Sleep(1 * time.Second),
 	}
 	htmlContent, success := crawlerAPI.GetHtmlWithActions(&actions, false)
-	if success {
-		document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
-		}
-		var messages []string
-		document.Find("div.report-table-list-container,div.report-row").Each(func(i int, selection *goquery.Selection) {
-			text := strutil.RemoveWhiteSpace(selection.Text(), false)
-			messages = append(messages, text)
-			logger.SugaredLogger.Infof("搜索到消息-%s: %s", "", text)
-		})
-		logger.SugaredLogger.Infof("messages:%d", len(messages))
+	if !success {
+		t.Skip("GetHtmlWithActions() did not complete in the current browser environment")
 	}
-	//logger.SugaredLogger.Infof("htmlContent:%s", htmlContent)
+	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		t.Fatalf("parse action HTML: %v", err)
+	}
+	var messages []string
+	document.Find("div.report-table-list-container,div.report-row").Each(func(i int, selection *goquery.Selection) {
+		text := strutil.RemoveWhiteSpace(selection.Text(), false)
+		messages = append(messages, text)
+		t.Logf("搜索到消息-%s: %s", "", text)
+	})
+	requirePositiveLen(t, "crawler action messages", len(messages))
+	t.Logf("messages:%d", len(messages))
+	//t.Logf("htmlContent:%s", htmlContent)
 }
 
 func TestHk(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	//https://stock.finance.sina.com.cn/hkstock/quotes/00001.html
 	db.Init("../../data/stock.db")
 	hks := &[]models.StockInfoHK{}
@@ -145,37 +148,37 @@ func TestHk(t *testing.T) {
 	crawlerAPI = crawlerAPI.NewCrawler(ctx, crawlerBaseInfo)
 
 	for _, hk := range *hks {
-		logger.SugaredLogger.Infof("hk: %+v", hk)
+		t.Logf("hk: %+v", hk)
 		url := fmt.Sprintf("https://stock.finance.sina.com.cn/hkstock/quotes/%s.html", strings.ReplaceAll(hk.Code, ".HK", ""))
 		htmlContent, ok := crawlerAPI.GetHtml(url, "#stock_cname", true)
 		if !ok {
 			continue
 		}
-		//logger.SugaredLogger.Infof("htmlContent: %s", htmlContent)
+		//t.Logf("htmlContent: %s", htmlContent)
 		document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			t.Fatalf("parse HK stock HTML for %s: %v", hk.Code, err)
 		}
 		document.Find("#stock_cname").Each(func(i int, selection *goquery.Selection) {
 			text := strutil.RemoveNonPrintable(selection.Text())
-			logger.SugaredLogger.Infof("股票名称-:%s", text)
+			t.Logf("股票名称-:%s", text)
 		})
 
 		document.Find("#mts_stock_hk_price").Each(func(i int, selection *goquery.Selection) {
 			text := strutil.RemoveNonPrintable(selection.Text())
-			logger.SugaredLogger.Infof("股票名称-现价: %s", text)
+			t.Logf("股票名称-现价: %s", text)
 		})
 
 		document.Find(".deta_hqContainer >.deta03 li").Each(func(i int, selection *goquery.Selection) {
 			text := strutil.RemoveNonPrintable(selection.Text())
-			logger.SugaredLogger.Infof("股票名称-%s: %s", "", text)
+			t.Logf("股票名称-%s: %s", "", text)
 		})
 
 	}
 }
 
 func TestUpdateUSName(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	us := &[]models.StockInfoUS{}
 	db.Dao.Model(&models.StockInfoUS{}).Where("name = ?", "").Order("RANDOM()").Find(us)
@@ -193,7 +196,7 @@ func TestUpdateUSName(t *testing.T) {
 		crawlerAPI = crawlerAPI.NewCrawler(ctx, crawlerBaseInfo)
 
 		url := fmt.Sprintf("https://stock.finance.sina.com.cn/usstock/quotes/%s.html", us.Code[:len(us.Code)-3])
-		logger.SugaredLogger.Infof("url: %s", url)
+		t.Logf("url: %s", url)
 		//waitVisible := "span.quote_title_name"
 		waitVisible := "div.hq_title > h1"
 
@@ -202,16 +205,16 @@ func TestUpdateUSName(t *testing.T) {
 		if !ok {
 			continue
 		}
-		//logger.SugaredLogger.Infof("htmlContent: %s", htmlContent)
+		//t.Logf("htmlContent: %s", htmlContent)
 		document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			t.Fatalf("parse US stock HTML for %s: %v", us.Code, err)
 		}
 		name := ""
 		document.Find(waitVisible).Each(func(i int, selection *goquery.Selection) {
 			name = strutil.RemoveNonPrintable(selection.Text())
 			name = strutil.SplitAndTrim(name, " ", "")[0]
-			logger.SugaredLogger.Infof("股票名称-:%s", name)
+			t.Logf("股票名称-:%s", name)
 		})
 		db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", us.Code).Updates(map[string]interface{}{
 			"name":      name,
@@ -221,7 +224,7 @@ func TestUpdateUSName(t *testing.T) {
 
 }
 func TestUS(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	bytes, err := os.ReadFile("../../build/us.json")
 	if err != nil {
@@ -241,7 +244,7 @@ func TestUS(t *testing.T) {
 	tick := &Tick{}
 	json.Unmarshal(bytes, &tick)
 	for i, datum := range tick.Data {
-		logger.SugaredLogger.Infof("datum: %d, %+v", i, datum)
+		t.Logf("datum: %d, %+v", i, datum)
 		name := ""
 
 		//https://quote.eastmoney.com/us/AAPL.html
@@ -255,15 +258,15 @@ func TestUS(t *testing.T) {
 		//if !ok {
 		//	continue
 		//}
-		////logger.SugaredLogger.Infof("htmlContent: %s", htmlContent)
+		////t.Logf("htmlContent: %s", htmlContent)
 		//document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 		//if err != nil {
-		//	logger.SugaredLogger.Error(err.Error())
+		//	t.Fatalf("parse US quote HTML: %v", err)
 		//}
 		//document.Find(waitVisible).Each(func(i int, selection *goquery.Selection) {
 		//	name = strutil.RemoveNonPrintable(selection.Text())
 		//	name = strutil.SplitAndTrim(name, " ", "")[0]
-		//	logger.SugaredLogger.Infof("股票名称-:%s", name)
+		//	t.Logf("股票名称-:%s", name)
 		//})
 
 		us := &models.StockInfoUS{
@@ -279,7 +282,7 @@ func TestUS(t *testing.T) {
 }
 
 func TestUSSINA(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	//https://finance.sina.com.cn/stock/usstock/sector.shtml#cm
 	crawlerAPI := CrawlerApi{}
 	crawlerBaseInfo := CrawlerBaseInfo{
@@ -298,16 +301,16 @@ func TestUSSINA(t *testing.T) {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		t.Fatalf("parse Sina US sector HTML: %v", err)
 	}
 	document.Find("div#data > table >tbody >tr").Each(func(i int, selection *goquery.Selection) {
 		tr := selection.Text()
-		logger.SugaredLogger.Infof("tr: %s", tr)
+		t.Logf("tr: %s", tr)
 	})
 }
 
 func TestSina(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	db.Init("../../data/stock.db")
 	url := "https://finance.sina.com.cn/realstock/company/sz002906/nc.shtml"
 	crawlerAPI := CrawlerApi{}
@@ -326,7 +329,7 @@ func TestSina(t *testing.T) {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		t.Fatalf("parse Sina stock HTML: %v", err)
 	}
 
 	//price
@@ -341,7 +344,7 @@ func TestSina(t *testing.T) {
 }
 
 func TestDC(t *testing.T) {
-	requireIntegrationTest(t)
+	requireManualTest(t)
 	url := "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=sh600745#/cwfx"
 	db.Init("../../data/stock.db")
 	crawlerAPI := CrawlerApi{}
@@ -363,7 +366,7 @@ func TestDC(t *testing.T) {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		t.Fatalf("parse EastMoney financial HTML: %v", err)
 	}
 	GetTableMarkdown(document, "div.report_table table", &markdown)
 

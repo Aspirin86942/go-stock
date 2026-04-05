@@ -1,7 +1,6 @@
 package data
 
 import (
-	"go-stock/backend/logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,34 +9,18 @@ import (
 
 // TestRemoveNonPrintable tests the RemoveAllBlankChar function.
 func TestRemoveNonPrintable(t *testing.T) {
-	//tests := []struct {
-	//	input    string
-	//	expected string
-	//}{
-	//	{"新 希 望", "新希望"},
-	//	{"", ""},
-	//	{"Hello, World!", "Hello, World!"},
-	//	{"\x00\x01\x02", ""},
-	//	{"Hello\x00World", "HelloWorld"},
-	//	{"\x1F\x20\x7E\x7F", " \x7E"},
-	//}
-
-	//for _, test := range tests {
-	//	actual := RemoveAllBlankChar(test.input)
-	//	if actual != test.expected {
-	//		t.Errorf("RemoveAllBlankChar(%q) = %q; expected %q", test.input, actual, test.expected)
-	//	}
-	//}
-	txt := "新 希 望"
-	txt2 := RemoveAllBlankChar(txt)
-	logger.SugaredLogger.Infof("RemoveAllBlankChar(%s)", txt2)
-	logger.SugaredLogger.Infof("RemoveAllBlankChar(%s)", txt)
-
+	if got := RemoveAllBlankChar("新 希 望"); got != "新希望" {
+		t.Fatalf("RemoveAllBlankChar returned %q, want %q", got, "新希望")
+	}
 }
 
 func TestConvertStockCodeToTushareCode(t *testing.T) {
-	logger.SugaredLogger.Infof("ConvertStockCodeToTushareCode(%s)", ConvertStockCodeToTushareCode("sz000802"))
-	logger.SugaredLogger.Infof("ConvertTushareCodeToStockCode(%s)", ConvertTushareCodeToStockCode("000802.SZ"))
+	if got := ConvertStockCodeToTushareCode("sz000802"); got != "000802.SZ" {
+		t.Fatalf("ConvertStockCodeToTushareCode returned %q", got)
+	}
+	if got := ConvertTushareCodeToStockCode("000802.SZ"); got != "sz000802" {
+		t.Fatalf("ConvertTushareCodeToStockCode returned %q", got)
+	}
 }
 func TestReplaceSensitiveWords(t *testing.T) {
 	originalWD, err := os.Getwd()
