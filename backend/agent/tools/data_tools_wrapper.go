@@ -23,6 +23,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var marketDataLoader = loadMarketDataResponse
+
 type DataToolWrapper struct {
 	name           string
 	description    string
@@ -2589,7 +2591,7 @@ type APIPurchase struct {
 	LotRate      *float64 `json:"lot_rate"`
 }
 
-func getMarketDataContent(ctx context.Context) (string, error) {
+func loadMarketDataResponse(ctx context.Context) (APIResponse, error) {
 	client := resty.New()
 	apiURL := "https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6"
 
@@ -2600,19 +2602,29 @@ func getMarketDataContent(ctx context.Context) (string, error) {
 	ua := uaGen.GetRandom()
 
 	var apiResp APIResponse
-	resp, err := client.R().
+	req := client.R().
 		SetHeader("User-Agent", ua).
-		SetResult(&apiResp).
-		Get(apiURL)
+		SetResult(&apiResp)
+	if ctx != nil {
+		req = req.SetContext(ctx)
+	}
+	resp, err := req.Get(apiURL)
 
 	if err != nil {
-		return "", fmt.Errorf("调用API失败: %v", err)
+		return APIResponse{}, fmt.Errorf("调用API失败: %v", err)
 	}
 
 	if resp.StatusCode() != 200 || apiResp.Code != 200 {
-		return "", fmt.Errorf("API返回错误: 状态码=%d, 错误信息=%s", resp.StatusCode(), apiResp.Msg)
+		return APIResponse{}, fmt.Errorf("API返回错误: 状态码=%d, 错误信息=%s", resp.StatusCode(), apiResp.Msg)
 	}
+	return apiResp, nil
+}
 
+func getMarketDataContent(ctx context.Context) (string, error) {
+	apiResp, err := marketDataLoader(ctx)
+	if err != nil {
+		return "", err
+	}
 	content := strings.Builder{}
 	content.WriteString("# 市场行情数据\r\n\r\n")
 
