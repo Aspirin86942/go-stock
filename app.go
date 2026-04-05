@@ -13,6 +13,8 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	marketservice "go-stock/backend/service/market"
+	marketsource "go-stock/backend/source/marketnews"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +54,14 @@ type App struct {
 	stockAlertMu       sync.Mutex
 	stockAlertLastSent map[string]time.Time
 	priceAtAlertReset  map[string]float64
+	marketReadService  marketReadService
+}
+
+type marketReadService interface {
+	LoadFeeds() marketservice.FeedSet
+	RefreshFeed(source string) marketservice.Feed
+	LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet
+	LoadIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry
 }
 
 const (
@@ -78,6 +88,7 @@ func NewApp() *App {
 		AiTools:            tools,
 		stockAlertLastSent: make(map[string]time.Time),
 		priceAtAlertReset:  make(map[string]float64),
+		marketReadService:  marketservice.NewService(marketsource.NewSource()),
 	}
 }
 
@@ -1778,6 +1789,22 @@ func (a *App) GetStockEastMoneyKLinePageResult(stockCode, stockName string, klt 
 		"errorCode":       result.ErrorCode,
 		"usedCookieRetry": result.UsedCookieRetry,
 	}
+}
+
+func (a *App) GetMarketFeeds() marketservice.FeedSet {
+	return a.marketReadService.LoadFeeds()
+}
+
+func (a *App) RefreshMarketFeed(source string) marketservice.Feed {
+	return a.marketReadService.RefreshFeed(source)
+}
+
+func (a *App) GetMarketGlobalIndexes() marketservice.IndexSet {
+	return a.marketReadService.LoadGlobalIndexes(30)
+}
+
+func (a *App) GetMarketIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry {
+	return a.marketReadService.LoadIndustryRanks(sort, cnt)
 }
 
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {
