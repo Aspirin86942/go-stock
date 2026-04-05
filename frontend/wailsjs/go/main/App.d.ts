@@ -4,6 +4,7 @@ import {models} from '../models';
 import {data} from '../models';
 import {context} from '../models';
 import {lo} from '../models';
+import {market} from '../models';
 
 export function AbortChatWithAgent():Promise<void>;
 
@@ -127,6 +128,12 @@ export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<
 
 export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<any>>;
 
+export function GetMarketFeeds():Promise<market.FeedSet>;
+
+export function GetMarketGlobalIndexes():Promise<market.IndexSet>;
+
+export function GetMarketIndustryRanks(arg1:string,arg2:number):Promise<Array<market.IndustryRankEntry>>;
+
 export function GetMoneyRankSina(arg1:string):Promise<Array<Record<string, any>>>;
 
 export function GetPromptTemplateList(arg1:models.PromptTemplateQuery):Promise<models.PromptTemplatePageData>;
@@ -202,6 +209,8 @@ export function NewsPush(arg1:any):Promise<void>;
 export function OpenURL(arg1:string):Promise<void>;
 
 export function ReFleshTelegraphList(arg1:string):Promise<any>;
+
+export function RefreshMarketFeed(arg1:string):Promise<market.Feed>;
 
 export function RemoveGroup(arg1:number):Promise<string>;
 

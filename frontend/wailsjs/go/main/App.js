@@ -246,6 +246,18 @@ export function GetIndustryRank(arg1, arg2) {
   return window['go']['main']['App']['GetIndustryRank'](arg1, arg2);
 }
 
+export function GetMarketFeeds() {
+  return window['go']['main']['App']['GetMarketFeeds']();
+}
+
+export function GetMarketGlobalIndexes() {
+  return window['go']['main']['App']['GetMarketGlobalIndexes']();
+}
+
+export function GetMarketIndustryRanks(arg1, arg2) {
+  return window['go']['main']['App']['GetMarketIndustryRanks'](arg1, arg2);
+}
+
 export function GetMoneyRankSina(arg1) {
   return window['go']['main']['App']['GetMoneyRankSina'](arg1);
 }
@@ -396,6 +408,10 @@ export function OpenURL(arg1) {
 
 export function ReFleshTelegraphList(arg1) {
   return window['go']['main']['App']['ReFleshTelegraphList'](arg1);
+}
+
+export function RefreshMarketFeed(arg1) {
+  return window['go']['main']['App']['RefreshMarketFeed'](arg1);
 }
 
 export function RemoveGroup(arg1) {

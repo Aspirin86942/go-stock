@@ -4,11 +4,7 @@ import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref}
 import {
   GetAIResponseResult,
   GetConfig,
-  GetIndustryRank,
   GetPromptTemplates,
-  GetTelegraphList,
-  GlobalStockIndexes,
-  ReFleshTelegraphList,
   SaveAIResponseResult,
   SaveAsMarkdown,
   ShareAnalysis,
@@ -37,6 +33,12 @@ import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import SelectStock from "./SelectStock.vue";
 import Stockhotmap from "./stockhotmap.vue";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
+import {
+  loadMarketFeeds,
+  loadMarketGlobalIndexes,
+  loadMarketIndustryRanks,
+  refreshMarketFeed,
+} from "../services/marketService.mjs";
 
 const route = useRoute()
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
@@ -84,14 +86,26 @@ const thinkingMode = ref(false)
 const treemapRef = ref(null);
 let treemapchart =null;
 
+function applyMarketIndexes(indexes) {
+  globalStockIndexes.value = indexes
+  common.value = indexes.common
+  america.value = indexes.america
+  europe.value = indexes.europe
+  asia.value = indexes.asia
+  other.value = indexes.other
+}
+
+function loadFeeds() {
+  loadMarketFeeds().then((res) => {
+    telegraphList.value = res.telegraph
+    sinaNewsList.value = res.sina
+    foreignNewsList.value = res.foreign
+  })
+}
+
 function getIndex() {
-  GlobalStockIndexes().then((res) => {
-    globalStockIndexes.value = res
-    common.value = res["common"]
-    america.value = res["america"]
-    europe.value = res["europe"]
-    asia.value = res["asia"]
-    other.value = res["other"]
+  loadMarketGlobalIndexes().then((res) => {
+    applyMarketIndexes(res)
   })
 }
 
@@ -113,15 +127,7 @@ onBeforeMount(() => {
     aiConfigs.value = res
     aiConfigId.value = resolveFirstAiConfigId(res)
   })
-  GetTelegraphList("财联社电报").then((res) => {
-    telegraphList.value = res
-  })
-  GetTelegraphList("新浪财经").then((res) => {
-    sinaNewsList.value = res
-  })
-  GetTelegraphList("外媒").then((res) => {
-    foreignNewsList.value = res
-  })
+  loadFeeds()
   getIndex();
   industryRank();
   indexInterval.value = setInterval(() => {
@@ -214,8 +220,7 @@ function changeIndustryRankSort() {
 }
 
 function industryRank() {
-
-  GetIndustryRank(sort.value, 150).then(result => {
+  loadMarketIndustryRanks(sort.value, 150).then(result => {
     if (result.length > 0) {
       //console.log(result)
       industryRanks.value = result
@@ -336,15 +341,15 @@ function share() {
 
 function ReFlesh(source) {
   //console.log("ReFlesh:", source)
-  ReFleshTelegraphList(source).then(res => {
+  refreshMarketFeed(source).then(res => {
     if (source === "财联社电报") {
-      telegraphList.value = res
+      telegraphList.value = res.items
     }
     if (source === "新浪财经") {
-      sinaNewsList.value = res
+      sinaNewsList.value = res.items
     }
     if (source === "外媒") {
-      foreignNewsList.value = res
+      foreignNewsList.value = res.items
     }
   })
 }
@@ -540,29 +545,29 @@ function ReFlesh(source) {
                 </n-tr>
               </n-thead>
               <n-tbody>
-                <n-tr v-for="item in industryRanks" :key="item.bd_code">
+                <n-tr v-for="item in industryRanks" :key="item.boardCode">
                   <n-td>
-                    <n-tag :bordered=false type="info">{{ item.bd_name }}</n-tag>
+                    <n-tag :bordered=false type="info">{{ item.boardName }}</n-tag>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf>0?'error':'success'">{{ item.bd_zdf }}%</n-text>
+                    <n-text :type="item.boardChangePercent>0?'error':'success'">{{ item.boardChangePercent }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf5>0?'error':'success'">{{ item.bd_zdf5 }}%</n-text>
+                    <n-text :type="item.boardChangePercent5D>0?'error':'success'">{{ item.boardChangePercent5D }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf20>0?'error':'success'">{{ item.bd_zdf20 }}%</n-text>
+                    <n-text :type="item.boardChangePercent20D>0?'error':'success'">{{ item.boardChangePercent20D }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'"> {{ item.nzg_name }}
-                      <n-text type="info">{{ item.nzg_code }}</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'"> {{ item.leaderName }}
+                      <n-text type="info">{{ item.leaderCode }}</n-text>
                     </n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'"> {{ item.nzg_zdf }}%</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'"> {{ item.leaderChangePercent }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'">{{ item.nzg_zxj }}</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'">{{ item.leaderPrice }}</n-text>
                   </n-td>
                 </n-tr>
               </n-tbody>
@@ -583,29 +588,29 @@ function ReFlesh(source) {
                 </n-tr>
               </n-thead>
               <n-tbody>
-                <n-tr v-for="item in industryRanks" :key="item.bd_code">
+                <n-tr v-for="item in industryRanks" :key="item.boardCode">
                   <n-td>
-                    <n-tag :bordered=false type="info">{{ item.bd_name }}</n-tag>
+                    <n-tag :bordered=false type="info">{{ item.boardName }}</n-tag>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf>0?'error':'success'">{{ item.bd_zdf }}%</n-text>
+                    <n-text :type="item.boardChangePercent>0?'error':'success'">{{ item.boardChangePercent }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf5>0?'error':'success'">{{ item.bd_zdf5 }}%</n-text>
+                    <n-text :type="item.boardChangePercent5D>0?'error':'success'">{{ item.boardChangePercent5D }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.bd_zdf20>0?'error':'success'">{{ item.bd_zdf20 }}%</n-text>
+                    <n-text :type="item.boardChangePercent20D>0?'error':'success'">{{ item.boardChangePercent20D }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'"> {{ item.nzg_name }}
-                      <n-text type="info">{{ item.nzg_code }}</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'"> {{ item.leaderName }}
+                      <n-text type="info">{{ item.leaderCode }}</n-text>
                     </n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'"> {{ item.nzg_zdf }}%</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'"> {{ item.leaderChangePercent }}%</n-text>
                   </n-td>
                   <n-td>
-                    <n-text :type="item.nzg_zdf>0?'error':'success'">{{ item.nzg_zxj }}</n-text>
+                    <n-text :type="item.leaderChangePercent>0?'error':'success'">{{ item.leaderPrice }}</n-text>
                   </n-td>
                 </n-tr>
               </n-tbody>

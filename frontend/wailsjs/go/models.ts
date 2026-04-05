@@ -1043,6 +1043,171 @@ export namespace lo {
 
 }
 
+export namespace market {
+	
+	export class Feed {
+	    source: string;
+	    items: models.Telegraph[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Feed(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.source = source["source"];
+	        this.items = this.convertValues(source["items"], models.Telegraph);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FeedSet {
+	    telegraph: models.Telegraph[];
+	    sina: models.Telegraph[];
+	    foreign: models.Telegraph[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FeedSet(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.telegraph = this.convertValues(source["telegraph"], models.Telegraph);
+	        this.sina = this.convertValues(source["sina"], models.Telegraph);
+	        this.foreign = this.convertValues(source["foreign"], models.Telegraph);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GlobalIndexEntry {
+	    code: string;
+	    name: string;
+	    location: string;
+	    qtcode: string;
+	    state: string;
+	    zdf: string;
+	    zxj: string;
+	    img: string;
+	    region: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GlobalIndexEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.name = source["name"];
+	        this.location = source["location"];
+	        this.qtcode = source["qtcode"];
+	        this.state = source["state"];
+	        this.zdf = source["zdf"];
+	        this.zxj = source["zxj"];
+	        this.img = source["img"];
+	        this.region = source["region"];
+	    }
+	}
+	export class IndexSet {
+	    common: GlobalIndexEntry[];
+	    america: GlobalIndexEntry[];
+	    europe: GlobalIndexEntry[];
+	    asia: GlobalIndexEntry[];
+	    other: GlobalIndexEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new IndexSet(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.common = this.convertValues(source["common"], GlobalIndexEntry);
+	        this.america = this.convertValues(source["america"], GlobalIndexEntry);
+	        this.europe = this.convertValues(source["europe"], GlobalIndexEntry);
+	        this.asia = this.convertValues(source["asia"], GlobalIndexEntry);
+	        this.other = this.convertValues(source["other"], GlobalIndexEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class IndustryRankEntry {
+	    boardCode: string;
+	    boardName: string;
+	    boardChangePercent: string;
+	    boardChangePercent5D: string;
+	    boardChangePercent20D: string;
+	    leaderCode: string;
+	    leaderName: string;
+	    leaderChangePercent: string;
+	    leaderPrice: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndustryRankEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.boardCode = source["boardCode"];
+	        this.boardName = source["boardName"];
+	        this.boardChangePercent = source["boardChangePercent"];
+	        this.boardChangePercent5D = source["boardChangePercent5D"];
+	        this.boardChangePercent20D = source["boardChangePercent20D"];
+	        this.leaderCode = source["leaderCode"];
+	        this.leaderName = source["leaderName"];
+	        this.leaderChangePercent = source["leaderChangePercent"];
+	        this.leaderPrice = source["leaderPrice"];
+	    }
+	}
+
+}
+
 export namespace models {
 	
 	export class AIResponseResult {
@@ -1983,6 +2148,112 @@ export namespace models {
 	        this.DOWNNDAY = source["DOWNNDAY"];
 	    }
 	}
+	export class TelegraphTags {
+	    ID: number;
+	    // Go type: time
+	    CreatedAt: any;
+	    // Go type: time
+	    UpdatedAt: any;
+	    // Go type: gorm
+	    DeletedAt: any;
+	    tagId: number;
+	    telegraphId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TelegraphTags(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.CreatedAt = this.convertValues(source["CreatedAt"], null);
+	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
+	        this.DeletedAt = this.convertValues(source["DeletedAt"], null);
+	        this.tagId = source["tagId"];
+	        this.telegraphId = source["telegraphId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Telegraph {
+	    ID: number;
+	    // Go type: time
+	    CreatedAt: any;
+	    // Go type: time
+	    UpdatedAt: any;
+	    // Go type: gorm
+	    DeletedAt: any;
+	    time: string;
+	    // Go type: time
+	    dataTime?: any;
+	    title: string;
+	    content: string;
+	    subjects: string[];
+	    stocks: string[];
+	    isRed: boolean;
+	    url: string;
+	    source: string;
+	    tags: TelegraphTags[];
+	    sentimentResult: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Telegraph(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.CreatedAt = this.convertValues(source["CreatedAt"], null);
+	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
+	        this.DeletedAt = this.convertValues(source["DeletedAt"], null);
+	        this.time = source["time"];
+	        this.dataTime = this.convertValues(source["dataTime"], null);
+	        this.title = source["title"];
+	        this.content = source["content"];
+	        this.subjects = source["subjects"];
+	        this.stocks = source["stocks"];
+	        this.isRed = source["isRed"];
+	        this.url = source["url"];
+	        this.source = source["source"];
+	        this.tags = this.convertValues(source["tags"], TelegraphTags);
+	        this.sentimentResult = source["sentimentResult"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class VersionInfo {
 	    ID: number;
 	    // Go type: time
