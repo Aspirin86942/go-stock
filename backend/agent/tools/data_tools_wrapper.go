@@ -48,15 +48,29 @@ func (t *DataToolWrapper) Info(ctx context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *DataToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	_, trace := ensureToolTraceContext(ctx, "tool-data-wrapper")
 	if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
-		log.WithTrace(toolTrace("tool-data-wrapper")).Info(
+		log.WithTrace(trace).Info(
 			"tool.data_wrapper.called",
 			"data tool wrapper called",
 			logger.String("tool_name", t.name),
 			logger.String("arguments", argumentsInJSON),
 		)
 	}
-	return t.handler(argumentsInJSON)
+	result, err := t.handler(argumentsInJSON)
+	if err != nil {
+		if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
+			log.WithTrace(trace).Error(
+				"tool.data_wrapper.failed",
+				"data tool wrapper execution failed",
+				logger.String("tool_name", t.name),
+				logger.String("error_class", "tool_error"),
+				logger.Err(err),
+			)
+		}
+		return "", err
+	}
+	return result, nil
 }
 
 func thsResultToMarkdown(res map[string]any, title string) string {

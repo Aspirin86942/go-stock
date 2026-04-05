@@ -24,12 +24,43 @@ func moduleLogger(sink logger.Sink, module string) *logger.Logger {
 	return runtimeLogger.ForSink(sink, module)
 }
 
-func moduleTrace(source string) logger.TraceContext {
+func moduleLoggerRuntime() *logger.Runtime {
 	runtimeLogger := logger.Default()
 	if runtimeLogger == nil {
-		return logger.TraceContext{Source: source}
+		return &logger.Runtime{}
 	}
-	return runtimeLogger.NewTrace(source)
+	return runtimeLogger
+}
+
+func moduleTrace(args ...any) logger.TraceContext {
+	ctx, source := resolveModuleTraceArgs(args...)
+	return moduleLoggerRuntime().TraceOrNew(ctx, source)
+}
+
+func ensureModuleTraceContext(ctx context.Context, source string) (context.Context, logger.TraceContext) {
+	return moduleLoggerRuntime().EnsureTraceContext(ctx, source)
+}
+
+func resolveModuleTraceArgs(args ...any) (context.Context, string) {
+	var ctx context.Context
+	source := ""
+	switch len(args) {
+	case 1:
+		switch value := args[0].(type) {
+		case context.Context:
+			ctx = value
+		case string:
+			source = value
+		}
+	case 2:
+		if value, ok := args[0].(context.Context); ok {
+			ctx = value
+		}
+		if value, ok := args[1].(string); ok {
+			source = value
+		}
+	}
+	return ctx, source
 }
 
 func aiLogger(module string) *logger.Logger {
@@ -41,8 +72,16 @@ func taskLogger(module string) *logger.Logger {
 }
 
 func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent {
+	reqCtx := context.Background()
+	if ctx != nil && *ctx != nil {
+		reqCtx = *ctx
+	}
+	reqCtx, trace := ensureModuleTraceContext(reqCtx, "get-stock-ai-agent")
+	if ctx != nil {
+		*ctx = reqCtx
+	}
 	if log := aiLogger("agent.core"); log != nil {
-		log.WithTrace(moduleTrace("get-stock-ai-agent")).Info(
+		log.WithTrace(trace).Info(
 			"agent.config.loaded",
 			"loaded ai agent config",
 			logger.Uint("ai_config_id", aiConfig.ID),
@@ -60,7 +99,7 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 				Type: "enabled",
 			}
 		}
-		toolableChatModel, err = ark.NewChatModel(context.Background(), &ark.ChatModelConfig{
+		toolableChatModel, err = ark.NewChatModel(reqCtx, &ark.ChatModelConfig{
 			BaseURL:     aiConfig.BaseUrl,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
@@ -76,7 +115,7 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 				"type": "enabled",
 			}
 		}
-		toolableChatModel, err = einoopenai.NewChatModel(*ctx, &einoopenai.ChatModelConfig{
+		toolableChatModel, err = einoopenai.NewChatModel(reqCtx, &einoopenai.ChatModelConfig{
 			BaseURL:     aiConfig.BaseUrl,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
@@ -89,10 +128,11 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 
 	if err != nil {
 		if log := aiLogger("agent.core"); log != nil {
-			log.WithTrace(moduleTrace("get-stock-ai-agent")).Error(
+			log.WithTrace(trace).Error(
 				"agent.model_init_failed",
 				"initialize tool-calling model failed",
 				logger.Uint("ai_config_id", aiConfig.ID),
+				logger.String("error_class", "ai_error"),
 				logger.Err(err),
 			)
 		}
@@ -105,7 +145,7 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 		Tools: allTools,
 	}
 
-	agent, err := react.NewAgent(*ctx, &react.AgentConfig{
+	agent, err := react.NewAgent(reqCtx, &react.AgentConfig{
 		ToolCallingModel: toolableChatModel,
 		ToolsConfig:      aiTools,
 		MaxStep:          len(allTools) + 5,
@@ -128,10 +168,11 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig) *react.Agent 
 	})
 	if err != nil {
 		if log := aiLogger("agent.core"); log != nil {
-			log.WithTrace(moduleTrace("get-stock-ai-agent")).Error(
+			log.WithTrace(trace).Error(
 				"agent.compose_failed",
 				"compose react agent failed",
 				logger.Uint("ai_config_id", aiConfig.ID),
+				logger.String("error_class", "ai_error"),
 				logger.Err(err),
 			)
 		}

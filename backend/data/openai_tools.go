@@ -2,6 +2,7 @@ package data
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go-stock/backend/db"
@@ -88,6 +89,21 @@ type streamedToolCall struct {
 }
 
 var openAIToolsLog = dataModuleLogger(logger.SinkAI, "data.openai_tools")
+
+func openAIContext(o *OpenAi) context.Context {
+	if o == nil {
+		return nil
+	}
+	return o.Ctx()
+}
+
+func openAIToolsLogger(ctx context.Context, source string) *logger.Logger {
+	return openAIToolsLog.WithContext(ctx, source)
+}
+
+func openAIStreamLogger(ctx context.Context, source string) *logger.Logger {
+	return openAIStreamLog.WithContext(ctx, source)
+}
 
 // appendToolMessages 统一向 messages 追加一次工具调用的 assistant/tool 两条消息
 func appendToolMessages(
@@ -244,11 +260,12 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 		req = req.SetContext(o.ctx)
 	}
 	resp, err := req.Post("/chat/completions")
-
-	body := resp.RawBody()
-	defer body.Close()
 	if err != nil {
-		openAIToolsLog.Errorf("data.openai_tools.stream_failed", "Stream error : %s", err.Error())
+		openAIToolsLogger(openAIContext(o), "openai-tools-ask").Error(
+			"data.openai_tools.stream_failed",
+			fmt.Sprintf("Stream error : %s", err.Error()),
+			logger.String("error_class", "ai_error"),
+		)
 		ch <- map[string]any{
 			"code":     0,
 			"question": question,
@@ -256,6 +273,8 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 		}
 		return
 	}
+	body := resp.RawBody()
+	defer body.Close()
 
 	scanner := bufio.NewScanner(body)
 	for scanner.Scan() {
@@ -318,14 +337,21 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 				}
 			} else {
 				if err != nil {
-					openAIToolsLog.Errorf("data.openai_tools.stream_data_failed", "Stream data error : %s", err.Error())
+					openAIToolsLogger(openAIContext(o), "openai-tools-ask").Error(
+						"data.openai_tools.stream_data_failed",
+						fmt.Sprintf("Stream data error : %s", err.Error()),
+						logger.String("error_class", "ai_error"),
+					)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
 						"content":  err.Error(),
 					}
 				} else {
-					openAIToolsLog.Warnf("data.openai_tools.stream_data_invalid", "Stream data error : %s", data)
+					openAIToolsLogger(openAIContext(o), "openai-tools-ask").Warn(
+						"data.openai_tools.stream_data_invalid",
+						fmt.Sprintf("Stream data error : %s", data),
+					)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
@@ -335,7 +361,10 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 			}
 		} else {
 			if strutil.RemoveNonPrintable(line) != "" {
-				openAIToolsLog.Warnf("data.openai_tools.stream_line_invalid", "Stream data error : %s", line)
+				openAIToolsLogger(openAIContext(o), "openai-tools-ask").Warn(
+					"data.openai_tools.stream_line_invalid",
+					fmt.Sprintf("Stream data error : %s", line),
+				)
 				res := &models.Resp{}
 				if err := json.Unmarshal([]byte(line), res); err == nil {
 					msg := res.Message
@@ -401,11 +430,12 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 		req = req.SetContext(o.ctx)
 	}
 	resp, err := req.Post("/chat/completions")
-
-	body := resp.RawBody()
-	defer body.Close()
 	if err != nil {
-		openAIToolsLog.Errorf("data.openai_tools.stream_with_tools_failed", "Stream error : %s", err.Error())
+		openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Error(
+			"data.openai_tools.stream_with_tools_failed",
+			fmt.Sprintf("Stream error : %s", err.Error()),
+			logger.String("error_class", "ai_error"),
+		)
 		ch <- map[string]any{
 			"code":     0,
 			"question": question,
@@ -413,6 +443,8 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 		}
 		return
 	}
+	body := resp.RawBody()
+	defer body.Close()
 
 	scanner := bufio.NewScanner(body)
 	pendingToolCalls := map[int]*streamedToolCall{}
@@ -514,7 +546,10 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 							funcArguments := pending.Arguments.String()
 							callID := pending.ID
 							if funcName == "" {
-								openAIToolsLog.Warn("data.openai_tools.empty_function_name", "skip tool call with empty function name")
+								openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Warn(
+									"data.openai_tools.empty_function_name",
+									"skip tool call with empty function name",
+								)
 								continue
 							}
 							// 优先使用注册的 ToolHandler 处理
@@ -530,7 +565,11 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 									StreamResponseID:     streamResponse.Id,
 									Model:                streamResponse.Model,
 								}); hErr != nil {
-									openAIToolsLog.Errorf("data.openai_tools.tool_call_failed", "tool %s error : %s", funcName, hErr.Error())
+									openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Error(
+										"data.openai_tools.tool_call_failed",
+										fmt.Sprintf("tool %s error : %s", funcName, hErr.Error()),
+										logger.String("error_class", "ai_error"),
+									)
 									ch <- map[string]any{
 										"code":     0,
 										"question": question,
@@ -554,14 +593,21 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 				}
 			} else {
 				if err != nil {
-					openAIToolsLog.Errorf("data.openai_tools.stream_with_tools_data_failed", "Stream data error : %s", err.Error())
+					openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Error(
+						"data.openai_tools.stream_with_tools_data_failed",
+						fmt.Sprintf("Stream data error : %s", err.Error()),
+						logger.String("error_class", "ai_error"),
+					)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
 						"content":  err.Error(),
 					}
 				} else {
-					openAIToolsLog.Warnf("data.openai_tools.stream_with_tools_invalid", "Stream data error : %s", data)
+					openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Warn(
+						"data.openai_tools.stream_with_tools_invalid",
+						fmt.Sprintf("Stream data error : %s", data),
+					)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
@@ -571,7 +617,10 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 			}
 		} else {
 			if strutil.RemoveNonPrintable(line) != "" {
-				openAIToolsLog.Warnf("data.openai_tools.stream_with_tools_line_invalid", "Stream data error : %s", line)
+				openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Warn(
+					"data.openai_tools.stream_with_tools_line_invalid",
+					fmt.Sprintf("Stream data error : %s", line),
+				)
 				res := &models.Resp{}
 				if err := json.Unmarshal([]byte(line), res); err == nil {
 					msg := res.Message
@@ -580,7 +629,10 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 					}
 
 					if isFunctionCallingUnsupported(msg) {
-						openAIToolsLog.Warnf("data.openai_tools.model_unsupported", "model %s does not support tool calling", o.Model)
+						openAIToolsLogger(openAIContext(o), "openai-tools-with-tools").Warn(
+							"data.openai_tools.model_unsupported",
+							fmt.Sprintf("model %s does not support tool calling", o.Model),
+						)
 						ch <- map[string]any{
 							"code":     0,
 							"question": question,
@@ -601,7 +653,11 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 }
 
 func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, question string) {
-	err := db.Dao.Create(&models.AIResponseResult{
+	dao := db.Dao
+	if ctx := openAIContext(o); ctx != nil {
+		dao = dao.WithContext(ctx)
+	}
+	err := dao.Create(&models.AIResponseResult{
 		StockCode: stockCode,
 		StockName: stockName,
 		ModelName: o.Model,
@@ -610,12 +666,20 @@ func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, ques
 		Question:  question,
 	}).Error
 	if err != nil {
-		openAIToolsLog.Errorf("data.openai_tools.save_result_failed", "failed to save ai response result: %v", err)
+		openAIToolsLogger(openAIContext(o), "openai-tools-save-result").Error(
+			"data.openai_tools.save_result_failed",
+			fmt.Sprintf("failed to save ai response result: %v", err),
+			logger.String("error_class", "ai_error"),
+		)
 	}
 }
 
 func (o *OpenAi) GetAIResponseResult(stock string) *models.AIResponseResult {
 	var result models.AIResponseResult
-	db.Dao.Where("stock_code = ?", stock).Order("id desc").Limit(1).Find(&result)
+	dao := db.Dao
+	if ctx := openAIContext(o); ctx != nil {
+		dao = dao.WithContext(ctx)
+	}
+	dao.Where("stock_code = ?", stock).Order("id desc").Limit(1).Find(&result)
 	return &result
 }

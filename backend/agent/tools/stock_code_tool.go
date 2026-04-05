@@ -37,7 +37,7 @@ func (q QueryStockCodeInfo) Info(ctx context.Context) (*schema.ToolInfo, error) 
 }
 
 func (q QueryStockCodeInfo) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	trace := toolTrace("tool-query-stock-code")
+	_, trace := ensureToolTraceContext(ctx, "tool-query-stock-code")
 	if log := toolModuleLogger("agent.tool.stock_code"); log != nil {
 		log.WithTrace(trace).Info(
 			"tool.stock_code.called",
@@ -52,6 +52,7 @@ func (q QueryStockCodeInfo) InvokableRun(ctx context.Context, argumentsInJSON st
 			log.WithTrace(trace).Error(
 				"tool.stock_code.arguments_invalid",
 				"unmarshal stock code tool args failed",
+				logger.String("error_class", "tool_error"),
 				logger.Err(err),
 			)
 		}
@@ -81,6 +82,7 @@ func (q QueryStockCodeInfo) InvokableRun(ctx context.Context, argumentsInJSON st
 			log.WithTrace(trace).Error(
 				"tool.stock_code.marshal_failed",
 				"marshal stock code tool result failed",
+				logger.String("error_class", "tool_error"),
 				logger.Err(err),
 			)
 		}

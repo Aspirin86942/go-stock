@@ -120,8 +120,12 @@ func (a *CronTaskApi) EnableTask(id uint, enable bool) error {
 	}).Error
 }
 
-func (a *CronTaskApi) UpdateRunInfo(id uint, lastRunAt time.Time, nextRunAt *time.Time, lastRunResult string) error {
-	return db.Dao.Model(&models.CronTask{}).Where("id = ?", id).Updates(map[string]any{
+func (a *CronTaskApi) UpdateRunInfo(ctx context.Context, id uint, lastRunAt time.Time, nextRunAt *time.Time, lastRunResult string) error {
+	dao := db.Dao
+	if ctx != nil {
+		dao = dao.WithContext(ctx)
+	}
+	return dao.Model(&models.CronTask{}).Where("id = ?", id).Updates(map[string]any{
 		"last_run_at":     lastRunAt,
 		"next_run_at":     nextRunAt,
 		"run_count":       gorm.Expr("run_count + 1"),
@@ -183,7 +187,7 @@ func (a *CronTaskApi) SearchTasks(keyword string) []models.CronTask {
 }
 
 func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) error {
-	trace := moduleTrace("cron-task-execute")
+	ctx, trace := ensureModuleTraceContext(ctx, "cron-task-execute")
 	if log := taskLogger("agent.cron_task"); log != nil {
 		log.WithTrace(trace).Info(
 			"task.execute_started",
@@ -207,6 +211,7 @@ func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) er
 				"cron task execution failed",
 				logger.Uint("task_id", task.ID),
 				logger.String("task_name", task.Name),
+				logger.String("error_class", "task_error"),
 				logger.Err(err),
 			)
 		}
@@ -214,7 +219,7 @@ func (a *CronTaskApi) ExecuteTask(ctx context.Context, task *models.CronTask) er
 		runResult = "成功"
 	}
 
-	err2 := a.UpdateRunInfo(task.ID, now, &nextRunAt, runResult)
+	err2 := a.UpdateRunInfo(ctx, task.ID, now, &nextRunAt, runResult)
 	if err2 != nil {
 		if log := taskLogger("agent.cron_task"); log != nil {
 			log.WithTrace(trace).Error(
@@ -249,7 +254,7 @@ func (a *CronTaskApi) executeTaskByType(ctx context.Context, task *models.CronTa
 		return a.executeCustomTask(ctx, task)
 	default:
 		if log := taskLogger("agent.cron_task"); log != nil {
-			log.WithTrace(moduleTrace("cron-task-dispatch")).Warn(
+			log.WithTrace(moduleTrace(ctx, "cron-task-dispatch")).Warn(
 				"task.unknown_type",
 				"unknown cron task type",
 				logger.String("task_type", task.TaskType),
@@ -268,7 +273,7 @@ func (a *CronTaskApi) CalculateNextRunTime(cronExpr string) time.Time {
 }
 
 func (a *CronTaskApi) executeStockAnalysis(ctx context.Context, task *models.CronTask) error {
-	trace := moduleTrace("cron-task-stock-analysis")
+	trace := moduleTrace(ctx, "cron-task-stock-analysis")
 	if log := taskLogger("agent.cron_task"); log != nil {
 		log.WithTrace(trace).Info(
 			"task.stock_analysis_started",
@@ -331,7 +336,7 @@ func (a *CronTaskApi) executeFundAnalysis(ctx context.Context, task *models.Cron
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
 			if log := taskLogger("agent.cron_task"); log != nil {
-				log.WithTrace(moduleTrace("cron-task-fund-analysis")).Error(
+				log.WithTrace(moduleTrace(ctx, "cron-task-fund-analysis")).Error(
 					"task.fund_analysis_params_invalid",
 					"parse fund analysis task params failed",
 					logger.Uint("task_id", task.ID),
@@ -348,7 +353,7 @@ func (a *CronTaskApi) executeFundAnalysis(ctx context.Context, task *models.Cron
 			return ctx.Err()
 		default:
 			if log := taskLogger("agent.cron_task"); log != nil {
-				log.WithTrace(moduleTrace("cron-task-fund-analysis")).Info(
+				log.WithTrace(moduleTrace(ctx, "cron-task-fund-analysis")).Info(
 					"task.fund_analysis_item",
 					"analyzing fund",
 					logger.Uint("task_id", task.ID),
@@ -368,7 +373,7 @@ func (a *CronTaskApi) executeNewsFetch(ctx context.Context, task *models.CronTas
 	default:
 		data.NewMarketNewsApi().TelegraphList(30)
 		if log := taskLogger("agent.cron_task"); log != nil {
-			log.WithTrace(moduleTrace("cron-task-news-fetch")).Info(
+			log.WithTrace(moduleTrace(ctx, "cron-task-news-fetch")).Info(
 				"task.news_fetch_completed",
 				"news fetch task completed",
 				logger.Uint("task_id", task.ID),
@@ -389,7 +394,7 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 		err := json.Unmarshal([]byte(task.Params), &params)
 		if err != nil {
 			if log := taskLogger("agent.cron_task"); log != nil {
-				log.WithTrace(moduleTrace("cron-task-stock-monitor")).Error(
+				log.WithTrace(moduleTrace(ctx, "cron-task-stock-monitor")).Error(
 					"task.stock_monitor_params_invalid",
 					"parse stock monitor task params failed",
 					logger.Uint("task_id", task.ID),
@@ -406,7 +411,7 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 			return ctx.Err()
 		default:
 			if log := taskLogger("agent.cron_task"); log != nil {
-				log.WithTrace(moduleTrace("cron-task-stock-monitor")).Info(
+				log.WithTrace(moduleTrace(ctx, "cron-task-stock-monitor")).Info(
 					"task.stock_monitor_item",
 					"monitoring stock",
 					logger.Uint("task_id", task.ID),
@@ -421,7 +426,7 @@ func (a *CronTaskApi) executeStockMonitor(ctx context.Context, task *models.Cron
 
 func (a *CronTaskApi) executeCustomTask(ctx context.Context, task *models.CronTask) error {
 	if log := taskLogger("agent.cron_task"); log != nil {
-		log.WithTrace(moduleTrace("cron-task-custom")).Info(
+		log.WithTrace(moduleTrace(ctx, "cron-task-custom")).Info(
 			"task.custom_started",
 			"started custom task",
 			logger.Uint("task_id", task.ID),
@@ -432,7 +437,7 @@ func (a *CronTaskApi) executeCustomTask(ctx context.Context, task *models.CronTa
 }
 
 func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.CronTask) error {
-	trace := moduleTrace("cron-task-market-analysis")
+	trace := moduleTrace(ctx, "cron-task-market-analysis")
 	if log := taskLogger("agent.cron_task"); log != nil {
 		log.WithTrace(trace).Info(
 			"task.market_analysis_started",
@@ -486,7 +491,7 @@ func (a *CronTaskApi) executeMarketAnalysis(ctx context.Context, task *models.Cr
 }
 
 func (a *CronTaskApi) executeGlobalStockIndexCache(ctx context.Context, task *models.CronTask) error {
-	trace := moduleTrace("cron-task-global-index-cache")
+	trace := moduleTrace(ctx, "cron-task-global-index-cache")
 	if log := taskLogger("agent.cron_task"); log != nil {
 		log.WithTrace(trace).Info(
 			"task.global_index_cache_started",
@@ -519,7 +524,7 @@ func (a *CronTaskApi) executeGlobalStockIndexCache(ctx context.Context, task *mo
 }
 
 func (a *CronTaskApi) executeStockChangeSave(ctx context.Context, task *models.CronTask) error {
-	trace := moduleTrace("cron-task-stock-change-save")
+	trace := moduleTrace(ctx, "cron-task-stock-change-save")
 	if log := taskLogger("agent.cron_task"); log != nil {
 		log.WithTrace(trace).Info(
 			"task.stock_change_save_started",

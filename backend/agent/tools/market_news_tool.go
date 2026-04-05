@@ -33,6 +33,7 @@ func (q QueryMarketNews) Info(ctx context.Context) (*schema.ToolInfo, error) {
 }
 
 func (q QueryMarketNews) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	_, trace := ensureToolTraceContext(ctx, "tool-market-news")
 	md := strings.Builder{}
 	res := data.NewMarketNewsApi().ClsCalendar()
 	for _, a := range res {
@@ -47,7 +48,7 @@ func (q QueryMarketNews) InvokableRun(ctx context.Context, argumentsInJSON strin
 		//logger.SugaredLogger.Debugf("value: %+v,list: %+v", date.String(), list)
 		list.ForEach(func(key, value gjson.Result) bool {
 			if log := toolModuleLogger("agent.tool.market_news"); log != nil {
-				log.WithTrace(toolTrace("tool-market-news")).Info(
+				log.WithTrace(trace).Info(
 					"tool.market_news.item",
 					"parsed market news item",
 					logger.String("item_index", key.String()),

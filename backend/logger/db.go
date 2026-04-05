@@ -35,28 +35,33 @@ func (l *GormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	return &clone
 }
 
-func (l *GormLogger) Info(_ context.Context, msg string, data ...interface{}) {
+func (l *GormLogger) Info(ctx context.Context, msg string, data ...interface{}) {
 	if l == nil || l.logLevel < gormlogger.Info {
 		return
 	}
-	l.base().Info("db.gorm.info", "gorm info", String("message", fmt.Sprintf(msg, data...)))
+	l.base(ctx).Info("db.gorm.info", "gorm info", String("message", fmt.Sprintf(msg, data...)))
 }
 
-func (l *GormLogger) Warn(_ context.Context, msg string, data ...interface{}) {
+func (l *GormLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	if l == nil || l.logLevel < gormlogger.Warn {
 		return
 	}
-	l.base().Warn("db.gorm.warn", "gorm warning", String("message", fmt.Sprintf(msg, data...)))
+	l.base(ctx).Warn("db.gorm.warn", "gorm warning", String("message", fmt.Sprintf(msg, data...)))
 }
 
-func (l *GormLogger) Error(_ context.Context, msg string, data ...interface{}) {
+func (l *GormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
 	if l == nil || l.logLevel < gormlogger.Error {
 		return
 	}
-	l.base().Error("db.gorm.error", "gorm error", String("message", fmt.Sprintf(msg, data...)))
+	l.base(ctx).Error(
+		"db.gorm.error",
+		"gorm error",
+		String("message", fmt.Sprintf(msg, data...)),
+		String("error_class", "db_error"),
+	)
 }
 
-func (l *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	if l == nil || l.logLevel <= gormlogger.Silent {
 		return
 	}
@@ -67,17 +72,17 @@ func (l *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql st
 			return
 		}
 		sql, rows := fc()
-		l.base().Error(
+		l.base(ctx).Error(
 			"db.query.failed",
 			"gorm query failed",
-			append(queryFields(sql, rows, elapsed), String("error_message", err.Error()))...,
+			append(queryFields(sql, rows, elapsed), String("error_message", err.Error()), String("error_class", "db_error"))...,
 		)
 		return
 	}
 
 	if l.slowThreshold > 0 && elapsed >= l.slowThreshold && l.logLevel >= gormlogger.Warn {
 		sql, rows := fc()
-		l.base().Warn(
+		l.base(ctx).Warn(
 			"db.query.slow",
 			"gorm query exceeded threshold",
 			queryFields(sql, rows, elapsed)...,
@@ -87,7 +92,7 @@ func (l *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql st
 
 	if l.logLevel >= gormlogger.Info {
 		sql, rows := fc()
-		l.base().Info(
+		l.base(ctx).Info(
 			"db.query.completed",
 			"gorm query completed",
 			queryFields(sql, rows, elapsed)...,
@@ -95,7 +100,7 @@ func (l *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql st
 	}
 }
 
-func (l *GormLogger) base() *Logger {
+func (l *GormLogger) base(ctx context.Context) *Logger {
 	var runtime *Runtime
 	if l != nil {
 		runtime = l.runtime
@@ -103,12 +108,11 @@ func (l *GormLogger) base() *Logger {
 	if runtime == nil {
 		runtime = Default()
 	}
-
-	trace := TraceContext{Source: "gorm"}
 	if runtime != nil {
-		trace = runtime.NewTrace("gorm")
+		return runtime.ForSink(SinkDB, "gorm").WithTrace(runtime.TraceOrNew(ctx, "gorm"))
 	}
-	return runtime.ForSink(SinkDB, "gorm").WithTrace(trace)
+	runtime = &Runtime{}
+	return runtime.ForSink(SinkDB, "gorm").WithTrace(runtime.TraceOrNew(ctx, "gorm"))
 }
 
 func queryFields(sql string, rows int64, elapsed time.Duration) []zap.Field {

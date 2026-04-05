@@ -26,15 +26,27 @@ func (o *OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysProm
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
-			openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_panic", "NewSummaryStockNewsStream panic: %v", err)
+			openAIStreamLogger(o.Ctx(), "openai-stream-summary-tools").Error(
+				"data.openai_stream.summary_with_tools_panic",
+				fmt.Sprintf("NewSummaryStockNewsStream panic: %v", err),
+				logger.String("error_class", "ai_error"),
+			)
 		}
 	}()
 
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_goroutine_panic", "NewSummaryStockNewsStream goroutine panic: %v", err)
-				openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_goroutine_config", "NewSummaryStockNewsStream goroutine panic config: %s", o.String())
+				openAIStreamLogger(o.Ctx(), "openai-stream-summary-tools").Error(
+					"data.openai_stream.summary_with_tools_goroutine_panic",
+					fmt.Sprintf("NewSummaryStockNewsStream goroutine panic: %v", err),
+					logger.String("error_class", "ai_error"),
+				)
+				openAIStreamLogger(o.Ctx(), "openai-stream-summary-tools").Error(
+					"data.openai_stream.summary_with_tools_goroutine_config",
+					fmt.Sprintf("NewSummaryStockNewsStream goroutine panic config: %s", o.String()),
+					logger.String("error_class", "ai_error"),
+				)
 			}
 		}()
 		defer close(ch)
@@ -157,15 +169,27 @@ func (o *OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
-			openAIStreamLog.Errorf("data.openai_stream.summary_panic", "NewSummaryStockNewsStream panic: %v", err)
+			openAIStreamLogger(o.Ctx(), "openai-stream-summary").Error(
+				"data.openai_stream.summary_panic",
+				fmt.Sprintf("NewSummaryStockNewsStream panic: %v", err),
+				logger.String("error_class", "ai_error"),
+			)
 		}
 	}()
 
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				openAIStreamLog.Errorf("data.openai_stream.summary_goroutine_panic", "NewSummaryStockNewsStream goroutine panic: %v", err)
-				openAIStreamLog.Errorf("data.openai_stream.summary_goroutine_config", "NewSummaryStockNewsStream goroutine panic config:%s", o.String())
+				openAIStreamLogger(o.Ctx(), "openai-stream-summary").Error(
+					"data.openai_stream.summary_goroutine_panic",
+					fmt.Sprintf("NewSummaryStockNewsStream goroutine panic: %v", err),
+					logger.String("error_class", "ai_error"),
+				)
+				openAIStreamLogger(o.Ctx(), "openai-stream-summary").Error(
+					"data.openai_stream.summary_goroutine_config",
+					fmt.Sprintf("NewSummaryStockNewsStream goroutine panic config:%s", o.String()),
+					logger.String("error_class", "ai_error"),
+				)
 			}
 		}()
 		defer close(ch)
@@ -300,15 +324,31 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 
 	defer func() {
 		if err := recover(); err != nil {
-			openAIStreamLog.Errorf("data.openai_stream.chat_panic", "NewChatStream panic: %v", err)
+			openAIStreamLogger(o.Ctx(), "openai-stream-chat").Error(
+				"data.openai_stream.chat_panic",
+				fmt.Sprintf("NewChatStream panic: %v", err),
+				logger.String("error_class", "ai_error"),
+			)
 		}
 	}()
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_panic", "NewChatStream goroutine panic: %v", err)
-				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_stock", "NewChatStream goroutine panic stock:%s stockCode:%s", stock, stockCode)
-				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_config", "NewChatStream goroutine panic config:%s", o.String())
+				openAIStreamLogger(o.Ctx(), "openai-stream-chat").Error(
+					"data.openai_stream.chat_goroutine_panic",
+					fmt.Sprintf("NewChatStream goroutine panic: %v", err),
+					logger.String("error_class", "ai_error"),
+				)
+				openAIStreamLogger(o.Ctx(), "openai-stream-chat").Error(
+					"data.openai_stream.chat_goroutine_stock",
+					fmt.Sprintf("NewChatStream goroutine panic stock:%s stockCode:%s", stock, stockCode),
+					logger.String("error_class", "ai_error"),
+				)
+				openAIStreamLogger(o.Ctx(), "openai-stream-chat").Error(
+					"data.openai_stream.chat_goroutine_config",
+					fmt.Sprintf("NewChatStream goroutine panic config:%s", o.String()),
+					logger.String("error_class", "ai_error"),
+				)
 			}
 		}()
 		defer close(ch)

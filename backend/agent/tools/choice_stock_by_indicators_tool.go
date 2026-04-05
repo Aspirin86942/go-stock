@@ -21,12 +21,43 @@ func toolModuleLogger(module string) *logger.Logger {
 	return runtimeLogger.ForSink(logger.SinkAI, module)
 }
 
-func toolTrace(source string) logger.TraceContext {
+func toolLoggerRuntime() *logger.Runtime {
 	runtimeLogger := logger.Default()
 	if runtimeLogger == nil {
-		return logger.TraceContext{Source: source}
+		return &logger.Runtime{}
 	}
-	return runtimeLogger.NewTrace(source)
+	return runtimeLogger
+}
+
+func toolTrace(args ...any) logger.TraceContext {
+	ctx, source := resolveToolTraceArgs(args...)
+	return toolLoggerRuntime().TraceOrNew(ctx, source)
+}
+
+func ensureToolTraceContext(ctx context.Context, source string) (context.Context, logger.TraceContext) {
+	return toolLoggerRuntime().EnsureTraceContext(ctx, source)
+}
+
+func resolveToolTraceArgs(args ...any) (context.Context, string) {
+	var ctx context.Context
+	source := ""
+	switch len(args) {
+	case 1:
+		switch value := args[0].(type) {
+		case context.Context:
+			ctx = value
+		case string:
+			source = value
+		}
+	case 2:
+		if value, ok := args[0].(context.Context); ok {
+			ctx = value
+		}
+		if value, ok := args[1].(string); ok {
+			source = value
+		}
+	}
+	return ctx, source
 }
 
 // @Author spark

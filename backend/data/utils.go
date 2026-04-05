@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	"go-stock/backend/logger"
 	"regexp"
@@ -24,20 +25,25 @@ func dataModuleLogger(sink logger.Sink, module string) dataModuleLog {
 	return dataModuleLog{sink: sink, module: module}
 }
 
-func dataTrace(source string) logger.TraceContext {
+func dataLoggerRuntime() *logger.Runtime {
 	runtime := logger.Default()
 	if runtime == nil {
-		panic("logger runtime not initialized")
+		return &logger.Runtime{}
 	}
-	return runtime.NewTrace(source)
+	return runtime
+}
+
+func dataTrace(ctx context.Context, source string) logger.TraceContext {
+	return dataLoggerRuntime().TraceOrNew(ctx, source)
+}
+
+func (l dataModuleLog) WithContext(ctx context.Context, source string) *logger.Logger {
+	runtime := dataLoggerRuntime()
+	return runtime.ForSink(l.sink, l.module).WithTrace(runtime.TraceOrNew(ctx, source))
 }
 
 func (l dataModuleLog) base(source string) *logger.Logger {
-	runtime := logger.Default()
-	if runtime == nil {
-		panic("logger runtime not initialized")
-	}
-	return runtime.ForSink(l.sink, l.module).WithTrace(runtime.NewTrace(source))
+	return l.WithContext(nil, source)
 }
 
 func (l dataModuleLog) Info(event string, args ...any) {

@@ -27,7 +27,14 @@ func NewStockAiAgentApi() *StockAiAgent {
 }
 
 func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId int, thinkingMode bool) *StockAiAgent {
-	trace := moduleTrace("new-stock-ai-agent")
+	reqCtx := context.Background()
+	if ctx != nil && *ctx != nil {
+		reqCtx = *ctx
+	}
+	reqCtx, trace := ensureModuleTraceContext(reqCtx, "new-stock-ai-agent")
+	if ctx != nil {
+		*ctx = reqCtx
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if log := aiLogger("agent.api"); log != nil {
@@ -35,6 +42,7 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 					"agent.new_stock_ai_agent_panic",
 					"panic while creating stock ai agent",
 					logger.Int("ai_config_id", aiConfigId),
+					logger.String("error_class", "ai_error"),
 					logger.Any("panic_value", r),
 				)
 			}
@@ -48,6 +56,7 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 				"agent.setting_config_missing",
 				"setting config is nil while creating stock ai agent",
 				logger.Int("ai_config_id", aiConfigId),
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return nil
@@ -62,6 +71,7 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 				"agent.ai_config_not_found",
 				"ai config not found",
 				logger.Int("ai_config_id", aiConfigId),
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return nil
@@ -72,6 +82,7 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 				"agent.ai_config_nil",
 				"ai config resolved to nil",
 				logger.Int("ai_config_id", aiConfigId),
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return nil
@@ -90,6 +101,7 @@ func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId in
 				"agent.instance_create_failed",
 				"failed to create stock ai agent",
 				logger.Int("ai_config_id", aiConfigId),
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return nil
@@ -106,7 +118,7 @@ func (receiver StockAiAgent) Chat(question string, aiConfigId int, sysPromptId *
 }
 
 func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool) chan *schema.Message {
-	trace := moduleTrace("chat-with-context")
+	ctx, trace := ensureModuleTraceContext(ctx, "chat-with-context")
 	ch := make(chan *schema.Message, 1024)
 
 	go func() {
@@ -117,6 +129,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.chat_context_panic",
 						"panic in chat with context",
 						logger.Int("ai_config_id", aiConfigId),
+						logger.String("error_class", "ai_error"),
 						logger.Any("panic_value", r),
 					)
 				}
@@ -135,6 +148,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 					"agent.chat_context_agent_nil",
 					"stock ai agent is nil",
 					logger.Int("ai_config_id", aiConfigId),
+					logger.String("error_class", "ai_error"),
 				)
 			}
 			ch <- &schema.Message{
@@ -157,6 +171,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.history_messages_failed",
 						"failed to get history messages",
 						logger.String("session_id", stockAiAgent.sessionID),
+						logger.String("error_class", "ai_error"),
 						logger.Err(err),
 					)
 				}
@@ -189,6 +204,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.user_message_save_failed",
 						"failed to save user message",
 						logger.String("session_id", stockAiAgent.sessionID),
+						logger.String("error_class", "ai_error"),
 						logger.Err(err),
 					)
 				}
@@ -211,13 +227,14 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						log.WithTrace(trace).Error(
 							"agent.process_message_future_panic",
 							"panic while processing message future",
+							logger.String("error_class", "ai_error"),
 							logger.Any("panic_value", r),
 						)
 					}
 				}
 				wg.Done()
 			}()
-			processMessageFuture(msgFuture, ch)
+			processMessageFuture(ctx, msgFuture, ch)
 		}()
 
 		func() {
@@ -229,6 +246,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.chat_context_agent_impl_nil",
 						"stock ai agent implementation is nil",
 						logger.Int("ai_config_id", aiConfigId),
+						logger.String("error_class", "ai_error"),
 					)
 				}
 				ch <- &schema.Message{
@@ -245,6 +263,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.stream_create_failed",
 						"create stream from agent failed",
 						logger.Int("ai_config_id", aiConfigId),
+						logger.String("error_class", "ai_error"),
 						logger.Err(err),
 					)
 				}
@@ -264,6 +283,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 						"agent.stream_nil",
 						"stream result is nil",
 						logger.Int("ai_config_id", aiConfigId),
+						logger.String("error_class", "ai_error"),
 					)
 				}
 				ch <- &schema.Message{
@@ -295,6 +315,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 							"agent.stream_recv_failed",
 							"receive message from agent stream failed",
 							logger.Int("ai_config_id", aiConfigId),
+							logger.String("error_class", "ai_error"),
 							logger.Err(err),
 						)
 					}
@@ -316,6 +337,7 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 							"agent.assistant_message_save_failed",
 							"failed to save assistant message",
 							logger.String("session_id", stockAiAgent.sessionID),
+							logger.String("error_class", "ai_error"),
 							logger.Err(err),
 						)
 					}
@@ -336,6 +358,7 @@ func safeSend(ch chan *schema.Message, msg *schema.Message) {
 				log.WithTrace(moduleTrace("safe-send")).Error(
 					"agent.channel_send_panic",
 					"panic when sending message to channel",
+					logger.String("error_class", "ai_error"),
 					logger.Any("panic_value", r),
 				)
 			}
@@ -353,13 +376,14 @@ func safeSend(ch chan *schema.Message, msg *schema.Message) {
 	}
 }
 
-func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message) {
-	trace := moduleTrace("process-message-future")
+func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch chan *schema.Message) {
+	trace := moduleTrace(ctx, "process-message-future")
 	if msgFuture == nil || ch == nil {
 		if log := aiLogger("agent.api"); log != nil {
 			log.WithTrace(trace).Error(
 				"agent.message_future_invalid",
 				"message future or channel is nil",
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return
@@ -371,6 +395,7 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 			log.WithTrace(trace).Error(
 				"agent.message_stream_iterator_nil",
 				"message stream iterator is nil",
+				logger.String("error_class", "ai_error"),
 			)
 		}
 		return
@@ -383,6 +408,7 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 				log.WithTrace(trace).Error(
 					"agent.message_stream_next_failed",
 					"failed to get next message stream",
+					logger.String("error_class", "ai_error"),
 					logger.Err(err),
 				)
 			}
@@ -414,6 +440,7 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 					log.WithTrace(trace).Error(
 						"agent.message_stream_recv_failed",
 						"failed to receive from message stream",
+						logger.String("error_class", "ai_error"),
 						logger.Err(err),
 					)
 				}
