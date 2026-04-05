@@ -40,6 +40,7 @@ type BrowserManager struct {
 }
 
 var browserManager = &BrowserManager{}
+var webSearchLog = dataModuleLogger(logger.SinkHTTP, "data.web_search")
 
 func GetBrowserManager() *BrowserManager {
 	return browserManager
@@ -71,7 +72,7 @@ func (bm *BrowserManager) GetOrCreateBrowser() (*BrowserInstance, error) {
 
 	allocatorCtx, allocatorCancel := getStealthAllocator(context.Background(), path, true)
 
-	browserCtx, browserCancel := chromedp.NewContext(allocatorCtx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+	browserCtx, browserCancel := chromedp.NewContext(allocatorCtx, chromedp.WithLogf(webSearchLog.ChromedpInfof("data.web_search.chromedp")))
 
 	err := chromedp.Run(browserCtx)
 	if err != nil {
@@ -88,7 +89,7 @@ func (bm *BrowserManager) GetOrCreateBrowser() (*BrowserInstance, error) {
 		lastUsed:        time.Now(),
 	}
 
-	logger.SugaredLogger.Infof("Created new browser instance")
+	webSearchLog.Info("data.web_search.browser_created", "Created new browser instance")
 	return bm.instance, nil
 }
 
@@ -121,7 +122,7 @@ func (bm *BrowserManager) CloseBrowser() {
 	if bm.instance != nil {
 		bm.instance.Close()
 		bm.instance = nil
-		logger.SugaredLogger.Infof("Browser instance closed")
+		webSearchLog.Info("data.web_search.browser_closed", "Browser instance closed")
 	}
 }
 
@@ -153,7 +154,7 @@ func (s *WebSearchApi) Search(query string, maxResults int) []WebSearchResult {
 
 	browser, err := GetBrowserManager().GetOrCreateBrowser()
 	if err != nil {
-		logger.SugaredLogger.Warnf("Failed to get browser: %v", err)
+		webSearchLog.Warnf("data.web_search.get_browser_failed", "Failed to get browser: %v", err)
 		return nil
 	}
 
@@ -187,12 +188,12 @@ func (s *WebSearchApi) searchBingWithBrowser(browser *BrowserInstance, query str
 		chromedp.InnerHTML("#b_results", &htmlContent),
 	)
 	if err != nil {
-		logger.SugaredLogger.Errorf("Bing search failed: %v", err)
+		webSearchLog.Errorf("data.web_search.bing_failed", "Bing search failed: %v", err)
 		return results
 	}
 
 	results = s.parseBingResultsWithGoquery(htmlContent, maxResults)
-	logger.SugaredLogger.Infof("Bing search found %d results for query: %s", len(results), query)
+	webSearchLog.Infof("data.web_search.bing_succeeded", "Bing search found %d results for query: %s", len(results), query)
 
 	return results
 }
@@ -219,12 +220,12 @@ func (s *WebSearchApi) searchBaiduWithBrowser(browser *BrowserInstance, query st
 		chromedp.InnerHTML("#content_left", &htmlContent),
 	)
 	if err != nil {
-		logger.SugaredLogger.Errorf("Baidu search failed: %v", err)
+		webSearchLog.Errorf("data.web_search.baidu_failed", "Baidu search failed: %v", err)
 		return results
 	}
 
 	results = s.parseBaiduResultsWithGoquery(htmlContent, maxResults)
-	logger.SugaredLogger.Infof("Baidu search found %d results for query: %s", len(results), query)
+	webSearchLog.Infof("data.web_search.baidu_succeeded", "Baidu search found %d results for query: %s", len(results), query)
 
 	return results
 }
@@ -234,7 +235,7 @@ func (s *WebSearchApi) parseBingResultsWithGoquery(htmlContent string, maxResult
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Errorf("Failed to parse Bing HTML: %v", err)
+		webSearchLog.Errorf("data.web_search.parse_bing_failed", "Failed to parse Bing HTML: %v", err)
 		return results
 	}
 
@@ -274,7 +275,7 @@ func (s *WebSearchApi) parseBingResultsWithGoquery(htmlContent string, maxResult
 		results = append(results, result)
 	})
 
-	logger.SugaredLogger.Debugf("Bing: found %d results using goquery", len(results))
+	webSearchLog.Debugf("data.web_search.parse_bing_succeeded", "Bing: found %d results using goquery", len(results))
 	return results
 }
 
@@ -283,7 +284,7 @@ func (s *WebSearchApi) parseBaiduResultsWithGoquery(htmlContent string, maxResul
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Errorf("Failed to parse Baidu HTML: %v", err)
+		webSearchLog.Errorf("data.web_search.parse_baidu_failed", "Failed to parse Baidu HTML: %v", err)
 		return results
 	}
 
@@ -337,7 +338,7 @@ func (s *WebSearchApi) parseBaiduResultsWithGoquery(htmlContent string, maxResul
 		results = append(results, result)
 	})
 
-	logger.SugaredLogger.Debugf("Baidu: found %d results using goquery", len(results))
+	webSearchLog.Debugf("data.web_search.parse_baidu_succeeded", "Baidu: found %d results using goquery", len(results))
 	return results
 }
 

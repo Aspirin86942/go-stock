@@ -87,6 +87,8 @@ type streamedToolCall struct {
 	Arguments strings.Builder
 }
 
+var openAIToolsLog = dataModuleLogger(logger.SinkAI, "data.openai_tools")
+
 // appendToolMessages 统一向 messages 追加一次工具调用的 assistant/tool 两条消息
 func appendToolMessages(
 	messages *[]map[string]any,
@@ -246,7 +248,7 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 	body := resp.RawBody()
 	defer body.Close()
 	if err != nil {
-		logger.SugaredLogger.Infof("Stream error : %s", err.Error())
+		openAIToolsLog.Errorf("data.openai_tools.stream_failed", "Stream error : %s", err.Error())
 		ch <- map[string]any{
 			"code":     0,
 			"question": question,
@@ -316,14 +318,14 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 				}
 			} else {
 				if err != nil {
-					logger.SugaredLogger.Infof("Stream data error : %s", err.Error())
+					openAIToolsLog.Errorf("data.openai_tools.stream_data_failed", "Stream data error : %s", err.Error())
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
 						"content":  err.Error(),
 					}
 				} else {
-					logger.SugaredLogger.Infof("Stream data error : %s", data)
+					openAIToolsLog.Warnf("data.openai_tools.stream_data_invalid", "Stream data error : %s", data)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
@@ -333,7 +335,7 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 			}
 		} else {
 			if strutil.RemoveNonPrintable(line) != "" {
-				logger.SugaredLogger.Infof("Stream data error : %s", line)
+				openAIToolsLog.Warnf("data.openai_tools.stream_line_invalid", "Stream data error : %s", line)
 				res := &models.Resp{}
 				if err := json.Unmarshal([]byte(line), res); err == nil {
 					msg := res.Message
@@ -403,7 +405,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 	body := resp.RawBody()
 	defer body.Close()
 	if err != nil {
-		logger.SugaredLogger.Infof("Stream error : %s", err.Error())
+		openAIToolsLog.Errorf("data.openai_tools.stream_with_tools_failed", "Stream error : %s", err.Error())
 		ch <- map[string]any{
 			"code":     0,
 			"question": question,
@@ -512,7 +514,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 							funcArguments := pending.Arguments.String()
 							callID := pending.ID
 							if funcName == "" {
-								logger.SugaredLogger.Warn("skip tool call with empty function name")
+								openAIToolsLog.Warn("data.openai_tools.empty_function_name", "skip tool call with empty function name")
 								continue
 							}
 							// 优先使用注册的 ToolHandler 处理
@@ -528,7 +530,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 									StreamResponseID:     streamResponse.Id,
 									Model:                streamResponse.Model,
 								}); hErr != nil {
-									logger.SugaredLogger.Infof("tool %s error : %s", funcName, hErr.Error())
+									openAIToolsLog.Errorf("data.openai_tools.tool_call_failed", "tool %s error : %s", funcName, hErr.Error())
 									ch <- map[string]any{
 										"code":     0,
 										"question": question,
@@ -552,14 +554,14 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 				}
 			} else {
 				if err != nil {
-					logger.SugaredLogger.Infof("Stream data error : %s", err.Error())
+					openAIToolsLog.Errorf("data.openai_tools.stream_with_tools_data_failed", "Stream data error : %s", err.Error())
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
 						"content":  err.Error(),
 					}
 				} else {
-					logger.SugaredLogger.Infof("Stream data error : %s", data)
+					openAIToolsLog.Warnf("data.openai_tools.stream_with_tools_invalid", "Stream data error : %s", data)
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
@@ -569,7 +571,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 			}
 		} else {
 			if strutil.RemoveNonPrintable(line) != "" {
-				logger.SugaredLogger.Infof("Stream data error : %s", line)
+				openAIToolsLog.Warnf("data.openai_tools.stream_with_tools_line_invalid", "Stream data error : %s", line)
 				res := &models.Resp{}
 				if err := json.Unmarshal([]byte(line), res); err == nil {
 					msg := res.Message
@@ -578,7 +580,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 					}
 
 					if isFunctionCallingUnsupported(msg) {
-						logger.SugaredLogger.Warnf("model %s does not support tool calling", o.Model)
+						openAIToolsLog.Warnf("data.openai_tools.model_unsupported", "model %s does not support tool calling", o.Model)
 						ch <- map[string]any{
 							"code":     0,
 							"question": question,
@@ -608,7 +610,7 @@ func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, ques
 		Question:  question,
 	}).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("failed to save ai response result: %v", err)
+		openAIToolsLog.Errorf("data.openai_tools.save_result_failed", "failed to save ai response result: %v", err)
 	}
 }
 

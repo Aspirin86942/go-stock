@@ -20,19 +20,21 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+var openAIStreamLog = dataModuleLogger(logger.SinkAI, "data.openai_stream")
+
 func (o *OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromptId *int, tools []Tool, thinking bool, history []map[string]interface{}) <-chan map[string]any {
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
-			logger.SugaredLogger.Error("NewSummaryStockNewsStream panic", err)
+			openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_panic", "NewSummaryStockNewsStream panic: %v", err)
 		}
 	}()
 
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logger.SugaredLogger.Errorf("NewSummaryStockNewsStream goroutine panic: %s", err)
-				logger.SugaredLogger.Errorf("NewSummaryStockNewsStream goroutine panic config: %s", o.String())
+				openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_goroutine_panic", "NewSummaryStockNewsStream goroutine panic: %v", err)
+				openAIStreamLog.Errorf("data.openai_stream.summary_with_tools_goroutine_config", "NewSummaryStockNewsStream goroutine panic config: %s", o.String())
 			}
 		}()
 		defer close(ch)
@@ -155,15 +157,15 @@ func (o *OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
-			logger.SugaredLogger.Error("NewSummaryStockNewsStream panic", err)
+			openAIStreamLog.Errorf("data.openai_stream.summary_panic", "NewSummaryStockNewsStream panic: %v", err)
 		}
 	}()
 
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logger.SugaredLogger.Errorf("NewSummaryStockNewsStream goroutine  panic :%s", err)
-				logger.SugaredLogger.Errorf("NewSummaryStockNewsStream goroutine  panic  config:%s", o.String())
+				openAIStreamLog.Errorf("data.openai_stream.summary_goroutine_panic", "NewSummaryStockNewsStream goroutine panic: %v", err)
+				openAIStreamLog.Errorf("data.openai_stream.summary_goroutine_config", "NewSummaryStockNewsStream goroutine panic config:%s", o.String())
 			}
 		}()
 		defer close(ch)
@@ -298,15 +300,15 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 
 	defer func() {
 		if err := recover(); err != nil {
-			logger.SugaredLogger.Error("NewChatStream panic", err)
+			openAIStreamLog.Errorf("data.openai_stream.chat_panic", "NewChatStream panic: %v", err)
 		}
 	}()
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logger.SugaredLogger.Errorf("NewChatStream goroutine  panic :%s", err)
-				logger.SugaredLogger.Errorf("NewChatStream goroutine  panic  stock:%s stockCode:%s", stock, stockCode)
-				logger.SugaredLogger.Errorf("NewChatStream goroutine  panic  config:%s", o.String())
+				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_panic", "NewChatStream goroutine panic: %v", err)
+				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_stock", "NewChatStream goroutine panic stock:%s stockCode:%s", stock, stockCode)
+				openAIStreamLog.Errorf("data.openai_stream.chat_goroutine_config", "NewChatStream goroutine panic config:%s", o.String())
 			}
 		}()
 		defer close(ch)

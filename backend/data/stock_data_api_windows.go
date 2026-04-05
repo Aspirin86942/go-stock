@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+var stockBrowserWindowsLog = dataModuleLogger(logger.SinkApp, "data.stock_browser_windows")
+
 // CheckChrome 在 Windows 系统上检查谷歌浏览器是否安装
 func CheckChrome() (string, bool) {
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe`, registry.QUERY_VALUE)
@@ -73,17 +75,17 @@ func CheckFirefox() (string, bool) {
 func CheckBrowser() (string, bool) {
 	// 优先检测 Edge（chromedp 基于 Chromium，Edge 兼容性更好）
 	if path, ok := CheckEdge(); ok {
-		logger.SugaredLogger.Infof("检测到 Edge 浏览器：%s", path)
+		stockBrowserWindowsLog.Infof("data.stock_browser_windows.edge_detected", "检测到 Edge 浏览器：%s", path)
 		return path, true
 	}
 	// 其次检测 Chrome
 	if path, ok := CheckChrome(); ok {
-		logger.SugaredLogger.Infof("检测到 Chrome 浏览器：%s", path)
+		stockBrowserWindowsLog.Infof("data.stock_browser_windows.chrome_detected", "检测到 Chrome 浏览器：%s", path)
 		return path, true
 	}
 	// 最后检测 Firefox
 	if path, ok := CheckFirefox(); ok {
-		logger.SugaredLogger.Infof("检测到 Firefox 浏览器：%s", path)
+		stockBrowserWindowsLog.Infof("data.stock_browser_windows.firefox_detected", "检测到 Firefox 浏览器：%s", path)
 		return path, true
 	}
 	return "", false

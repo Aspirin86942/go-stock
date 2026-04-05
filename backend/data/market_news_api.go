@@ -29,6 +29,8 @@ import (
 type MarketNewsApi struct {
 }
 
+var marketNewsLog = dataModuleLogger(logger.SinkHTTP, "data.market_news")
+
 func NewMarketNewsApi() *MarketNewsApi {
 	return &MarketNewsApi{}
 }
@@ -266,7 +268,7 @@ func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 	vm := otto.New()
 	_, err := vm.Run(js)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		marketNewsLog.Errorf("data.market_news.run_vm_failed", "run vm failed: %v", err)
 	}
 	vm.Run("var result = data.result;")
 	//vm.Run("var resultStr =JSON.stringify(data);")
@@ -281,7 +283,7 @@ func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 	feed := make(map[string]any)
 	err = json.Unmarshal([]byte(value.String()), &feed)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Unmarshal error:%v", err.Error())
+		marketNewsLog.Errorf("data.market_news.feed_unmarshal_failed", "json.Unmarshal error:%v", err.Error())
 	}
 	var telegraphs []models.Telegraph
 
@@ -510,7 +512,7 @@ func (m MarketNewsApi) CacheGlobalStockIndexes(crawlTimeOut uint) error {
 		}
 	}
 
-	logger.SugaredLogger.Info("全球指数缓存完成")
+	marketNewsLog.Info("data.market_news.global_index_cached", "全球指数缓存完成")
 	return nil
 }
 
@@ -623,7 +625,7 @@ func (m MarketNewsApi) GetIndustryMoneyRankSina(fenlei, sort string) []map[strin
 	res := &[]map[string]any{}
 	err := json.Unmarshal([]byte(js), &res)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		marketNewsLog.Errorf("data.market_news.global_index_parse_failed", "%v", err)
 		return *res
 	}
 	return *res
@@ -643,7 +645,7 @@ func (m MarketNewsApi) GetMoneyRankSina(sort string) []map[string]any {
 	res := &[]map[string]any{}
 	err := json.Unmarshal([]byte(js), &res)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		marketNewsLog.Errorf("data.market_news.money_rank_parse_failed", "%v", err)
 		return *res
 	}
 	return *res
@@ -660,7 +662,7 @@ func (m MarketNewsApi) GetStockMoneyTrendByDay(stockCode string, days int) []map
 	res := &[]map[string]any{}
 	err := json.Unmarshal([]byte(js), &res)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		marketNewsLog.Errorf("data.market_news.money_trend_parse_failed", "%v", err)
 		return *res
 	}
 	return *res
@@ -708,7 +710,7 @@ func (m MarketNewsApi) LongTiger(date string) *[]models.LongTigerRankData {
 	//logger.SugaredLogger.Infof("resp:%v", data)
 	err = json.Unmarshal([]byte(data.String()), ranks)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		marketNewsLog.Errorf("data.market_news.long_tiger_unmarshal_failed", "%v", err)
 		return ranks
 	}
 	for _, rankData := range *ranks {
@@ -988,7 +990,7 @@ func (m MarketNewsApi) TradingViewNewsDetail(id string) *models.TVNewsDetail {
 		SetResult(newsDetail).
 		Get(newsUrl)
 	if err != nil {
-		logger.SugaredLogger.Errorf("TradingViewNewsDetail err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.tradingview_detail_failed", "TradingViewNewsDetail err:%s", err.Error())
 		return newsDetail
 	}
 	//logger.SugaredLogger.Infof("resp:%+v", newsDetail)
@@ -1016,7 +1018,7 @@ func (m MarketNewsApi) XUEQIUHotStock(size int, marketType string) *[]models.Hot
 		SetResult(res).
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("XUEQIUHotStock err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.xueqiu_hot_stock_failed", "XUEQIUHotStock err:%s", err.Error())
 		return &[]models.HotItem{}
 	}
 	//logger.SugaredLogger.Infof("XUEQIUHotStock:%+v", res)
@@ -1034,7 +1036,7 @@ func (m MarketNewsApi) HotEvent(size int) *[]models.HotEvent {
 	sprintf := fmt.Sprintf("https://xueqiu.com/hot_event/list.json?count=%d", size)
 	resp, err := request.Get(sprintf)
 	if err != nil {
-		logger.SugaredLogger.Errorf("HotEvent err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.hot_event_failed", "HotEvent err:%s", err.Error())
 		return events
 	}
 	//logger.SugaredLogger.Infof("HotEvent:%s", resp.Body())
@@ -1063,7 +1065,7 @@ func (m MarketNewsApi) HotTopic(size int) []any {
 		}).
 		Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("HotTopic err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.hot_topic_failed", "HotTopic err:%s", err.Error())
 		return []any{}
 	}
 	//logger.SugaredLogger.Infof("HotTopic:%s", resp.Body())
@@ -1095,7 +1097,7 @@ func (m MarketNewsApi) InvestCalendar(yearMonth string) []any {
 		}).
 		Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("InvestCalendar err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.invest_calendar_failed", "InvestCalendar err:%s", err.Error())
 		return []any{}
 	}
 	//logger.SugaredLogger.Infof("InvestCalendar:%s", resp.Body())
@@ -1114,7 +1116,7 @@ func (m MarketNewsApi) ClsCalendar() []any {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("ClsCalendar err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.cls_calendar_failed", "ClsCalendar err:%s", err.Error())
 		return []any{}
 	}
 	respMap := map[string]any{}
@@ -1133,7 +1135,7 @@ func (m MarketNewsApi) GetGDP() *models.GDPResp {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GDP err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.gdp_request_failed", "GDP err:%s", err.Error())
 		return res
 	}
 	body := resp.Body()
@@ -1143,7 +1145,7 @@ func (m MarketNewsApi) GetGDP() *models.GDPResp {
 
 	val, err := vm.Run(body)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GDP err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.gdp_vm_failed", "GDP err:%s", err.Error())
 		return res
 	}
 	data, _ := val.Object().Value().Export()
@@ -1168,7 +1170,7 @@ func (m MarketNewsApi) GetCPI() *models.CPIResp {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetCPI err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.cpi_request_failed", "GetCPI err:%s", err.Error())
 		return res
 	}
 	body := resp.Body()
@@ -1178,7 +1180,7 @@ func (m MarketNewsApi) GetCPI() *models.CPIResp {
 
 	val, err := vm.Run(body)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetCPI err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.cpi_vm_failed", "GetCPI err:%s", err.Error())
 		return res
 	}
 	data, _ := val.Object().Value().Export()
@@ -1203,7 +1205,7 @@ func (m MarketNewsApi) GetPPI() *models.PPIResp {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetPPI err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.ppi_failed", "GetPPI err:%s", err.Error())
 		return res
 	}
 	body := resp.Body()
@@ -1261,7 +1263,7 @@ func (m MarketNewsApi) GetIndustryReportInfo(infoCode string) string {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetIndustryReportInfo err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.industry_report_failed", "GetIndustryReportInfo err:%s", err.Error())
 		return ""
 	}
 	body := resp.Body()
@@ -1287,7 +1289,7 @@ func (receiver MarketNewsApi) GetSecuritiesCompanyOpinion(startDate string, endD
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GetSecuritiesCompanyOpinion err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.securities_company_opinion_failed", "GetSecuritiesCompanyOpinion err:%s", err.Error())
 		return &res
 	}
 	body := resp.Body()
@@ -1342,7 +1344,7 @@ func (m MarketNewsApi) ReutersNew() *models.ReutersNews {
 		SetResult(news).
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("ReutersNew err:%s", err.Error())
+		marketNewsLog.Errorf("data.market_news.reuters_failed", "ReutersNew err:%s", err.Error())
 		return news
 	}
 	//logger.SugaredLogger.Infof("Articles:%+v", news.Result.Articles)
@@ -1374,7 +1376,7 @@ func (m MarketNewsApi) InteractiveAnswer(page int, pageSize int, keyWord string)
 		SetResult(answers).
 		Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("InteractiveAnswer-err:%+v", err)
+		marketNewsLog.Errorf("data.market_news.interactive_answer_failed", "InteractiveAnswer-err:%+v", err)
 	}
 	//logger.SugaredLogger.Debugf("InteractiveAnswer-resp:%s", resp.Body())
 	return answers
@@ -1395,7 +1397,7 @@ func (m MarketNewsApi) CailianpressWeb(searchWords string) *models.CailianpressW
 	if err != nil {
 		return nil
 	}
-	logger.SugaredLogger.Debug(res)
+	marketNewsLog.Debugf("data.market_news.cailianpress_web_result", "%v", res)
 
 	return res
 }

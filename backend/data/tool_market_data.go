@@ -14,6 +14,8 @@ func init() {
 	registerToolHandler("GetMarketData", handleGetMarketData)
 }
 
+var marketDataToolLog = dataModuleLogger(logger.SinkAI, "data.tool_market_data")
+
 // APIResponse API响应结构
 type APIResponse struct {
 	Code int     `json:"code"`
@@ -168,7 +170,7 @@ func handleGetMarketData(o *OpenAi, funcArguments string, ctx *ToolContext) erro
 		content.WriteString("今日无新股申购\r\n")
 	}
 
-	logger.SugaredLogger.Debug("%s", content.String())
+	marketDataToolLog.Debugf("data.tool_market_data.rendered", "%s", content.String())
 
 	appendToolMessages(
 		ctx.Messages,

@@ -16,6 +16,8 @@ import (
 // @Date 2025/6/28 21:02
 // @Desc
 // -----------------------------------------------------------------------------------
+var searchStockLog = dataModuleLogger(logger.SinkHTTP, "data.search_stock")
+
 type SearchStockApi struct {
 	words string
 }
@@ -56,7 +58,7 @@ func (s SearchStockApi) SearchStock(pageSize int) map[string]any {
 				"extraCondition": ""
 				}`, s.words, pageSize, qgqpBId, time.Now().Unix())).Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("SearchStock-err:%+v", err)
+		searchStockLog.Errorf("data.search_stock.request_failed", "SearchStock request failed: %+v", err)
 		return map[string]any{
 			"code":    -1,
 			"message": err.Error(),
@@ -101,7 +103,7 @@ func (s SearchStockApi) SearchBk(pageSize int) map[string]any {
 				"extraCondition": ""
 				}`, s.words, pageSize, qgqpBId, time.Now().Unix())).Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("SearchStock-err:%+v", err)
+		searchStockLog.Errorf("data.search_stock.search_bk_failed", "SearchBk request failed: %+v", err)
 		return map[string]any{
 			"code":    -1,
 			"message": err.Error(),
@@ -146,7 +148,7 @@ func (s SearchStockApi) SearchETF(pageSize int) map[string]any {
 				"extraCondition": ""
 				}`, s.words, pageSize, qgqpBId, time.Now().Unix())).Post(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("SearchETF-err:%+v", err)
+		searchStockLog.Errorf("data.search_stock.search_etf_failed", "SearchETF request failed: %+v", err)
 		return map[string]any{
 			"code":    -1,
 			"message": err.Error(),
@@ -167,7 +169,7 @@ func (s SearchStockApi) HotStrategy() map[string]any {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("HotStrategy-err:%+v", err)
+		searchStockLog.Errorf("data.search_stock.hot_strategy_failed", "HotStrategy request failed: %+v", err)
 		return map[string]any{}
 	}
 	respMap := map[string]any{}
@@ -198,7 +200,7 @@ func (s SearchStockApi) StrategySquare() map[string]any {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("StrategySquare-err:%+v", err)
+		searchStockLog.Errorf("data.search_stock.strategy_square_failed", "StrategySquare request failed: %+v", err)
 		return map[string]any{}
 	}
 	respMap := map[string]any{}

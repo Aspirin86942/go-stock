@@ -48,6 +48,8 @@ type stockChangesAPIResponse struct {
 type StockChangesApi struct {
 }
 
+var stockChangesLog = dataModuleLogger(logger.SinkHTTP, "data.stock_changes")
+
 func NewStockChangesApi() *StockChangesApi {
 	return &StockChangesApi{}
 }
@@ -100,33 +102,33 @@ func (a *StockChangesApi) GetStockChanges(changeTypes []int, pageIndex, pageSize
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		logger.SugaredLogger.Errorf("创建请求失败: %v", err)
+		stockChangesLog.Errorf("data.stock_changes.request_create_failed", "创建请求失败: %v", err)
 		return nil
 	}
 	req.Header.Set("User-Agent", getRandomUA())
 
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.SugaredLogger.Errorf("获取股票异动数据失败: %v", err)
+		stockChangesLog.Errorf("data.stock_changes.request_failed", "获取股票异动数据失败: %v", err)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.SugaredLogger.Errorf("读取响应失败: %v", err)
+		stockChangesLog.Errorf("data.stock_changes.read_failed", "读取响应失败: %v", err)
 		return nil
 	}
 
 	jsonStr := extractJSON(string(body))
 	if jsonStr == "" {
-		logger.SugaredLogger.Error("解析JSON失败")
+		stockChangesLog.Error("data.stock_changes.extract_json_failed", "解析JSON失败")
 		return nil
 	}
 
 	var apiResp stockChangesAPIResponse
 	if err := json.Unmarshal([]byte(jsonStr), &apiResp); err != nil {
-		logger.SugaredLogger.Errorf("解析JSON失败: %v", err)
+		stockChangesLog.Errorf("data.stock_changes.unmarshal_failed", "解析JSON失败: %v", err)
 		return nil
 	}
 
@@ -193,7 +195,7 @@ func (a *StockChangesApi) GetAllStockChangesWithPaging(pageSize int) *StockChang
 	}
 
 	for page := 0; page <= totalPages; page++ {
-		logger.SugaredLogger.Infof("获取第 %d 页数据,共 %d 页", page, totalPages)
+		stockChangesLog.Infof("data.stock_changes.page_fetch", "获取第 %d 页数据,共 %d 页", page, totalPages)
 		nextPage := a.GetStockChanges(allTypes, page, pageSize)
 		if nextPage == nil || len(nextPage.Data) == 0 {
 			break

@@ -3,7 +3,6 @@ package data
 import (
 	"bufio"
 	_ "embed"
-	"fmt"
 	"go-stock/backend/apppath"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -67,6 +66,8 @@ var (
 	}
 )
 
+var sentimentLog = dataModuleLogger(logger.SinkAI, "data.stock_sentiment_analysis")
+
 //go:embed data/dict/base.txt
 var baseDict string
 
@@ -76,7 +77,7 @@ var zhDict string
 func InitAnalyzeSentiment() {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.SugaredLogger.Error(fmt.Sprintf("panic: %v", r))
+			sentimentLog.Errorf("data.stock_sentiment_analysis.init_panic", "panic: %v", r)
 		}
 	}()
 	// 加载简体中文词典
@@ -87,9 +88,9 @@ func InitAnalyzeSentiment() {
 
 	err := seg.LoadDictEmbed(baseDict)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		sentimentLog.Errorf("data.stock_sentiment_analysis.load_base_dict_failed", "%v", err)
 	} else {
-		logger.SugaredLogger.Info("加载默认词典成功")
+		sentimentLog.Info("data.stock_sentiment_analysis.load_base_dict_succeeded", "加载默认词典成功")
 	}
 	seg.CalcToken()
 
@@ -104,10 +105,10 @@ func InitAnalyzeSentiment() {
 			err = seg.AddToken(stock.BKName, basefreq+100, "n")
 		}
 		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
+			sentimentLog.Errorf("data.stock_sentiment_analysis.add_stock_token_failed", "添加%s失败:%s", stock.Name, err.Error())
 		}
 	}
-	logger.SugaredLogger.Info("加载股票名称词典成功")
+	sentimentLog.Info("data.stock_sentiment_analysis.load_stock_tokens_succeeded", "加载股票名称词典成功")
 
 	stockhks := &[]models.StockInfoHK{}
 	db.Dao.Model(&models.StockInfoHK{}).Find(stockhks)
@@ -120,10 +121,10 @@ func InitAnalyzeSentiment() {
 			err = seg.AddToken(stock.BKName, basefreq+100, "n")
 		}
 		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
+			sentimentLog.Errorf("data.stock_sentiment_analysis.add_hk_stock_token_failed", "添加%s失败:%s", stock.Name, err.Error())
 		}
 	}
-	logger.SugaredLogger.Info("加载港股名称词典成功")
+	sentimentLog.Info("data.stock_sentiment_analysis.load_hk_stock_tokens_succeeded", "加载港股名称词典成功")
 	//stockus := &[]models.StockInfoUS{}
 	//db.Dao.Model(&models.StockInfoUS{}).Where("trim(name) != ?", "").Find(stockus)
 	//for _, stock := range *stockus {
@@ -140,23 +141,23 @@ func InitAnalyzeSentiment() {
 		}
 		err := seg.AddToken(tag.Name, basefreq+100, "n")
 		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", tag.Name, err.Error())
+			sentimentLog.Errorf("data.stock_sentiment_analysis.add_tag_token_failed", "添加%s失败:%s", tag.Name, err.Error())
 		} else {
 			//logger.SugaredLogger.Infof("添加tags词典[%s]成功", tag.Name)
 		}
 	}
-	logger.SugaredLogger.Info("加载tags词典成功")
+	sentimentLog.Info("data.stock_sentiment_analysis.load_tag_tokens_succeeded", "加载tags词典成功")
 	seg.CalcToken()
 	paths, pathErr := apppath.Ensure()
 	if pathErr != nil {
-		logger.SugaredLogger.Errorf("初始化运行时路径失败:%v", pathErr)
+		sentimentLog.Errorf("data.stock_sentiment_analysis.ensure_paths_failed", "初始化运行时路径失败:%v", pathErr)
 		return
 	}
 	//加载用户自定义词典 先判断用户词典是否存在
 	if fileutil.IsExist(paths.UserDictPath) {
 		lines, err := fileutil.ReadFileByLine(paths.UserDictPath)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			sentimentLog.Errorf("data.stock_sentiment_analysis.read_user_dict_failed", "%v", err)
 			return
 		}
 		for _, line := range lines {
@@ -190,17 +191,17 @@ func InitAnalyzeSentiment() {
 					err = seg.AddToken(k[0], freq, k[2])
 				}
 			default:
-				logger.SugaredLogger.Errorf("用户词典格式错误:%s", line)
+				sentimentLog.Errorf("data.stock_sentiment_analysis.user_dict_invalid", "用户词典格式错误:%s", line)
 			}
 			//logger.SugaredLogger.Infof("添加用户词典[%s]成功", line)
 		}
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			sentimentLog.Errorf("data.stock_sentiment_analysis.load_user_dict_failed", "%v", err)
 		} else {
-			logger.SugaredLogger.Infof("加载用户词典成功")
+			sentimentLog.Info("data.stock_sentiment_analysis.load_user_dict_succeeded", "加载用户词典成功")
 		}
 	} else {
-		logger.SugaredLogger.Info("用户词典不存在")
+		sentimentLog.Info("data.stock_sentiment_analysis.user_dict_missing", "用户词典不存在")
 	}
 	seg.CalcToken()
 }
@@ -513,13 +514,12 @@ func GetSentimentDescription(category models.SentimentType) string {
 func main() {
 	// 从命令行读取输入
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("请输入要分析的股市相关文本（输入exit退出）：")
+	sentimentLog.Info("data.stock_sentiment_analysis.cli_prompt", "请输入要分析的股市相关文本（输入exit退出）：")
 
 	for {
-		fmt.Print("> ")
 		text, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("读取输入时出错:", err)
+			sentimentLog.Errorf("data.stock_sentiment_analysis.cli_read_failed", "读取输入时出错: %v", err)
 			continue
 		}
 
@@ -535,7 +535,7 @@ func main() {
 		result := AnalyzeSentiment(text)
 
 		// 输出结果
-		fmt.Printf("情感分析结果: %s (得分: %.2f, 正面词:%d, 负面词:%d)\n",
+		sentimentLog.Infof("data.stock_sentiment_analysis.cli_result", "情感分析结果: %s (得分: %.2f, 正面词:%d, 负面词:%d)",
 			GetSentimentDescription(result.Category),
 			result.Score,
 			result.PositiveCount,

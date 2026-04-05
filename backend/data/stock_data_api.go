@@ -44,6 +44,9 @@ type StockDataApi struct {
 	client *resty.Client
 	config *SettingConfig
 }
+
+var stockDataLog = dataModuleLogger(logger.SinkApp, "data.stock_data")
+
 type StockInfo struct {
 	gorm.Model
 	Date     string  `json:"日期" gorm:"index"`
@@ -287,11 +290,11 @@ func (receiver StockDataApi) GetIndexBasic() {
 		SetResult(res).
 		Post(tushareApiUrl)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.index_basic_failed", "%v", err)
 		return
 	}
 	if res.Code != 0 {
-		logger.SugaredLogger.Error(res.Msg)
+		stockDataLog.Error("data.stock_data.index_basic_api_error", res.Msg)
 		return
 	}
 	//ioutil.WriteFile("index_basic.json", resp.Body(), 0666)
@@ -336,11 +339,11 @@ func (receiver StockDataApi) GetStockBaseInfo() {
 	ioutil.WriteFile("stock_basic.json", resp.Body(), 0666)
 	//logger.SugaredLogger.Infof("GetStockBaseInfo %+v", res)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.stock_basic_failed", "%v", err)
 		return
 	}
 	if res.Code != 0 {
-		logger.SugaredLogger.Error(res.Msg)
+		stockDataLog.Error("data.stock_data.stock_basic_api_error", res.Msg)
 		return
 	}
 	for _, item := range res.Data.Items {
@@ -388,7 +391,7 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 			Get(url)
 		//logger.SugaredLogger.Infof("GetStockCodeRealTimeData %s", url)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			stockDataLog.Errorf("data.stock_data.realtime_tx_failed", "%v", err)
 			return &[]StockInfo{}, err
 		}
 		str := GB18030ToUTF8(resp.Body())
@@ -397,7 +400,7 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 		for _, data := range dataStr {
 			stockData, err := ParseTxStockData(data)
 			if err != nil {
-				logger.SugaredLogger.Error(err.Error())
+				stockDataLog.Errorf("data.stock_data.parse_tx_failed", "%v", err)
 				continue
 			}
 			stockInfos = append(stockInfos, *stockData)
@@ -435,7 +438,7 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.realtime_sina_failed", "%v", err)
 		return &[]StockInfo{}, err
 	}
 
@@ -447,7 +450,7 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 		stockData, err := ParseFullSingleStockData(data)
 		//logger.SugaredLogger.Infof("GetStockCodeRealTimeData %v", stockData)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			stockDataLog.Errorf("data.stock_data.parse_sina_failed", "%v", err)
 			continue
 		}
 		if stockData == nil {
@@ -474,7 +477,7 @@ func (receiver StockDataApi) Follow(stockCode string) string {
 	//logger.SugaredLogger.Infof("Follow %s", stockCode)
 	stockInfos, err := receiver.GetStockCodeRealTimeData(stockCode)
 	if err != nil || len(*stockInfos) == 0 {
-		logger.SugaredLogger.Error(err)
+		stockDataLog.Errorf("data.stock_data.follow_failed", "%v", err)
 		return "关注失败"
 	}
 	if strings.HasPrefix(stockCode, "us") {
@@ -539,7 +542,7 @@ func (receiver StockDataApi) SetCostPriceAndVolume(price float64, volume int64, 
 	}
 	err := db.Dao.Model(&FollowedStock{}).Where("stock_code = ?", strings.ToLower(stockCode)).Update("cost_price", price).Update("volume", volume).Error
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.set_cost_failed", "%v", err)
 		return "设置失败"
 	}
 	return "设置成功"
@@ -556,7 +559,7 @@ func (receiver StockDataApi) SetAlarmChangePercent(val, alarmPrice float64, stoc
 		"alarm_price":          alarmPrice,
 	}).Error
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.set_alarm_failed", "%v", err)
 		return "设置失败"
 	}
 	return "设置成功"
@@ -571,7 +574,7 @@ func (receiver StockDataApi) SetStockSort(newSort int64, stockCode string) {
 	// 获取当前排序值
 	var currentStock FollowedStock
 	if err := db.Dao.Model(&FollowedStock{}).Where("stock_code = ?", strings.ToLower(stockCode)).First(&currentStock).Error; err != nil {
-		logger.SugaredLogger.Error("找不到当前股票: ", err.Error())
+		stockDataLog.Errorf("data.stock_data.current_stock_missing", "找不到当前股票: %s", err.Error())
 		return
 	}
 
@@ -584,7 +587,7 @@ func (receiver StockDataApi) SetStockSort(newSort int64, stockCode string) {
 	// 检查新排序位置是否被占用
 	var count int64
 	if err := db.Dao.Model(&FollowedStock{}).Where("sort = ?", newSort).Count(&count).Error; err != nil {
-		logger.SugaredLogger.Error("检查新排序位置被占用失败: ", err.Error())
+		stockDataLog.Errorf("data.stock_data.check_sort_failed", "检查新排序位置被占用失败: %s", err.Error())
 		return
 	}
 	if count == 0 {
@@ -592,7 +595,7 @@ func (receiver StockDataApi) SetStockSort(newSort int64, stockCode string) {
 		if err := db.Dao.Model(&FollowedStock{}).
 			Where("stock_code = ?", strings.ToLower(stockCode)).
 			Update("sort", newSort).Error; err != nil {
-			logger.SugaredLogger.Error("更新排序位置失败: ", err.Error())
+			stockDataLog.Errorf("data.stock_data.update_sort_failed", "更新排序位置失败: %s", err.Error())
 		}
 	} else {
 		// 新位置已被占用，需要移动其他记录
@@ -601,14 +604,14 @@ func (receiver StockDataApi) SetStockSort(newSort int64, stockCode string) {
 			if err := db.Dao.Model(&FollowedStock{}).
 				Where("sort >= ? AND sort < ?", newSort, oldSort).
 				Update("sort", gorm.Expr("sort + 1")).Error; err != nil {
-				logger.SugaredLogger.Error("向前排序更新失败: ", err.Error())
+				stockDataLog.Errorf("data.stock_data.move_sort_forward_failed", "向前排序更新失败: %s", err.Error())
 			}
 		} else {
 			// 向后移动：将中间记录向前移动
 			if err := db.Dao.Model(&FollowedStock{}).
 				Where("sort > ? AND sort <= ?", oldSort, newSort).
 				Update("sort", gorm.Expr("sort - 1")).Error; err != nil {
-				logger.SugaredLogger.Error("向后排序更新失败: ", err.Error())
+				stockDataLog.Errorf("data.stock_data.move_sort_backward_failed", "向后排序更新失败: %s", err.Error())
 			}
 		}
 
@@ -616,7 +619,7 @@ func (receiver StockDataApi) SetStockSort(newSort int64, stockCode string) {
 		if err := db.Dao.Model(&FollowedStock{}).
 			Where("stock_code = ?", strings.ToLower(stockCode)).
 			Update("sort", newSort).Error; err != nil {
-			logger.SugaredLogger.Error("更新股票排序失败: ", err.Error())
+			stockDataLog.Errorf("data.stock_data.update_stock_sort_failed", "更新股票排序失败: %s", err.Error())
 		}
 	}
 
@@ -794,14 +797,14 @@ func ParseTxStockData(data string) (*StockInfo, error) {
 	//logger.SugaredLogger.Infof("股票数据解析完成: %v", result)
 	marshal, err := json.Marshal(result)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Marshal error:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.parse_full_marshal_failed", "json.Marshal error:%s", err.Error())
 		return nil, err
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成marshal: %s", marshal)
 	stockInfo := &StockInfo{}
 	err = json.Unmarshal(marshal, &stockInfo)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Unmarshal error:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.parse_full_unmarshal_failed", "json.Unmarshal error:%s", err.Error())
 		return nil, err
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成stockInfo: %+v", stockInfo)
@@ -935,14 +938,14 @@ func ParseFullSingleStockData(data string) (*StockInfo, error) {
 	//logger.SugaredLogger.Infof("股票数据解析完成: %v", result)
 	marshal, err := json.Marshal(result)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Marshal error:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.parse_tx_marshal_failed", "json.Marshal error:%s", err.Error())
 		return nil, err
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成marshal: %s", marshal)
 	stockInfo := &StockInfo{}
 	err = json.Unmarshal(marshal, &stockInfo)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json.Unmarshal error:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.parse_tx_unmarshal_failed", "json.Unmarshal error:%s", err.Error())
 		return nil, err
 	}
 	//logger.SugaredLogger.Infof("股票数据解析完成stockInfo: %+v", stockInfo)
@@ -1231,7 +1234,7 @@ func getUSStockPriceInfo(stockCode string, crawlTimeOut int64) *[]string {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_cn_price_parse_failed", "%v", err)
 	}
 	stockName := ""
 	stockPrice := ""
@@ -1286,7 +1289,7 @@ func getHKStockPriceInfo(stockCode string, crawlTimeOut int64) *[]string {
 	//logger.SugaredLogger.Infof("CrawlHKStockPriceInfo htmlContent:%s", htmlContent)
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_hk_price_parse_failed", "%v", err)
 	}
 	stockName := ""
 	stockPrice := ""
@@ -1337,7 +1340,7 @@ func GetZSInfo(name, stockCode string, crawlTimeOut int64) string {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.company_info_parse_failed", "%v", err)
 	}
 
 	//price
@@ -1372,7 +1375,7 @@ func getSHSZStockPriceInfo(stockName, stockCode string, crawlTimeOut int64) *[]s
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_index_parse_failed", "%v", err)
 	}
 
 	//price
@@ -1407,7 +1410,7 @@ func SearchStockInfo(stock, msgType string, crawlTimeOut int64) *[]string {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_stock_info_parse_failed", "%v", err)
 		return &[]string{}
 	}
 	var messages []string
@@ -1423,8 +1426,8 @@ func SearchStockInfoByCode(stock string) *[]string {
 	// 创建一个 chromedp 上下文
 	ctx, cancel := chromedp.NewContext(
 		context.Background(),
-		chromedp.WithLogf(logger.SugaredLogger.Infof),
-		chromedp.WithErrorf(logger.SugaredLogger.Errorf),
+		chromedp.WithLogf(stockDataLog.ChromedpInfof("data.stock_data.chromedp")),
+		chromedp.WithErrorf(stockDataLog.ChromedpErrorf("data.stock_data.chromedp_error")),
 	)
 	defer cancel()
 	var htmlContent string
@@ -1439,12 +1442,12 @@ func SearchStockInfoByCode(stock string) *[]string {
 		chromedp.OuterHTML("html", &htmlContent, chromedp.ByQuery),
 	)
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_stock_info_baidu_failed", "%v", err)
 		return &[]string{}
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		stockDataLog.Errorf("data.stock_data.search_stock_info_baidu_parse_failed", "%v", err)
 		return &[]string{}
 	}
 	var messages []string
@@ -1530,7 +1533,7 @@ func (receiver StockDataApi) GetKLineData(stockCode string, kLineType string, da
 		SetResult(K).
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("err:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.request_failed", "err:%s", err.Error())
 		return K
 	}
 	return K
@@ -2537,7 +2540,7 @@ func (receiver StockDataApi) GetStockRZRQInfo(stockCode string) models.StockRZRQ
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("err:%s", err.Error())
+		stockDataLog.Errorf("data.stock_data.request_failed", "err:%s", err.Error())
 		return StockRZRQInfoResp
 	}
 	json.Unmarshal(resp.Body(), &StockRZRQInfoResp)
@@ -2569,7 +2572,7 @@ func (receiver StockDataApi) AddTradingRecord(record TradingRecord) (uint, error
 	// 保存到数据库
 	err := db.Dao.Model(&TradingRecord{}).Create(&record).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("添加交易日志失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.add_trading_record_failed", "添加交易日志失败: %s", err.Error())
 		return 0, err
 	}
 
@@ -2714,14 +2717,14 @@ func (receiver StockDataApi) GetTradingRecordList(query TradingRecordListQuery) 
 	var total int64
 	err := q.Count(&total).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("获取交易日志总数失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.count_trading_records_failed", "获取交易日志总数失败: %s", err.Error())
 		return nil, err
 	}
 
 	offset := (page - 1) * pageSize
 	err = q.Offset(offset).Limit(pageSize).Order("trading_time DESC, id DESC").Find(&records).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("获取交易日志列表失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.list_trading_records_failed", "获取交易日志列表失败: %s", err.Error())
 		return nil, err
 	}
 
@@ -2732,7 +2735,7 @@ func (receiver StockDataApi) GetTradingRecordList(query TradingRecordListQuery) 
 
 	var allGlobal []TradingRecord
 	if err := db.Dao.Model(&TradingRecord{}).Order("trading_time ASC, id ASC").Find(&allGlobal).Error; err != nil {
-		logger.SugaredLogger.Errorf("获取交易日志全局序失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.global_trading_records_failed", "获取交易日志全局序失败: %s", err.Error())
 		return nil, err
 	}
 
@@ -2842,7 +2845,7 @@ func (receiver StockDataApi) GetTradingRecordList(query TradingRecordListQuery) 
 		res := db.Dao.Model(&TradingRecord{}).Where("id = ? AND (recorded_close_price IS NULL OR recorded_close_price = 0)", bf.id).
 			Update("recorded_close_price", bf.closePrice)
 		if res.Error != nil {
-			logger.SugaredLogger.Warnf("回写交易记录收盘价快照失败 id=%d: %s", bf.id, res.Error.Error())
+			stockDataLog.Warnf("data.stock_data.backfill_close_price_failed", "回写交易记录收盘价快照失败 id=%d: %s", bf.id, res.Error.Error())
 		}
 	}
 
@@ -2882,7 +2885,7 @@ func (receiver StockDataApi) GetTradingRecordStatistics() (*TradingRecordStatist
 	var records []TradingRecord
 	err := db.Dao.Model(&TradingRecord{}).Order("trading_time ASC, id ASC").Find(&records).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("获取交易日志统计失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.trading_statistics_failed", "获取交易日志统计失败: %s", err.Error())
 		return nil, err
 	}
 
@@ -2980,7 +2983,7 @@ func (receiver StockDataApi) GetTradingRecordById(id uint) (*TradingRecord, erro
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
-		logger.SugaredLogger.Errorf("获取交易日志失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.get_trading_record_failed", "获取交易日志失败: %s", err.Error())
 		return nil, err
 	}
 	return &record, nil
@@ -2988,7 +2991,7 @@ func (receiver StockDataApi) GetTradingRecordById(id uint) (*TradingRecord, erro
 
 // UpdateTradingRecord 更新交易日志
 func (receiver StockDataApi) UpdateTradingRecord(record TradingRecord) error {
-	logger.SugaredLogger.Infof("UpdateTradingRecord: %v", record)
+	stockDataLog.Infof("data.stock_data.update_trading_record", "UpdateTradingRecord: %v", record)
 	// 自动计算金额（价格 * 数量）
 	record.Amount = record.Price * float64(record.Volume)
 
@@ -2998,13 +3001,13 @@ func (receiver StockDataApi) UpdateTradingRecord(record TradingRecord) error {
 
 	err := db.Dao.Model(&TradingRecord{}).Where("id = ?", record.ID).Updates(&record).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("更新交易日志失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.update_trading_record_failed", "更新交易日志失败: %s", err.Error())
 		return err
 	}
 	// Updates(struct) 会忽略零值字段，收盘价快照单独写入保证落库
 	if err := db.Dao.Model(&TradingRecord{}).Where("id = ?", record.ID).
 		Update("recorded_close_price", record.RecordedClosePrice).Error; err != nil {
-		logger.SugaredLogger.Errorf("更新交易日志收盘价快照失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.update_trading_record_snapshot_failed", "更新交易日志收盘价快照失败: %s", err.Error())
 		return err
 	}
 	return nil
@@ -3014,7 +3017,7 @@ func (receiver StockDataApi) UpdateTradingRecord(record TradingRecord) error {
 func (receiver StockDataApi) DeleteTradingRecord(id uint) error {
 	err := db.Dao.Model(&TradingRecord{}).Where("id = ?", id).Delete(&TradingRecord{}).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("删除交易日志失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.delete_trading_record_failed", "删除交易日志失败: %s", err.Error())
 		return err
 	}
 	return nil
@@ -3029,7 +3032,7 @@ func (receiver StockDataApi) CheckFrequentTrading(stockCode string) (bool, strin
 
 	err := db.Dao.Model(&TradingRecord{}).Where("stock_code = ? AND direction = ? AND trading_time > ?", stockCode, "买入", cutoffTime).Count(&count).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("检查频繁交易失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.check_frequent_trading_failed", "检查频繁交易失败: %s", err.Error())
 		return true, "检查频繁交易失败，默认允许交易"
 	}
 
@@ -3041,7 +3044,7 @@ func (receiver StockDataApi) CheckFrequentTrading(stockCode string) (bool, strin
 	cutoffTime7Days := time.Now().Add(-7 * 24 * time.Hour)
 	err = db.Dao.Model(&TradingRecord{}).Where("direction = ? AND trading_time > ?", "买入", cutoffTime7Days).Count(&count).Error
 	if err != nil {
-		logger.SugaredLogger.Errorf("检查频繁交易失败: %s", err.Error())
+		stockDataLog.Errorf("data.stock_data.check_recent_trading_failed", "检查频繁交易失败: %s", err.Error())
 		return true, "检查频繁交易失败，默认允许交易"
 	}
 

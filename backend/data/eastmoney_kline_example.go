@@ -12,6 +12,12 @@ import (
 // @Date 2026/3/15
 // @Desc 东方财富 K 线数据 API 使用示例
 
+var eastMoneyExampleLog = dataModuleLogger(logger.SinkApp, "data.eastmoney_kline_example")
+
+func logEastMoneyExample(event string, lines ...string) {
+	eastMoneyExampleLog.Info(event, strings.Join(lines, "\n"))
+}
+
 // Example_GetDayKLine 获取日 K 线数据示例
 func Example_GetDayKLine() {
 	config := GetSettingConfig()
@@ -22,20 +28,23 @@ func Example_GetDayKLine() {
 	kLines := api.GetDayKLine(stockCode, 30)
 
 	if len(*kLines) == 0 {
-		logger.SugaredLogger.Error("获取数据失败")
+		eastMoneyExampleLog.Error("data.eastmoney_kline_example.day_failed", "获取数据失败")
 		return
 	}
 
-	fmt.Printf("获取到 %d 条日 K 线数据\n", len(*kLines))
-	fmt.Println(strings.Repeat("-", 80))
-	fmt.Printf("%-12s %-10s %-10s %-10s %-10s %-12s\n", "日期", "开盘", "收盘", "最高", "最低", "成交量 (手)")
-	fmt.Println(strings.Repeat("-", 80))
+	lines := []string{
+		fmt.Sprintf("获取到 %d 条日 K 线数据", len(*kLines)),
+		strings.Repeat("-", 80),
+		fmt.Sprintf("%-12s %-10s %-10s %-10s %-10s %-12s", "日期", "开盘", "收盘", "最高", "最低", "成交量 (手)"),
+		strings.Repeat("-", 80),
+	}
 
 	for i := len(*kLines) - 1; i >= 0; i-- {
 		kline := (*kLines)[i]
-		fmt.Printf("%-12s %-10s %-10s %-10s %-10s %-12s\n",
-			kline.Day, kline.Open, kline.Close, kline.High, kline.Low, kline.Volume)
+		lines = append(lines, fmt.Sprintf("%-12s %-10s %-10s %-10s %-10s %-12s",
+			kline.Day, kline.Open, kline.Close, kline.High, kline.Low, kline.Volume))
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.day_output", lines...)
 }
 
 // Example_GetWeekKLine 获取周 K 线数据示例
@@ -48,20 +57,23 @@ func Example_GetWeekKLine() {
 	kLines := api.GetWeekKLine(stockCode, 20)
 
 	if len(*kLines) == 0 {
-		logger.SugaredLogger.Error("获取数据失败")
+		eastMoneyExampleLog.Error("data.eastmoney_kline_example.week_failed", "获取数据失败")
 		return
 	}
 
-	fmt.Printf("\n获取到 %d 条周 K 线数据\n", len(*kLines))
-	fmt.Println(strings.Repeat("-", 80))
-	fmt.Printf("%-12s %-10s %-10s %-10s %-10s\n", "日期", "开盘", "收盘", "最高", "最低")
-	fmt.Println(strings.Repeat("-", 80))
+	lines := []string{
+		fmt.Sprintf("获取到 %d 条周 K 线数据", len(*kLines)),
+		strings.Repeat("-", 80),
+		fmt.Sprintf("%-12s %-10s %-10s %-10s %-10s", "日期", "开盘", "收盘", "最高", "最低"),
+		strings.Repeat("-", 80),
+	}
 
 	for i := len(*kLines) - 1; i >= 0; i-- {
 		kline := (*kLines)[i]
-		fmt.Printf("%-12s %-10s %-10s %-10s %-10s\n",
-			kline.Day, kline.Open, kline.Close, kline.High, kline.Low)
+		lines = append(lines, fmt.Sprintf("%-12s %-10s %-10s %-10s %-10s",
+			kline.Day, kline.Open, kline.Close, kline.High, kline.Low))
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.week_output", lines...)
 }
 
 // Example_GetAdjustedKLine 获取复权 K 线数据示例
@@ -72,28 +84,29 @@ func Example_GetAdjustedKLine() {
 	// 获取宁德时代前复权日 K 线数据
 	stockCode := "300750.SZ"
 
-	fmt.Println("\n=== 前复权数据 ===")
 	qfqKLines := api.GetAdjustedKLine(stockCode, "qfq", 10)
+	lines := []string{"=== 前复权数据 ==="}
 	for _, kline := range *qfqKLines {
-		fmt.Printf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s\n",
-			kline.Day, kline.Open, kline.Close, kline.High, kline.Low)
+		lines = append(lines, fmt.Sprintf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s",
+			kline.Day, kline.Open, kline.Close, kline.High, kline.Low))
 	}
 
 	// 获取后复权日 K 线数据
-	fmt.Println("\n=== 后复权数据 ===")
+	lines = append(lines, "=== 后复权数据 ===")
 	hfqKLines := api.GetAdjustedKLine(stockCode, "hfq", 10)
 	for _, kline := range *hfqKLines {
-		fmt.Printf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s\n",
-			kline.Day, kline.Open, kline.Close, kline.High, kline.Low)
+		lines = append(lines, fmt.Sprintf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s",
+			kline.Day, kline.Open, kline.Close, kline.High, kline.Low))
 	}
 
 	// 获取不复权数据
-	fmt.Println("\n=== 不复权数据 ===")
+	lines = append(lines, "=== 不复权数据 ===")
 	noAdjKLines := api.GetDayKLine(stockCode, 10)
 	for _, kline := range *noAdjKLines {
-		fmt.Printf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s\n",
-			kline.Day, kline.Open, kline.Close, kline.High, kline.Low)
+		lines = append(lines, fmt.Sprintf("日期:%s 开盘:%s 收盘:%s 最高:%s 最低:%s",
+			kline.Day, kline.Open, kline.Close, kline.High, kline.Low))
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.adjusted_output", lines...)
 }
 
 // Example_GetMinuteKLine 获取分钟 K 线数据示例
@@ -104,14 +117,17 @@ func Example_GetMinuteKLine() {
 	// 获取 5 分钟 K 线数据
 	stockCode := "000001.SZ"
 
-	fmt.Println("\n=== 5 分钟 K 线 ===")
 	kLines5Min := api.GetMinuteKLine(stockCode, KLineType5Min, 50)
-	fmt.Printf("获取到 %d 条 5 分钟 K 线数据\n", len(*kLines5Min))
+	lines := []string{
+		"=== 5 分钟 K 线 ===",
+		fmt.Sprintf("获取到 %d 条 5 分钟 K 线数据", len(*kLines5Min)),
+	}
 
 	// 获取 15 分钟 K 线数据
-	fmt.Println("\n=== 15 分钟 K 线 ===")
 	kLines15Min := api.GetMinuteKLine(stockCode, KLineType15Min, 50)
-	fmt.Printf("获取到 %d 条 15 分钟 K 线数据\n", len(*kLines15Min))
+	lines = append(lines, "=== 15 分钟 K 线 ===")
+	lines = append(lines, fmt.Sprintf("获取到 %d 条 15 分钟 K 线数据", len(*kLines15Min)))
+	logEastMoneyExample("data.eastmoney_kline_example.minute_output", lines...)
 }
 
 // Example_BatchGetKLine 批量获取 K 线数据示例
@@ -127,17 +143,18 @@ func Example_BatchGetKLine() {
 		"00700.HK",  // 腾讯控股
 	}
 
-	fmt.Println("\n=== 批量获取日 K 线数据 ===")
 	result := api.GetBatchKLineData(stockCodes, "101", 5)
+	lines := []string{"=== 批量获取日 K 线数据 ==="}
 
 	for code, kLines := range result {
-		fmt.Printf("\n股票：%s, 获取到 %d 条数据\n", code, len(*kLines))
+		lines = append(lines, fmt.Sprintf("股票：%s, 获取到 %d 条数据", code, len(*kLines)))
 		if len(*kLines) > 0 {
 			latest := (*kLines)[len(*kLines)-1]
-			fmt.Printf("最新数据 - 日期:%s, 收盘价:%s, 涨跌幅:%.2f%%\n",
-				latest.Day, latest.Close, calculateChangePercent(latest.Open, latest.Close))
+			lines = append(lines, fmt.Sprintf("最新数据 - 日期:%s, 收盘价:%s, 涨跌幅:%.2f%%",
+				latest.Day, latest.Close, calculateChangePercent(latest.Open, latest.Close)))
 		}
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.batch_output", lines...)
 }
 
 // Example_AnalyzeKLine 分析 K 线数据示例
@@ -149,11 +166,9 @@ func Example_AnalyzeKLine() {
 	kLines := api.GetDayKLine(stockCode, 60)
 
 	if len(*kLines) == 0 {
-		logger.SugaredLogger.Error("获取数据失败")
+		eastMoneyExampleLog.Error("data.eastmoney_kline_example.analysis_failed", "获取数据失败")
 		return
 	}
-
-	fmt.Println("\n=== K 线技术分析 ===")
 
 	// 分析最近 30 天的数据
 	recentDays := 30
@@ -191,25 +206,29 @@ func Example_AnalyzeKLine() {
 	avgClose /= float64(count)
 	totalVolume /= float64(count)
 
-	fmt.Printf("统计周期：%d天\n", count)
-	fmt.Printf("平均收盘价：%.2f\n", avgClose)
-	fmt.Printf("最高价：%.2f\n", highestPrice)
-	fmt.Printf("最低价：%.2f\n", lowestPrice)
-	fmt.Printf("平均成交量：%.2f 手\n", totalVolume)
+	lines := []string{
+		"=== K 线技术分析 ===",
+		fmt.Sprintf("统计周期：%d天", count),
+		fmt.Sprintf("平均收盘价：%.2f", avgClose),
+		fmt.Sprintf("最高价：%.2f", highestPrice),
+		fmt.Sprintf("最低价：%.2f", lowestPrice),
+		fmt.Sprintf("平均成交量：%.2f 手", totalVolume),
+	}
 
 	// 判断趋势
 	firstClose, _ := convertor.ToFloat((*kLines)[startIndex].Close)
 	lastClose, _ := convertor.ToFloat((*kLines)[len(*kLines)-1].Close)
 	changePercent := (lastClose - firstClose) / firstClose * 100
 
-	fmt.Printf("\n期间涨跌幅：%.2f%%\n", changePercent)
+	lines = append(lines, fmt.Sprintf("期间涨跌幅：%.2f%%", changePercent))
 	if changePercent > 0 {
-		fmt.Println("趋势：上涨 ↗")
+		lines = append(lines, "趋势：上涨 ↗")
 	} else if changePercent < 0 {
-		fmt.Println("趋势：下跌 ↘")
+		lines = append(lines, "趋势：下跌 ↘")
 	} else {
-		fmt.Println("趋势：持平 →")
+		lines = append(lines, "趋势：持平 →")
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.analysis_output", lines...)
 }
 
 // Example_ExportKLineToJSON 导出 K 线数据为 JSON 示例
@@ -223,12 +242,11 @@ func Example_ExportKLineToJSON() {
 	// 转换为 JSON
 	jsonData, err := json.MarshalIndent(kLines, "", "  ")
 	if err != nil {
-		logger.SugaredLogger.Errorf("JSON 转换失败：%v", err)
+		eastMoneyExampleLog.Errorf("data.eastmoney_kline_example.json_failed", "JSON 转换失败：%v", err)
 		return
 	}
 
-	fmt.Println("\n=== JSON 格式数据 ===")
-	fmt.Println(string(jsonData))
+	logEastMoneyExample("data.eastmoney_kline_example.json_output", "=== JSON 格式数据 ===", string(jsonData))
 }
 
 // Example_GetLatestMarketInfo 获取最新行情信息示例
@@ -242,7 +260,7 @@ func Example_GetLatestMarketInfo() {
 		"300750.SZ", // 宁德时代
 	}
 
-	fmt.Println("\n=== 最新行情 ===")
+	lines := []string{"=== 最新行情 ==="}
 	for _, code := range stockCodes {
 		latestKLine := api.GetLatestKLine(code, "101")
 		if latestKLine != nil {
@@ -253,11 +271,12 @@ func Example_GetLatestMarketInfo() {
 
 			changePercent := calculateChangePercent(latestKLine.Open, latestKLine.Close)
 
-			fmt.Printf("%-10s 日期:%-12s 收盘价:%-8s 涨跌幅:%+6.2f%% 振幅:%.2f%%\n",
+			lines = append(lines, fmt.Sprintf("%-10s 日期:%-12s 收盘价:%-8s 涨跌幅:%+6.2f%% 振幅:%.2f%%",
 				code, latestKLine.Day, latestKLine.Close, changePercent,
-				(high-low)/open*100)
+				(high-low)/open*100))
 		}
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.latest_output", lines...)
 }
 
 // calculateChangePercent 计算涨跌幅
@@ -283,22 +302,26 @@ func Example_ValidateStockCodes() {
 		"123456",
 	}
 
-	fmt.Println("\n=== 股票代码验证 ===")
+	lines := []string{"=== 股票代码验证 ==="}
 	for _, code := range testCodes {
 		isValid := api.ValidateStockCode(code)
 		status := "✓ 有效"
 		if !isValid {
 			status = "✗ 无效"
 		}
-		fmt.Printf("%-15s -> %s\n", code, status)
+		lines = append(lines, fmt.Sprintf("%-15s -> %s", code, status))
 	}
+	logEastMoneyExample("data.eastmoney_kline_example.validate_output", lines...)
 }
 
 // RunAllExamples 运行所有示例
 func RunAllExamples() {
-	fmt.Println(strings.Repeat("=", 80))
-	fmt.Println("东方财富 K 线数据 API 使用示例")
-	fmt.Println(strings.Repeat("=", 80))
+	logEastMoneyExample(
+		"data.eastmoney_kline_example.run_start",
+		strings.Repeat("=", 80),
+		"东方财富 K 线数据 API 使用示例",
+		strings.Repeat("=", 80),
+	)
 
 	Example_GetDayKLine()
 	Example_GetWeekKLine()
@@ -310,7 +333,10 @@ func RunAllExamples() {
 	Example_GetLatestMarketInfo()
 	Example_ValidateStockCodes()
 
-	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("所有示例运行完成")
-	fmt.Println(strings.Repeat("=", 80))
+	logEastMoneyExample(
+		"data.eastmoney_kline_example.run_done",
+		strings.Repeat("=", 80),
+		"所有示例运行完成",
+		strings.Repeat("=", 80),
+	)
 }

@@ -8,6 +8,8 @@ import (
 	"os"
 )
 
+var stockBrowserDarwinLog = dataModuleLogger(logger.SinkApp, "data.stock_browser_darwin")
+
 // CheckChrome 检查 macOS 是否安装了 Chrome 浏览器
 func CheckChrome() (string, bool) {
 	// 检查 /Applications 目录下是否存在 Chrome
@@ -58,22 +60,22 @@ func CheckSafari() (string, bool) {
 func CheckBrowser() (string, bool) {
 	// 优先检测 Edge（chromedp 基于 Chromium，Edge 兼容性更好）
 	if path, ok := CheckEdge(); ok {
-		logger.SugaredLogger.Infof("检测到 Edge 浏览器：%s", path)
+		stockBrowserDarwinLog.Infof("data.stock_browser_darwin.edge_detected", "检测到 Edge 浏览器：%s", path)
 		return path, true
 	}
 	// 其次检测 Chrome
 	if path, ok := CheckChrome(); ok {
-		logger.SugaredLogger.Infof("检测到 Chrome 浏览器：%s", path)
+		stockBrowserDarwinLog.Infof("data.stock_browser_darwin.chrome_detected", "检测到 Chrome 浏览器：%s", path)
 		return path, true
 	}
 	// 然后检测 Safari（苹果自带浏览器）
 	if path, ok := CheckSafari(); ok {
-		logger.SugaredLogger.Infof("检测到 Safari 浏览器：%s", path)
+		stockBrowserDarwinLog.Infof("data.stock_browser_darwin.safari_detected", "检测到 Safari 浏览器：%s", path)
 		return path, true
 	}
 	// 最后检测 Firefox
 	if path, ok := CheckFirefox(); ok {
-		logger.SugaredLogger.Infof("检测到 Firefox 浏览器：%s", path)
+		stockBrowserDarwinLog.Infof("data.stock_browser_darwin.firefox_detected", "检测到 Firefox 浏览器：%s", path)
 		return path, true
 	}
 	return "", false

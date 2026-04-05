@@ -4,37 +4,32 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-var task6GuardFiles = map[string]struct{}{
-	"ai-assistant-web/cmd/ai-assistant-web/main.go": {},
-	"app.go":                         {},
-	"app_common.go":                  {},
-	"app_darwin.go":                  {},
-	"app_linux.go":                   {},
-	"app_windows.go":                 {},
-	"backend/agent/agent.go":         {},
-	"backend/agent/agent_api.go":     {},
-	"backend/agent/chat_memory.go":   {},
-	"backend/agent/cron_task_api.go": {},
-	"backend/agent/tools/choice_stock_by_indicators_tool.go": {},
-	"backend/agent/tools/data_tools_wrapper.go":              {},
-	"backend/agent/tools/market_news_tool.go":                {},
-	"backend/agent/tools/stock_code_tool.go":                 {},
-	"bootstrap_stock_search_data.go":                         {},
-	"main.go":                                                {},
+var guardExcludedDirs = map[string]struct{}{
+	".git":         {},
+	"frontend":     {},
+	"build":        {},
+	"node_modules": {},
 }
 
 func TestNoLegacyLoggerUsageInNonTestGoFiles(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
 	fset := token.NewFileSet()
+	guardFiles, err := collectGuardTargetFiles(repoRoot)
+	if err != nil {
+		t.Fatalf("collect guard target files: %v", err)
+	}
 
 	var violations []string
-	for relativePath := range task6GuardFiles {
+	for _, relativePath := range guardFiles {
 		absolutePath := filepath.Join(repoRoot, filepath.FromSlash(relativePath))
 		fileNode, err := parser.ParseFile(fset, absolutePath, nil, 0)
 		if err != nil {
@@ -44,7 +39,7 @@ func TestNoLegacyLoggerUsageInNonTestGoFiles(t *testing.T) {
 	}
 
 	if len(violations) > 0 {
-		t.Fatalf("legacy logger usage is forbidden in Task 6 scope:\n%s", strings.Join(violations, "\n"))
+		t.Fatalf("legacy logger usage is forbidden in non-test Go files:\n%s", strings.Join(violations, "\n"))
 	}
 }
 
@@ -65,6 +60,117 @@ func demo() any {
 	if len(violations) != 2 {
 		t.Fatalf("expected 2 violations for SugaredLogger value usage, got %d: %#v", len(violations), violations)
 	}
+}
+
+func TestCollectGuardTargetFiles_SkipsExcludedDirsAndTestFiles(t *testing.T) {
+	repoRoot := t.TempDir()
+	files := []string{
+		filepath.Join(repoRoot, "backend", "data", "stock_data_api.go"),
+		filepath.Join(repoRoot, "backend", "data", "stock_data_api_test.go"),
+		filepath.Join(repoRoot, "frontend", "src", "fake.go"),
+		filepath.Join(repoRoot, "build", "generated.go"),
+		filepath.Join(repoRoot, "node_modules", "pkg", "index.go"),
+		filepath.Join(repoRoot, ".git", "hooks", "pre-commit.go"),
+		filepath.Join(repoRoot, "main.go"),
+	}
+
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", file, err)
+		}
+		if err := os.WriteFile(file, []byte("package sample\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", file, err)
+		}
+	}
+
+	guardFiles, err := collectGuardTargetFiles(repoRoot)
+	if err != nil {
+		t.Fatalf("collect guard files: %v", err)
+	}
+	slices.Sort(guardFiles)
+
+	expected := []string{
+		"backend/data/stock_data_api.go",
+		"main.go",
+	}
+	if !slices.Equal(guardFiles, expected) {
+		t.Fatalf("unexpected guard files:\nwant=%v\ngot=%v", expected, guardFiles)
+	}
+}
+
+func TestShouldScanGuardFile(t *testing.T) {
+	testCases := []struct {
+		path string
+		want bool
+	}{
+		{path: "backend/data/openai_tools.go", want: true},
+		{path: "backend/data/openai_tools_test.go", want: false},
+		{path: "frontend/src/mock.go", want: false},
+		{path: "build/mock.go", want: false},
+		{path: ".git/hooks/pre-commit.go", want: false},
+		{path: "node_modules/pkg/mock.go", want: false},
+		{path: "backend/data/words.txt", want: false},
+	}
+
+	for _, tc := range testCases {
+		if got := shouldScanGuardFile(filepath.FromSlash(tc.path)); got != tc.want {
+			t.Fatalf("shouldScanGuardFile(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
+func collectGuardTargetFiles(repoRoot string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(repoRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == repoRoot {
+			return nil
+		}
+
+		relativePath, err := filepath.Rel(repoRoot, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if shouldSkipGuardDir(relativePath) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !shouldScanGuardFile(relativePath) {
+			return nil
+		}
+		files = append(files, filepath.ToSlash(relativePath))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
+func shouldScanGuardFile(relativePath string) bool {
+	normalized := filepath.ToSlash(filepath.Clean(relativePath))
+	if shouldSkipGuardDir(normalized) {
+		return false
+	}
+	if !strings.HasSuffix(normalized, ".go") {
+		return false
+	}
+	return !strings.HasSuffix(normalized, "_test.go")
+}
+
+func shouldSkipGuardDir(relativePath string) bool {
+	normalized := filepath.ToSlash(filepath.Clean(relativePath))
+	for _, part := range strings.Split(normalized, "/") {
+		if _, excluded := guardExcludedDirs[part]; excluded {
+			return true
+		}
+	}
+	return false
 }
 
 func collectLegacyUsageViolations(fset *token.FileSet, fileNode *ast.File, relativePath string) []string {

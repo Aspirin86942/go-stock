@@ -14,6 +14,8 @@ import (
 // @Date 2025/02/06 17:50
 // @Desc
 // -----------------------------------------------------------------------------------
+var alertDarwinLog = dataModuleLogger(logger.SinkApp, "data.alert_darwin")
+
 type AlertWindowsApi struct {
 	AppID string
 	// 窗口标题
@@ -35,7 +37,7 @@ func NewAlertWindowsApi(AppID string, Title string, Content string, Icon string)
 
 func (a AlertWindowsApi) SendNotification() bool {
 	if GetSettingConfig().LocalPushEnable == false {
-		logger.SugaredLogger.Error("本地推送未开启")
+		alertDarwinLog.Warn("data.alert_darwin.disabled", "本地推送未开启")
 		return false
 	}
 
@@ -44,7 +46,7 @@ func (a AlertWindowsApi) SendNotification() bool {
 	cmd := exec.Command("osascript", "-e", script)
 	err := cmd.Run()
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		alertDarwinLog.Errorf("data.alert_darwin.push_failed", "darwin notification push failed: %v", err)
 		return false
 	}
 

@@ -12,6 +12,8 @@ import (
 // @Desc
 //-----------------------------------------------------------------------------------
 
+var dingDingLog = dataModuleLogger(logger.SinkHTTP, "data.dingding")
+
 type DingDingAPI struct {
 	client *resty.Client
 }
@@ -33,10 +35,10 @@ func (DingDingAPI) SendDingDingMessage(message string) string {
 		SetBody(message).
 		Post(getApiURL())
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		dingDingLog.Errorf("data.dingding.send_failed", "send dingding message failed: %v", err)
 		return "发送钉钉消息失败"
 	}
-	logger.SugaredLogger.Infof("send dingding message: %s", resp.String())
+	dingDingLog.Infof("data.dingding.send_succeeded", "send dingding message: %s", resp.String())
 	return "发送钉钉消息成功"
 }
 
@@ -68,10 +70,10 @@ func (DingDingAPI) SendToDingDing(title, message string) string {
 		}).
 		Post(getApiURL())
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		dingDingLog.Errorf("data.dingding.send_markdown_failed", "send dingding markdown failed: %v", err)
 		return "发送钉钉消息失败"
 	}
-	logger.SugaredLogger.Infof("send dingding message: %s", resp.String())
+	dingDingLog.Infof("data.dingding.send_markdown_succeeded", "send dingding message: %s", resp.String())
 	return "发送钉钉消息成功"
 }
 

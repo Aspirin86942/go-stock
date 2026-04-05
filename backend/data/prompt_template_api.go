@@ -9,6 +9,8 @@ import (
 type PromptTemplateApi struct {
 }
 
+var promptTemplateLog = dataModuleLogger(logger.SinkApp, "data.prompt_template")
+
 func (t PromptTemplateApi) GetPromptTemplates(name string, promptType string) *[]models.PromptTemplate {
 	var result []models.PromptTemplate
 	if name != "" && promptType != "" {
@@ -120,7 +122,7 @@ func (t PromptTemplateApi) DelPrompt(Id uint) string {
 func (t PromptTemplateApi) GetPromptTemplateByID(id int) string {
 	prompt := &models.PromptTemplate{}
 	db.Dao.Model(&models.PromptTemplate{}).Where("id=?", id).First(prompt)
-	logger.SugaredLogger.Infof("GetPromptTemplateByID:%d %s", id, prompt.Content)
+	promptTemplateLog.Infof("data.prompt_template.get_by_id", "GetPromptTemplateByID:%d %s", id, prompt.Content)
 	return prompt.Content
 }
 func NewPromptTemplateApi() *PromptTemplateApi {

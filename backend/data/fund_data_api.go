@@ -23,6 +23,8 @@ type FundApi struct {
 	config *SettingConfig
 }
 
+var fundLog = dataModuleLogger(logger.SinkHTTP, "data.fund")
+
 func NewFundApi() *FundApi {
 	return &FundApi{
 		client: resty.New(),
@@ -90,7 +92,7 @@ func (FundBasic) TableName() string {
 func (f *FundApi) CrawlFundBasic(fundCode string) (*FundBasic, error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.SugaredLogger.Errorf("CrawlFundBasic panic: %v", r)
+			fundLog.Errorf("data.fund.crawl_basic_panic", "CrawlFundBasic panic: %v", r)
 		}
 	}()
 
@@ -332,7 +334,7 @@ func (f *FundApi) CrawlFundNetEstimatedUnit(code string) {
 		SetQueryParams(map[string]string{"rt": strconv.FormatInt(time.Now().UnixMilli(), 10)}).
 		Get(fmt.Sprintf("https://fundgz.1234567.com.cn/js/%s.js", code))
 	if err != nil {
-		logger.SugaredLogger.Errorf("err:%s", err.Error())
+		fundLog.Errorf("data.fund.estimate_value_failed", "err:%s", err.Error())
 		return
 	}
 	if response.StatusCode() == 200 {
@@ -372,7 +374,7 @@ func (f *FundApi) CrawlFundNetUnitValue(code string) {
 		SetHeader("Referer", "https://finance.sina.com.cn").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("err:%s", err.Error())
+		fundLog.Errorf("data.fund.unit_value_failed", "err:%s", err.Error())
 		return
 	}
 	if response.StatusCode() == 200 {
@@ -385,7 +387,7 @@ func (f *FundApi) CrawlFundNetUnitValue(code string) {
 			//logger.SugaredLogger.Infof("parts:%s", parts)
 			val, err := convertor.ToFloat(parts[1])
 			if err != nil {
-				logger.SugaredLogger.Errorf("err:%s", err.Error())
+				fundLog.Errorf("data.fund.unit_value_parse_failed", "err:%s", err.Error())
 				return
 			}
 			fund := &FollowedFund{

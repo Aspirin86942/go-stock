@@ -18,6 +18,10 @@ import (
 // @Desc
 //-----------------------------------------------------------------------------------
 
+func industryResearchReportLog() *log.Logger {
+	return log.Default().ForSink(log.SinkAI, "agent.tools.industry_research_report")
+}
+
 func GetIndustryResearchReportTool() tool.InvokableTool {
 	return &IndustryResearchReportTool{api: data.NewMarketNewsApi()}
 }
@@ -56,7 +60,11 @@ func (i IndustryResearchReportTool) InvokableRun(ctx context.Context, argumentsI
 		"BK0": "",
 	})
 
-	log.SugaredLogger.Debugf("code:%s", code)
+	industryResearchReportLog().WithTrace(log.Default().NewTrace("tool")).Info(
+		"industry_research_report.normalized_code",
+		"normalized industry research report code",
+		log.String("code", code),
+	)
 	codeStr := convertor.ToString(code)
 	resp := i.api.IndustryResearchReport(codeStr, 7)
 	md := strings.Builder{}
@@ -64,6 +72,11 @@ func (i IndustryResearchReportTool) InvokableRun(ctx context.Context, argumentsI
 		data := a.(map[string]any)
 		md.WriteString(i.api.GetIndustryReportInfo(data["infoCode"].(string)))
 	}
-	log.SugaredLogger.Debugf("codeNum:%s IndustryResearchReport:\n %s", code, md.String())
+	industryResearchReportLog().WithTrace(log.Default().NewTrace("tool")).Info(
+		"industry_research_report.rendered",
+		"industry research report rendered",
+		log.String("code", code),
+		log.String("content", md.String()),
+	)
 	return md.String(), nil
 }

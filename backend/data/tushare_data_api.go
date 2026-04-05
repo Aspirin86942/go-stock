@@ -20,6 +20,8 @@ type TushareApi struct {
 	config *SettingConfig
 }
 
+var tushareLog = dataModuleLogger(logger.SinkHTTP, "data.tushare")
+
 func NewTushareApi(config *SettingConfig) *TushareApi {
 	return &TushareApi{
 		client: resty.New(),
@@ -49,7 +51,7 @@ func (receiver TushareApi) GetDaily(tsCode, startDate, endDate string, crawlTime
 		SetResult(resp).
 		Post(tushareApiUrl)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		tushareLog.Errorf("data.tushare.daily_failed", "tushare daily request failed: %v", err)
 		return ""
 	}
 	res := ""

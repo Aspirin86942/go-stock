@@ -12,6 +12,8 @@ import (
 // @Desc
 // -----------------------------------------------------------------------------------
 
+var crawlerLog = dataModuleLogger(logger.SinkHTTP, "data.crawler")
+
 type CrawlerApi struct {
 	crawlerCtx      context.Context
 	crawlerBaseInfo CrawlerBaseInfo
@@ -74,7 +76,7 @@ func (c *CrawlerApi) GetHtml_old(url, waitVisible string, headless bool) (string
 			chromedp.Flag("use-mock-keychain", true),
 		)
 		defer pcancel()
-		ctx, cancel := chromedp.NewContext(pctx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		ctx, cancel := chromedp.NewContext(pctx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		defer cancel()
 		//defer chromedp.Cancel(ctx)
 		err := chromedp.Run(ctx, chromedp.Navigate(url),
@@ -83,16 +85,16 @@ func (c *CrawlerApi) GetHtml_old(url, waitVisible string, headless bool) (string
 			chromedp.InnerHTML("body", &htmlContent),
 		)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_failed", "GetHtml_old failed: %v", err)
 			return "", false
 		}
 	} else {
-		ctx, cancel := chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		ctx, cancel := chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		defer cancel()
 		//defer chromedp.Cancel(ctx)
 		err := chromedp.Run(ctx, chromedp.Navigate(url), chromedp.WaitVisible("body"), chromedp.InnerHTML("body", &htmlContent))
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_failed", "GetHtml_old failed: %v", err)
 			return "", false
 		}
 	}
@@ -142,7 +144,7 @@ func (c *CrawlerApi) GetHtmlWithNoCancel(url, waitVisible string, headless bool)
 			chromedp.Flag("use-mock-keychain", true),
 		)
 		//defer pcancel()
-		cctx, childCancel = chromedp.NewContext(pctx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		cctx, childCancel = chromedp.NewContext(pctx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		//defer cancel()
 		err := chromedp.Run(cctx, chromedp.Navigate(url),
 			chromedp.WaitVisible(waitVisible, chromedp.ByQuery), // 确保  元素可见
@@ -150,15 +152,15 @@ func (c *CrawlerApi) GetHtmlWithNoCancel(url, waitVisible string, headless bool)
 			chromedp.InnerHTML("body", &htmlContent),
 		)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_no_cancel_failed", "GetHtmlWithNoCancel failed: %v", err)
 			return "", false, parentCancel, childCancel
 		}
 	} else {
-		cctx, childCancel = chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		cctx, childCancel = chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		//defer cancel()
 		err := chromedp.Run(cctx, chromedp.Navigate(url), chromedp.WaitVisible("body"), chromedp.InnerHTML("body", &htmlContent))
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_no_cancel_failed", "GetHtmlWithNoCancel failed: %v", err)
 			return "", false, parentCancel, childCancel
 		}
 	}
@@ -205,23 +207,23 @@ func (c *CrawlerApi) GetHtmlWithActions(actions *[]chromedp.Action, headless boo
 			chromedp.Flag("use-mock-keychain", true),
 		)
 		defer pcancel()
-		ctx, cancel := chromedp.NewContext(pctx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		ctx, cancel := chromedp.NewContext(pctx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		defer cancel()
 		//defer chromedp.Cancel(ctx)
 
 		err := chromedp.Run(ctx, *actions...)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_with_actions_failed", "GetHtmlWithActions failed: %v", err)
 			return "", false
 		}
 	} else {
-		ctx, cancel := chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+		ctx, cancel := chromedp.NewContext(c.crawlerCtx, chromedp.WithLogf(crawlerLog.ChromedpInfof("data.crawler.chromedp")))
 		defer cancel()
 		//defer chromedp.Cancel(ctx)
 
 		err := chromedp.Run(ctx, *actions...)
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			crawlerLog.Errorf("data.crawler.get_html_with_actions_failed", "GetHtmlWithActions failed: %v", err)
 			return "", false
 		}
 	}

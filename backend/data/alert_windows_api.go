@@ -13,6 +13,8 @@ import (
 // @Date 2025/1/8 9:40
 // @Desc
 // -----------------------------------------------------------------------------------
+var alertWindowsLog = dataModuleLogger(logger.SinkApp, "data.alert_windows")
+
 type AlertWindowsApi struct {
 	AppID string
 	// 窗口标题
@@ -48,7 +50,7 @@ func (a AlertWindowsApi) SendNotification() bool {
 	}
 	err := notification.Push()
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		alertWindowsLog.Errorf("data.alert_windows.push_failed", "windows notification push failed: %v", err)
 		return false
 	}
 	return true

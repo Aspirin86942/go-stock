@@ -77,6 +77,8 @@ type SettingsApi struct {
 	Config *SettingConfig
 }
 
+var settingsLog = dataModuleLogger(logger.SinkApp, "data.settings")
+
 func NewSettingsApi() *SettingsApi {
 	return &SettingsApi{
 		Config: GetSettingConfig(),
@@ -124,7 +126,7 @@ func UpdateConfig(s *SettingConfig) string {
 		//更新AiConfig
 		err := updateAiConfigs(s.AiConfigs)
 		if err != nil {
-			logger.SugaredLogger.Errorf("更新AI模型服务配置失败: %v", err)
+			settingsLog.Errorf("data.settings.update_ai_configs_failed", "更新AI模型服务配置失败: %v", err)
 			return "更新AI模型服务配置失败: " + err.Error()
 		}
 	} else {
@@ -132,7 +134,7 @@ func UpdateConfig(s *SettingConfig) string {
 		// 创建主配置
 		result := db.Dao.Model(&Settings{}).Create(&Settings{})
 		if result.Error != nil {
-			logger.SugaredLogger.Error("创建配置失败:", result.Error)
+			settingsLog.Errorf("data.settings.create_failed", "创建配置失败: %v", result.Error)
 			return "创建配置失败: " + result.Error.Error()
 		}
 	}
@@ -219,7 +221,7 @@ func GetSettingConfig() *SettingConfig {
 		// 处理AI配置查询可能出现的错误
 		result = db.Dao.Model(&AIConfig{}).Find(&aiConfigs)
 		if result.Error != nil {
-			logger.SugaredLogger.Error("查询AI配置失败:", result.Error)
+			settingsLog.Errorf("data.settings.query_ai_configs_failed", "查询AI配置失败: %v", result.Error)
 		} else if len(aiConfigs) > 0 {
 			lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
 				if item.TimeOut <= 0 {

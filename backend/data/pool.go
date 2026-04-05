@@ -10,6 +10,8 @@ import (
 )
 
 // BrowserPool 浏览器池结构
+var browserPoolLog = dataModuleLogger(logger.SinkHTTP, "data.browser_pool")
+
 type BrowserPool struct {
 	pool chan *context.Context
 	mu   sync.Mutex
@@ -61,7 +63,7 @@ func NewBrowserPool(size int) *BrowserPool {
 				chromedp.Flag("password-store", "basic"),
 				chromedp.Flag("use-mock-keychain", true),
 			)
-			ctx, _ = chromedp.NewContext(ctx, chromedp.WithLogf(logger.SugaredLogger.Infof))
+			ctx, _ = chromedp.NewContext(ctx, chromedp.WithLogf(browserPoolLog.ChromedpInfof("data.browser_pool.chromedp")))
 			pool <- &ctx
 		}
 	}

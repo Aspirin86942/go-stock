@@ -18,6 +18,8 @@ import (
 	uaFake "github.com/lib4u/fake-useragent"
 )
 
+var eastMoneyKlineLog = dataModuleLogger(logger.SinkHTTP, "data.eastmoney_kline")
+
 // 模拟 Windows 上 Chrome 从 quote.eastmoney.com 请求 push2his 行情接口（与 DevTools Network 常见字段对齐）。
 // 不显式设置 Accept-Encoding：由 net/http 默认协商 gzip 并自动解压；若声明 br/zstd 而 Transport 不解压会导致乱码/失败。
 // getRandomUA 随机返回一个 User-Agent（使用 fake-useragent 库）
@@ -52,7 +54,7 @@ func (receiver *EastMoneyKLineApi) fetchKLineJSONBytesByHTTP(reqURL string, cook
 
 	resp, err := req.Get(reqURL)
 	if err != nil {
-		logger.SugaredLogger.Errorf("HTTP error: %v", err)
+		eastMoneyKlineLog.Errorf("data.eastmoney_kline.http_failed", "HTTP error: %v", err)
 		return nil, err
 	}
 	if resp.StatusCode() != 200 {
@@ -347,7 +349,8 @@ func (receiver *EastMoneyKLineApi) GetKLineData2(stockCode, kLineType, adjustFla
 func (receiver *EastMoneyKLineApi) GetKLineDataBefore(stockCode, kLineType, adjustFlag string, limit int, end string) *[]KLineData {
 	result := receiver.GetKLineDataBeforeResult(stockCode, kLineType, adjustFlag, limit, end)
 	if result.ErrorCode != "" {
-		logger.SugaredLogger.Errorf(
+		eastMoneyKlineLog.Errorf(
+			"data.eastmoney_kline.fetch_failed",
 			"GetKLineDataBefore failed stock=%s klt=%s limit=%d end=%s retry=%t code=%s msg=%s",
 			stockCode,
 			kLineType,
@@ -578,7 +581,7 @@ func (receiver *EastMoneyKLineApi) parseKLine(klineStr, adjustFlag string) *KLin
 	//logger.SugaredLogger.Debugf("parseKLine: %s", klineStr)
 	parts := strings.Split(klineStr, ",")
 	if len(parts) < 11 {
-		logger.SugaredLogger.Warnf("invalid kline format: %s", klineStr)
+		eastMoneyKlineLog.Warnf("data.eastmoney_kline.invalid_format", "invalid kline format: %s", klineStr)
 		return nil
 	}
 

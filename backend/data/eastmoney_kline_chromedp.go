@@ -37,6 +37,8 @@ var eastMoneyCookieCache = &cookieCache{
 	items: make(map[string]*cookieCacheItem),
 }
 
+var eastMoneyChromedpLog = dataModuleLogger(logger.SinkHTTP, "data.eastmoney_kline_chromedp")
+
 // InvalidateEastMoneyCookieCache 清空 Cookie 缓存（例如切换浏览器路径或调试时可调用）
 func InvalidateEastMoneyCookieCache() {
 	eastMoneyCookieCache.mu.Lock()
@@ -110,7 +112,7 @@ func EastMoneyCookieHeaderForPush2his(config *SettingConfig) string {
 	// 获取 push2his 接口的 Cookie，需要访问 quote 页面
 	h, err := FetchEastMoneyCookiesViaChromedp(browserPath, cdTimeout, quoteEastMoneyPage)
 	if err != nil {
-		logger.SugaredLogger.Warnf("东财 chromedp 获取 cookie 失败，push2his 请求将不带 Cookie: %v", err)
+		eastMoneyChromedpLog.Warnf("data.eastmoney_kline_chromedp.cookie_failed", "东财 chromedp 获取 cookie 失败，push2his 请求将不带 Cookie: %v", err)
 		return ""
 	}
 	return h
@@ -141,7 +143,7 @@ func fetchEastMoneyCookiesViaChromedp(browserPath string, timeout time.Duration,
 		if browserPath == "" {
 			return "", fmt.Errorf("chromedp: 未配置浏览器路径且未检测到系统浏览器 (Edge/Chrome/Firefox)")
 		}
-		logger.SugaredLogger.Infof("chromedp: 自动检测到浏览器路径：%s", browserPath)
+		eastMoneyChromedpLog.Infof("data.eastmoney_kline_chromedp.browser_detected", "chromedp: 自动检测到浏览器路径：%s", browserPath)
 	}
 	//logger.SugaredLogger.Debugf("chromedp: 获取 Cookie，浏览器路径：%s，URL：%s", browserPath, pageURL)
 
@@ -222,8 +224,8 @@ func eastMoneyCookiesViaChromedpOnce(browserPath string, timeout time.Duration, 
 	defer cancelAlloc()
 
 	ctx, cancelCtx := chromedp.NewContext(allocCtx,
-		chromedp.WithLogf(logger.SugaredLogger.Infof),
-		chromedp.WithErrorf(logger.SugaredLogger.Errorf),
+		chromedp.WithLogf(eastMoneyChromedpLog.ChromedpInfof("data.eastmoney_kline_chromedp.chromedp")),
+		chromedp.WithErrorf(eastMoneyChromedpLog.ChromedpErrorf("data.eastmoney_kline_chromedp.chromedp_error")),
 	)
 	defer cancelCtx()
 

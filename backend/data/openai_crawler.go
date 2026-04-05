@@ -15,6 +15,8 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+var openAICrawlerLog = dataModuleLogger(logger.SinkAI, "data.openai_crawler")
+
 func checkIsIndexBasic(stock string) bool {
 	count := int64(0)
 	db.Dao.Model(&IndexBasic{}).Where("name =  ?", stock).Count(&count)
@@ -58,7 +60,7 @@ func SearchGuShiTongStockInfo(stock string, crawlTimeOut int64) *[]string {
 	if success {
 		document, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 		if err != nil {
-			logger.SugaredLogger.Error(err.Error())
+			openAICrawlerLog.Errorf("data.openai_crawler.parse_gushitong_failed", "parse GuShiTong HTML failed: %v", err)
 			return &[]string{}
 		}
 		document.Find("div.finance-hover,div.list-date").Each(func(i int, selection *goquery.Selection) {
@@ -101,7 +103,7 @@ func GetFinancialReportsByXUEQIU(stockCode string, crawlTimeOut int64) *[]string
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		openAICrawlerLog.Errorf("data.openai_crawler.parse_xueqiu_failed", "parse Xueqiu financial report HTML failed: %v", err)
 	}
 	GetTableMarkdown(document, waitVisible, &markdown)
 	return &[]string{markdown.String()}
@@ -145,7 +147,7 @@ func GetFinancialReports(stockCode string, crawlTimeOut int64) *[]string {
 	}
 	document, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		logger.SugaredLogger.Error(err.Error())
+		openAICrawlerLog.Errorf("data.openai_crawler.parse_eastmoney_failed", "parse EastMoney financial report HTML failed: %v", err)
 	}
 	GetTableMarkdown(document, waitVisible, &markdown)
 	return &[]string{markdown.String()}

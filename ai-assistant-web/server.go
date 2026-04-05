@@ -52,6 +52,10 @@ type shareRequest struct {
 
 const unlockedWebMessage = "当前版本已开放全部功能，无需赞助码。"
 
+func serverLog() *logger.Logger {
+	return logger.Default().ForSink(logger.SinkHTTP, "ai-assistant-web")
+}
+
 // Start 在当前进程内启动 ai-assistant-web 服务（阻塞，适合放在 goroutine 中）。
 func Start() error {
 	if _, err := apppath.Ensure(); err != nil {
@@ -71,7 +75,11 @@ func Start() error {
 	}
 
 	addr := getAddr()
-	logger.SugaredLogger.Infof("ai-assistant-web started at: %s", addr)
+	serverLog().WithTrace(logger.Default().NewTrace("http")).Info(
+		"ai_assistant_web.start",
+		"ai-assistant-web started",
+		logger.String("address", addr),
+	)
 	return http.ListenAndServe(addr, handler)
 }
 

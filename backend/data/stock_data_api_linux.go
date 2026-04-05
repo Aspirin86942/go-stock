@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+var stockBrowserLinuxLog = dataModuleLogger(logger.SinkApp, "data.stock_browser_linux")
+
 // findBrowser 在 Linux 上查找浏览器可执行文件
 func findBrowser(paths []string) (string, bool) {
 	for _, path := range paths {
@@ -136,37 +138,37 @@ func CheckVivaldi() (string, bool) {
 func CheckBrowser() (string, bool) {
 	// 1. 优先检测 Edge（基于 Chromium，兼容性好）
 	if path, ok := CheckEdge(); ok {
-		logger.SugaredLogger.Infof("检测到 Edge 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.edge_detected", "检测到 Edge 浏览器：%s", path)
 		return path, true
 	}
 	// 2. 检测 Chrome/Chromium
 	if path, ok := CheckChrome(); ok {
-		logger.SugaredLogger.Infof("检测到 Chrome/Chromium 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.chrome_detected", "检测到 Chrome/Chromium 浏览器：%s", path)
 		return path, true
 	}
 	// 3. 检测 Brave（基于 Chromium）
 	if path, ok := CheckBrave(); ok {
-		logger.SugaredLogger.Infof("检测到 Brave 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.brave_detected", "检测到 Brave 浏览器：%s", path)
 		return path, true
 	}
 	// 4. 检测 Vivaldi（基于 Chromium）
 	if path, ok := CheckVivaldi(); ok {
-		logger.SugaredLogger.Infof("检测到 Vivaldi 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.vivaldi_detected", "检测到 Vivaldi 浏览器：%s", path)
 		return path, true
 	}
 	// 5. 检测 Opera（基于 Chromium）
 	if path, ok := CheckOpera(); ok {
-		logger.SugaredLogger.Infof("检测到 Opera 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.opera_detected", "检测到 Opera 浏览器：%s", path)
 		return path, true
 	}
 	// 6. 检测 Safari（Linux 上很少见）
 	if path, ok := CheckSafari(); ok {
-		logger.SugaredLogger.Infof("检测到 Safari 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.safari_detected", "检测到 Safari 浏览器：%s", path)
 		return path, true
 	}
 	// 7. 最后检测 Firefox
 	if path, ok := CheckFirefox(); ok {
-		logger.SugaredLogger.Infof("检测到 Firefox 浏览器：%s", path)
+		stockBrowserLinuxLog.Infof("data.stock_browser_linux.firefox_detected", "检测到 Firefox 浏览器：%s", path)
 		return path, true
 	}
 	return "", false
