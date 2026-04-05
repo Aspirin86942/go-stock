@@ -1,8 +1,10 @@
 package logger
 
 import (
+	"errors"
 	"fmt"
 	"go-stock/backend/apppath"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -41,25 +43,49 @@ func (r *Runtime) bootstrapSinks(cfg Config) error {
 		return fmt.Errorf("ensure logger logs dir %s: %w", cfg.Paths.LogsDir, err)
 	}
 
+	commonFields := filterRuntimeConfigFields(cfg.Fields)
 	sinkPaths := buildSinkPaths(cfg.Paths)
 	for _, sink := range []Sink{SinkApp, SinkError, SinkHTTP, SinkAI, SinkTask, SinkDB, SinkFrontend, SinkPanic} {
 		path, ok := sinkPaths[sink]
 		if !ok {
 			return fmt.Errorf("missing path for sink %s", sink)
 		}
-		r.sinks[sink] = newSinkLogger(path, cfg.EnableStdout)
+		baseLogger, closer := newSinkLogger(path, cfg.EnableStdout)
+		if len(commonFields) > 0 {
+			baseLogger = baseLogger.With(commonFields...)
+		}
+		r.sinks[sink] = baseLogger
+		r.closers = append(r.closers, closer)
 	}
 	return nil
 }
 
-func newSinkLogger(path string, enableStdout bool) *zap.Logger {
-	fileSyncer := zapcore.AddSync(&lumberjack.Logger{
+func filterRuntimeConfigFields(fields []zap.Field) []zap.Field {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	filtered := make([]zap.Field, 0, len(fields))
+	for _, field := range fields {
+		switch field.Key {
+		case "module", "event", "trace_id", "span_id", "app_session_id", "source":
+			continue
+		default:
+			filtered = append(filtered, field)
+		}
+	}
+	return filtered
+}
+
+func newSinkLogger(path string, enableStdout bool) (*zap.Logger, io.Closer) {
+	fileWriter := &lumberjack.Logger{
 		Filename:   path,
 		MaxSize:    10,
 		MaxBackups: 100,
 		MaxAge:     28,
 		Compress:   false,
-	})
+	}
+	fileSyncer := zapcore.AddSync(fileWriter)
 
 	writer := fileSyncer
 	if enableStdout {
@@ -68,7 +94,7 @@ func newSinkLogger(path string, enableStdout bool) *zap.Logger {
 
 	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	core := zapcore.NewCore(encoder, writer, zapcore.DebugLevel)
-	return zap.New(core, zap.AddCaller())
+	return zap.New(core, zap.AddCaller()), fileWriter
 }
 
 func (r *Runtime) getSinkLogger(sink Sink) *zap.Logger {
@@ -82,4 +108,19 @@ func (r *Runtime) getSinkLogger(sink Sink) *zap.Logger {
 		return log
 	}
 	return zap.NewNop()
+}
+
+func (r *Runtime) Close() error {
+	if r == nil {
+		return nil
+	}
+
+	var err error
+	for _, closer := range r.closers {
+		if closer == nil {
+			continue
+		}
+		err = errors.Join(err, closer.Close())
+	}
+	return err
 }

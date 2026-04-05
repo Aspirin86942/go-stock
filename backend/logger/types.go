@@ -2,6 +2,7 @@ package logger
 
 import (
 	"go-stock/backend/apppath"
+	"io"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -31,11 +32,35 @@ type Runtime struct {
 	sessionID string
 	sinks     map[Sink]*zap.Logger
 	payloads  *PayloadStore
+	closers   []io.Closer
 }
 
 type Config struct {
 	Paths        apppath.Paths
 	EnableStdout bool
+	Fields       []zap.Field
+}
+
+// GlobalState captures the mutable package-level logger globals so test helpers
+// can temporarily replace them and restore the previous state during cleanup.
+type GlobalState struct {
+	Runtime *Runtime
+	Core    *zap.Logger
+	Sugared *zap.SugaredLogger
+}
+
+func CaptureGlobalState() GlobalState {
+	return GlobalState{
+		Runtime: Default(),
+		Core:    CoreLogger,
+		Sugared: SugaredLogger,
+	}
+}
+
+func (s GlobalState) Restore() {
+	defaultRuntime.Store(s.Runtime)
+	CoreLogger = s.Core
+	SugaredLogger = s.Sugared
 }
 
 type Logger struct {

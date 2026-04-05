@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -175,6 +176,85 @@ func TestMustInit_RebindsLegacyGlobalsToLatestRuntime(t *testing.T) {
 	}
 }
 
+func TestMustInit_AppliesConfigFieldsToEverySink_PreservesSourceTraceFields(t *testing.T) {
+	previousRuntime := Default()
+	previousCoreLogger := CoreLogger
+	previousSugaredLogger := SugaredLogger
+	t.Cleanup(func() {
+		defaultRuntime.Store(previousRuntime)
+		CoreLogger = previousCoreLogger
+		SugaredLogger = previousSugaredLogger
+	})
+
+	rootDir := t.TempDir()
+	paths := apppath.Paths{
+		RootDir: rootDir,
+		LogsDir: filepath.Join(rootDir, "logs"),
+	}
+
+	runtime := MustInit(Config{
+		Paths:        paths,
+		EnableStdout: false,
+		Fields: []zap.Field{
+			String("execution_mode", "test"),
+			String("test_suite", "logger-core"),
+			String("source", "config-source"),
+		},
+	})
+	t.Cleanup(func() {
+		if err := runtime.Close(); err != nil {
+			t.Errorf("close runtime: %v", err)
+		}
+	})
+
+	trace := TraceContext{
+		TraceID:      "trace-config-fields",
+		SpanID:       "span-config-fields",
+		AppSessionID: "session-config-fields",
+		Source:       "http",
+	}
+	sinks := []Sink{SinkApp, SinkError, SinkHTTP, SinkAI, SinkTask, SinkDB, SinkFrontend, SinkPanic}
+	for _, sink := range sinks {
+		runtime.ForSink(sink, "logger.core").
+			WithTrace(trace).
+			Info("runtime.field.check", "runtime config fields", String("sink", string(sink)))
+	}
+
+	sinkPaths := buildSinkPaths(paths)
+	for _, sink := range sinks {
+		logFile := sinkPaths[sink]
+		content, err := os.ReadFile(logFile)
+		if err != nil {
+			t.Fatalf("read sink log %s: %v", logFile, err)
+		}
+		entry := parseLastJSONLogEntry(t, content)
+		if got, _ := entry["execution_mode"].(string); got != "test" {
+			t.Fatalf("expected execution_mode=test in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["test_suite"].(string); got != "logger-core" {
+			t.Fatalf("expected test_suite=logger-core in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["module"].(string); got != "logger.core" {
+			t.Fatalf("expected module=logger.core in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["event"].(string); got != "runtime.field.check" {
+			t.Fatalf("expected event=runtime.field.check in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["trace_id"].(string); got != "trace-config-fields" {
+			t.Fatalf("expected trace_id=trace-config-fields in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["span_id"].(string); got != "span-config-fields" {
+			t.Fatalf("expected span_id=span-config-fields in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["app_session_id"].(string); got != "session-config-fields" {
+			t.Fatalf("expected app_session_id=session-config-fields in %s, got %#v", logFile, got)
+		}
+		if got, _ := entry["source"].(string); got != "http" {
+			t.Fatalf("expected source from trace context in %s, got %#v", logFile, got)
+		}
+	}
+}
+
 func newRuntimeForTest(writer io.Writer) *Runtime {
 	testCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
@@ -212,4 +292,20 @@ func newRuntimeForTestWithSinks(appWriter io.Writer, errorWriter io.Writer) *Run
 		runtime.sinks[sink] = appLogger
 	}
 	return runtime
+}
+
+func parseLastJSONLogEntry(t *testing.T, content []byte) map[string]any {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[len(lines)-1]) == "" {
+		t.Fatalf("expected at least one JSON log line, got %q", string(content))
+	}
+
+	raw := lines[len(lines)-1]
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+		t.Fatalf("decode log entry %q: %v", raw, err)
+	}
+	return entry
 }
