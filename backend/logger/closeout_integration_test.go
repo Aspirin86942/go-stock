@@ -1,4 +1,4 @@
-package logger
+package logger_test
 
 import (
 	"encoding/json"
@@ -9,28 +9,19 @@ import (
 	"strings"
 	"testing"
 
-	"go-stock/backend/apppath"
+	"go-stock/backend/logger"
+	"go-stock/internal/testenv"
 )
 
 func TestHTTPTraceFlowsAcrossHTTPAndDBSinks(t *testing.T) {
-	rootDir, err := os.MkdirTemp("", "go-stock-closeout-http-*")
-	if err != nil {
-		t.Fatalf("create temp root dir: %v", err)
-	}
-	runtime := MustInit(Config{
-		Paths: apppath.Paths{
-			RootDir: rootDir,
-			LogsDir: filepath.Join(rootDir, "logs"),
-		},
-		EnableStdout: false,
-	})
-	runtime.AttachPayloadStore(NewPayloadStore(filepath.Join(rootDir, "logs"), 16, 5<<20))
+	runtime, artifacts := testenv.NewLoggerRuntime(t, "backend-logger")
+	runtime.AttachPayloadStore(logger.NewPayloadStore(artifacts.LogsDir, 16, 5<<20))
 
 	handler := runtime.HTTPMiddleware("integration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		runtime.ForSink(SinkDB, "integration.db").WithTrace(runtime.TraceOrNew(r.Context(), "db")).Info(
+		runtime.ForSink(logger.SinkDB, "integration.db").WithTrace(runtime.TraceOrNew(r.Context(), "db")).Info(
 			"db.integration.hit",
 			"handled db step",
-			String("table", "trace_probe"),
+			logger.String("table", "trace_probe"),
 		)
 		_, _ = w.Write([]byte(strings.Repeat("x", 128)))
 	}))
@@ -39,11 +30,11 @@ func TestHTTPTraceFlowsAcrossHTTPAndDBSinks(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	httpLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "http.log"))
+	httpLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "http.log"))
 	if err != nil {
 		t.Fatalf("read http log: %v", err)
 	}
-	dbLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "db.log"))
+	dbLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "db.log"))
 	if err != nil {
 		t.Fatalf("read db log: %v", err)
 	}
@@ -54,8 +45,14 @@ func TestHTTPTraceFlowsAcrossHTTPAndDBSinks(t *testing.T) {
 	if requireStringField(t, dbEvent, "trace_id") != traceID {
 		t.Fatalf("expected db.integration.hit to reuse %s, got %#v", traceID, dbEvent)
 	}
+	if requireStringField(t, httpEvent, "execution_mode") != "test" {
+		t.Fatalf("expected http.request.completed to carry execution_mode=test, got %#v", httpEvent)
+	}
+	if requireStringField(t, dbEvent, "test_case") != "TestHTTPTraceFlowsAcrossHTTPAndDBSinks" {
+		t.Fatalf("expected db.integration.hit to carry test_case metadata, got %#v", dbEvent)
+	}
 
-	payloadRoot := filepath.Join(rootDir, "logs", "payloads")
+	payloadRoot := filepath.Join(artifacts.LogsDir, "payloads")
 	for _, key := range []string{"request_payload_file", "response_payload_file"} {
 		payloadPath := requireStringField(t, httpEvent, key)
 		if !pathIsUnderRoot(payloadRoot, payloadPath) {

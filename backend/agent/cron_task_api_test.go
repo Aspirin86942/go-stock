@@ -8,27 +8,17 @@ import (
 	"strings"
 	"testing"
 
-	"go-stock/backend/apppath"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"go-stock/internal/testenv"
 )
 
 func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
-	rootDir, err := os.MkdirTemp("", "go-stock-closeout-task-*")
-	if err != nil {
-		t.Fatalf("create temp root dir: %v", err)
-	}
-	runtime := logger.MustInit(logger.Config{
-		Paths: apppath.Paths{
-			RootDir: rootDir,
-			LogsDir: filepath.Join(rootDir, "logs"),
-		},
-		EnableStdout: false,
-	})
+	runtime, artifacts := testenv.NewLoggerRuntime(t, "backend-agent")
 
 	// ExecuteTask 会在末尾调用 UpdateRunInfo，需要最小 sqlite 初始化避免 db.Dao 为空。
-	db.Init(filepath.Join(rootDir, "test.db"))
+	db.Init(filepath.Join(artifacts.RootDir, "test.db"))
 	sqlDB, err := db.Dao.DB()
 	if err != nil {
 		t.Fatalf("open sql db handle: %v", err)
@@ -67,15 +57,15 @@ func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
 		t.Fatalf("execute task: %v", err)
 	}
 
-	taskLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "task.log"))
+	taskLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "task.log"))
 	if err != nil {
 		t.Fatalf("read task log: %v", err)
 	}
-	aiLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "ai.log"))
+	aiLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "ai.log"))
 	if err != nil {
 		t.Fatalf("read ai log: %v", err)
 	}
-	dbLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "db.log"))
+	dbLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "db.log"))
 	if err != nil {
 		t.Fatalf("read db log: %v", err)
 	}
@@ -89,6 +79,12 @@ func TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks(t *testing.T) {
 	}
 	if requireStringField(t, dbEvent, "trace_id") != traceID {
 		t.Fatalf("expected db.trace_probe to reuse %s, got %#v", traceID, dbEvent)
+	}
+	if requireStringField(t, taskEvent, "execution_mode") != "test" {
+		t.Fatalf("expected task.execute_started to carry execution_mode=test, got %#v", taskEvent)
+	}
+	if requireStringField(t, aiEvent, "test_case") != "TestExecuteTask_TraceFlowsAcrossTaskAISinkAndDBSinks" {
+		t.Fatalf("expected ai.trace_probe to carry test_case metadata, got %#v", aiEvent)
 	}
 }
 

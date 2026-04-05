@@ -7,23 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"go-stock/backend/apppath"
-	"go-stock/backend/logger"
+	"go-stock/internal/testenv"
 )
 
 func TestLogFrontendRuntimeError_ReusesPayloadTraceID(t *testing.T) {
-	root, err := os.MkdirTemp("", "go-stock-frontend-log-*")
-	if err != nil {
-		t.Fatalf("create temp root: %v", err)
-	}
-	logsDir := filepath.Join(root, "logs")
-	_ = logger.MustInit(logger.Config{
-		Paths: apppath.Paths{
-			RootDir: root,
-			LogsDir: logsDir,
-		},
-		EnableStdout: false,
-	})
+	_, artifacts := testenv.NewLoggerRuntime(t, "app-common")
 
 	logFrontendRuntimeError([]interface{}{
 		map[string]any{
@@ -38,7 +26,7 @@ func TestLogFrontendRuntimeError_ReusesPayloadTraceID(t *testing.T) {
 		},
 	})
 
-	content, err := os.ReadFile(filepath.Join(logsDir, "frontend.log"))
+	content, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "frontend.log"))
 	if err != nil {
 		t.Fatalf("read frontend log: %v", err)
 	}
@@ -52,6 +40,12 @@ func TestLogFrontendRuntimeError_ReusesPayloadTraceID(t *testing.T) {
 	}
 	if got, _ := entry["error_class"].(string); got != "frontend_error" {
 		t.Fatalf("expected error_class frontend_error, got %#v", got)
+	}
+	if got, _ := entry["execution_mode"].(string); got != "test" {
+		t.Fatalf("expected execution_mode=test, got %#v", got)
+	}
+	if got, _ := entry["test_case"].(string); got != "TestLogFrontendRuntimeError_ReusesPayloadTraceID" {
+		t.Fatalf("expected test_case metadata, got %#v", got)
 	}
 }
 

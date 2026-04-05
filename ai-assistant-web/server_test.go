@@ -10,9 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"go-stock/backend/apppath"
 	"go-stock/backend/db"
-	"go-stock/backend/logger"
+	"go-stock/internal/testenv"
 )
 
 func TestRequireVip2_AllowsRequestsWithoutSponsorCode(t *testing.T) {
@@ -66,21 +65,7 @@ func TestVipStatus_ReturnsOpenAccess(t *testing.T) {
 }
 
 func TestNewHandler_HealthRouteStillWorksThroughLoggingMiddleware(t *testing.T) {
-	rootDir, err := os.MkdirTemp("", "go-stock-http-handler-*")
-	if err != nil {
-		t.Fatalf("create temp log dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(rootDir)
-	})
-
-	runtime := logger.MustInit(logger.Config{
-		EnableStdout: false,
-		Paths: apppath.Paths{
-			RootDir: rootDir,
-			LogsDir: filepath.Join(rootDir, "logs"),
-		},
-	})
+	runtime, artifacts := testenv.NewLoggerRuntime(t, "ai-assistant-web")
 
 	handler, err := newHandler(runtime)
 	if err != nil {
@@ -99,11 +84,14 @@ func TestNewHandler_HealthRouteStillWorksThroughLoggingMiddleware(t *testing.T) 
 		t.Fatalf("expected CORS header to be preserved, got %q", got)
 	}
 
-	httpLog, err := os.ReadFile(filepath.Join(rootDir, "logs", "http.log"))
+	httpLog, err := os.ReadFile(filepath.Join(artifacts.LogsDir, "http.log"))
 	if err != nil {
 		t.Fatalf("read http log: %v", err)
 	}
 	if !strings.Contains(string(httpLog), `"path":"/api/health"`) {
 		t.Fatalf("expected health request to be logged through middleware, got %s", string(httpLog))
+	}
+	if !strings.Contains(string(httpLog), `"execution_mode":"test"`) {
+		t.Fatalf("expected health request log to carry test metadata, got %s", string(httpLog))
 	}
 }
