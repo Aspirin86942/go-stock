@@ -7,5 +7,6 @@ import (
 )
 
 func requireIntegrationTest(t *testing.T) {
+	t.Helper()
 	testenv.RequireExternalTest(t)
 }
