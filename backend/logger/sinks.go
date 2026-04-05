@@ -11,6 +11,11 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+const (
+	defaultPayloadInlineLimit = 4 << 10
+	defaultPayloadMaxTotal    = int64(5 << 20)
+)
+
 func buildSinkPaths(paths apppath.Paths) map[Sink]string {
 	return map[Sink]string{
 		SinkApp:      filepath.Join(paths.LogsDir, "app.log"),
@@ -22,6 +27,10 @@ func buildSinkPaths(paths apppath.Paths) map[Sink]string {
 		SinkFrontend: filepath.Join(paths.LogsDir, "frontend.log"),
 		SinkPanic:    filepath.Join(paths.LogsDir, "panic.log"),
 	}
+}
+
+func newDefaultPayloadStore(paths apppath.Paths) *PayloadStore {
+	return NewPayloadStore(paths.LogsDir, defaultPayloadInlineLimit, defaultPayloadMaxTotal)
 }
 
 func (r *Runtime) bootstrapSinks(cfg Config) error {

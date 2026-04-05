@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-stock/backend/apppath"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -24,11 +25,13 @@ func MustInit(cfg Config) *Runtime {
 	}
 
 	runtime := &Runtime{
-		sinks: make(map[Sink]*zap.Logger),
+		sessionID: uuid.NewString(),
+		sinks:     make(map[Sink]*zap.Logger),
 	}
 	if err := runtime.bootstrapSinks(cfg); err != nil {
 		panic(fmt.Sprintf("bootstrap logger sinks: %v", err))
 	}
+	runtime.AttachPayloadStore(newDefaultPayloadStore(cfg.Paths))
 
 	defaultRuntime.Store(runtime)
 	return runtime

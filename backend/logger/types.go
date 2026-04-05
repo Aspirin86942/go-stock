@@ -28,7 +28,9 @@ type TraceContext struct {
 }
 
 type Runtime struct {
-	sinks map[Sink]*zap.Logger
+	sessionID string
+	sinks     map[Sink]*zap.Logger
+	payloads  *PayloadStore
 }
 
 type Config struct {
