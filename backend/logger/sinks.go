@@ -33,18 +33,17 @@ func (r *Runtime) bootstrapSinks(cfg Config) error {
 	}
 
 	sinkPaths := buildSinkPaths(cfg.Paths)
-	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	for _, sink := range []Sink{SinkApp, SinkError, SinkHTTP, SinkAI, SinkTask, SinkDB, SinkFrontend, SinkPanic} {
 		path, ok := sinkPaths[sink]
 		if !ok {
 			return fmt.Errorf("missing path for sink %s", sink)
 		}
-		r.sinks[sink] = newSinkLogger(path, encoder, cfg.EnableStdout)
+		r.sinks[sink] = newSinkLogger(path, cfg.EnableStdout)
 	}
 	return nil
 }
 
-func newSinkLogger(path string, encoder zapcore.Encoder, enableStdout bool) *zap.Logger {
+func newSinkLogger(path string, enableStdout bool) *zap.Logger {
 	fileSyncer := zapcore.AddSync(&lumberjack.Logger{
 		Filename:   path,
 		MaxSize:    10,
@@ -58,6 +57,7 @@ func newSinkLogger(path string, encoder zapcore.Encoder, enableStdout bool) *zap
 		writer = zapcore.NewMultiWriteSyncer(fileSyncer, zapcore.AddSync(os.Stdout))
 	}
 
+	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	core := zapcore.NewCore(encoder, writer, zapcore.DebugLevel)
 	return zap.New(core, zap.AddCaller())
 }

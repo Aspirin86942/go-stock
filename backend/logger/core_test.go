@@ -3,7 +3,6 @@ package logger
 import (
 	"bytes"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,10 +46,38 @@ func TestModuleLogger_AddsModuleEventAndTraceFields(t *testing.T) {
 	}
 }
 
-func newRuntimeForTest(writer io.Writer) *Runtime {
-	cfg := DefaultConfig(apppath.Paths{LogsDir: filepath.Join(os.TempDir(), "go-stock-test-logs")})
-	runtime := MustInit(cfg)
+func TestLegacySugaredLogger_ErrorGoesToErrorSink(t *testing.T) {
+	appBuf := &bytes.Buffer{}
+	errorBuf := &bytes.Buffer{}
+	runtime := newRuntimeForTestWithSinks(appBuf, errorBuf)
 
+	initLegacyGlobals(runtime)
+	SugaredLogger.Errorf("legacy error: %s", "boom")
+
+	if strings.Contains(appBuf.String(), "legacy error") {
+		t.Fatalf("expected legacy error log not to go to app sink, got %s", appBuf.String())
+	}
+	if !strings.Contains(errorBuf.String(), "legacy error") {
+		t.Fatalf("expected legacy error log to go to error sink, got %s", errorBuf.String())
+	}
+}
+
+func TestForSinkError_RoutesToErrorSink(t *testing.T) {
+	appBuf := &bytes.Buffer{}
+	errorBuf := &bytes.Buffer{}
+	runtime := newRuntimeForTestWithSinks(appBuf, errorBuf)
+
+	runtime.ForSink(SinkError, "legacy").Error("legacy.err", "sink-error-message")
+
+	if strings.Contains(appBuf.String(), "sink-error-message") {
+		t.Fatalf("expected sink error message not to go to app sink, got %s", appBuf.String())
+	}
+	if !strings.Contains(errorBuf.String(), "sink-error-message") {
+		t.Fatalf("expected sink error message to go to error sink, got %s", errorBuf.String())
+	}
+}
+
+func newRuntimeForTest(writer io.Writer) *Runtime {
 	testCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 		zapcore.AddSync(writer),
@@ -58,9 +85,33 @@ func newRuntimeForTest(writer io.Writer) *Runtime {
 	)
 	testLogger := zap.New(testCore)
 
+	runtime := &Runtime{sinks: make(map[Sink]*zap.Logger)}
 	for _, sink := range []Sink{SinkApp, SinkPanic, SinkHTTP, SinkDB, SinkFrontend, SinkError, SinkAI, SinkTask} {
 		runtime.sinks[sink] = testLogger
 	}
 
+	return runtime
+}
+
+func newRuntimeForTestWithSinks(appWriter io.Writer, errorWriter io.Writer) *Runtime {
+	appCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(appWriter),
+		zapcore.DebugLevel,
+	)
+	errorCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(errorWriter),
+		zapcore.DebugLevel,
+	)
+	appLogger := zap.New(appCore)
+	errorLogger := zap.New(errorCore)
+
+	runtime := &Runtime{sinks: make(map[Sink]*zap.Logger)}
+	runtime.sinks[SinkApp] = appLogger
+	runtime.sinks[SinkError] = errorLogger
+	for _, sink := range []Sink{SinkPanic, SinkHTTP, SinkDB, SinkFrontend, SinkAI, SinkTask} {
+		runtime.sinks[sink] = appLogger
+	}
 	return runtime
 }
