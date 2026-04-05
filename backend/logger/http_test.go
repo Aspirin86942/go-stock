@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -168,6 +169,71 @@ func TestHTTPMiddleware_StreamedPayloadHonorsMaxTotal(t *testing.T) {
 	if strings.Contains(line, "response_payload_file") {
 		t.Fatalf("expected overflowed streamed payload not to expose spill file, got %s", line)
 	}
+}
+
+func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
+	buf := &bytes.Buffer{}
+	runtime := newRuntimeForTest(buf)
+
+	handler := runtime.HTTPMiddleware("ai-assistant-web", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trace, ok := TraceContextFromContext(r.Context())
+		if !ok || strings.TrimSpace(trace.TraceID) == "" {
+			t.Fatalf("expected request context to carry trace, got %#v", trace)
+		}
+
+		runtime.ForSink(SinkHTTP, "ai-assistant-web").WithTrace(trace).Info(
+			"http.request.handler_trace",
+			"handler observed request trace",
+		)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/summary-stream", nil)
+	req.Body = errReader{}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	entries := parseJSONLogEntries(t, buf.String())
+	traceByEvent := map[string]string{}
+	for _, entry := range entries {
+		event, _ := entry["event"].(string)
+		traceID, _ := entry["trace_id"].(string)
+		if event == "http.request.body.read_failed" || event == "http.request.handler_trace" || event == "http.request.completed" {
+			traceByEvent[event] = traceID
+		}
+	}
+
+	for _, event := range []string{"http.request.body.read_failed", "http.request.handler_trace", "http.request.completed"} {
+		traceID := strings.TrimSpace(traceByEvent[event])
+		if traceID == "" {
+			t.Fatalf("expected event %s to have non-empty trace_id, got %#v", event, traceByEvent)
+		}
+	}
+	if traceByEvent["http.request.body.read_failed"] != traceByEvent["http.request.completed"] {
+		t.Fatalf("expected read_failed and completed to reuse trace_id, got %#v", traceByEvent)
+	}
+	if traceByEvent["http.request.handler_trace"] != traceByEvent["http.request.completed"] {
+		t.Fatalf("expected handler context trace to match completed trace, got %#v", traceByEvent)
+	}
+}
+
+func parseJSONLogEntries(t *testing.T, content string) []map[string]any {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	entries := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &entry); err != nil {
+			t.Fatalf("parse json log entry %q: %v", trimmed, err)
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
 
 type basicResponseWriter struct {

@@ -346,12 +346,15 @@ func (c *responseCapture) createSpillFile() (*os.File, string, error) {
 func (rt *Runtime) HTTPMiddleware(module string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+		ctx, trace := rt.EnsureTraceContext(req.Context(), "http")
+		req = req.WithContext(ctx)
+
 		recorder := newResponseRecorder(w, rt.payloads, "http-response")
 		writer := wrapResponseWriter(recorder, w)
 
 		requestBody, readErr := readRequestBody(req)
 		if readErr != nil {
-			rt.ForSink(SinkHTTP, module).WithTrace(rt.NewTrace("http")).Warn(
+			rt.ForSink(SinkHTTP, module).WithTrace(trace).Warn(
 				"http.request.body.read_failed",
 				"failed to read http request body",
 				String("method", req.Method),
@@ -375,7 +378,7 @@ func (rt *Runtime) HTTPMiddleware(module string, next http.Handler) http.Handler
 			fields = append(fields, String("response_payload_error", responseErr.Error()))
 		}
 
-		rt.ForSink(SinkHTTP, module).WithTrace(rt.NewTrace("http")).Info(
+		rt.ForSink(SinkHTTP, module).WithTrace(trace).Info(
 			"http.request.completed",
 			"handled http request",
 			fields...,

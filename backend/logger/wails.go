@@ -19,6 +19,7 @@ type FrontendErrorPayload struct {
 	Line    int            `json:"lineno"`
 	Column  int            `json:"colno"`
 	Stack   string         `json:"error"`
+	TraceID string         `json:"traceId"`
 	Extra   map[string]any `json:"extra,omitempty"`
 }
 
@@ -46,7 +47,7 @@ func NormalizeFrontendError(optionalData []interface{}) FrontendErrorPayload {
 	for key, value := range payload.Extra {
 		mergedExtra[key] = value
 	}
-	for _, key := range []string{"page", "route", "message", "source", "lineno", "colno", "error", "extra"} {
+	for _, key := range []string{"page", "route", "message", "source", "lineno", "colno", "error", "traceId", "extra"} {
 		delete(rawPayload, key)
 	}
 	for key, value := range rawPayload {

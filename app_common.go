@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/schema"
@@ -47,12 +48,19 @@ func logFrontendRuntimeError(optionalData []interface{}) {
 
 	payload := logger.NormalizeFrontendError(optionalData)
 	frontendLog := runtimeLogger.ForSink(logger.SinkFrontend, "frontend")
-	trace := runtimeLogger.NewTrace("wails-frontend")
+	trace := logger.TraceContext{
+		TraceID: strings.TrimSpace(payload.TraceID),
+		Source:  "wails-frontend",
+	}
+	if trace.TraceID == "" {
+		trace = runtimeLogger.NewTrace("wails-frontend")
+	}
 
 	if payload.Extra != nil {
 		frontendLog.WithTrace(trace).Error(
 			"frontend.error",
 			"frontend runtime error",
+			logger.String("error_class", "frontend_error"),
 			logger.String("page", payload.Page),
 			logger.String("route", payload.Route),
 			logger.String("error_message", payload.Message),
@@ -68,6 +76,7 @@ func logFrontendRuntimeError(optionalData []interface{}) {
 	frontendLog.WithTrace(trace).Error(
 		"frontend.error",
 		"frontend runtime error",
+		logger.String("error_class", "frontend_error"),
 		logger.String("page", payload.Page),
 		logger.String("route", payload.Route),
 		logger.String("error_message", payload.Message),
