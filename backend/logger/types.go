@@ -28,8 +28,7 @@ type TraceContext struct {
 }
 
 type Runtime struct {
-	sessionID string
-	sinks     map[Sink]*zap.Logger
+	sinks map[Sink]*zap.Logger
 }
 
 type Config struct {
@@ -37,12 +36,11 @@ type Config struct {
 	EnableStdout bool
 }
 
-type Logger struct {
+type ModuleLogger struct {
 	runtime *Runtime
 	sink    Sink
 	module  string
 	trace   TraceContext
-	fields  []zap.Field
 }
 
 var defaultRuntime atomic.Pointer[Runtime]

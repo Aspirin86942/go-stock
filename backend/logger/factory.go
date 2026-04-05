@@ -6,8 +6,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func (r *Runtime) ForSink(sink Sink, module string) *Logger {
-	return &Logger{runtime: r, sink: sink, module: module}
+func (r *Runtime) ForSink(sink Sink, module string) *ModuleLogger {
+	return &ModuleLogger{runtime: r, sink: sink, module: module}
 }
 
 func String(key, value string) zap.Field {
@@ -38,34 +38,25 @@ func Err(err error) zap.Field {
 	return zap.NamedError("error", err)
 }
 
-func (l *Logger) WithTrace(trace TraceContext) *Logger {
+func (l *ModuleLogger) WithTrace(trace TraceContext) *ModuleLogger {
 	clone := *l
 	clone.trace = trace
 	return &clone
 }
 
-func (l *Logger) With(fields ...zap.Field) *Logger {
-	clone := *l
-	if len(fields) == 0 {
-		return &clone
-	}
-	clone.fields = append(append([]zap.Field{}, l.fields...), fields...)
-	return &clone
+func (l *ModuleLogger) Info(event, message string, fields ...zap.Field) {
+	l.base(event).Info(message, fields...)
 }
 
-func (l *Logger) Info(event, message string, fields ...zap.Field) {
-	l.base(event).Info(message, mergeFields(l.fields, fields)...)
+func (l *ModuleLogger) Warn(event, message string, fields ...zap.Field) {
+	l.base(event).Warn(message, fields...)
 }
 
-func (l *Logger) Warn(event, message string, fields ...zap.Field) {
-	l.base(event).Warn(message, mergeFields(l.fields, fields)...)
+func (l *ModuleLogger) Error(event, message string, fields ...zap.Field) {
+	l.base(event).Error(message, fields...)
 }
 
-func (l *Logger) Error(event, message string, fields ...zap.Field) {
-	l.base(event).Error(message, mergeFields(l.fields, fields)...)
-}
-
-func (l *Logger) base(event string) *zap.Logger {
+func (l *ModuleLogger) base(event string) *zap.Logger {
 	return l.runtime.getSinkLogger(l.sink).With(
 		zap.String("module", l.module),
 		zap.String("event", event),
@@ -74,18 +65,4 @@ func (l *Logger) base(event string) *zap.Logger {
 		zap.String("app_session_id", l.trace.AppSessionID),
 		zap.String("source", l.trace.Source),
 	)
-}
-
-func mergeFields(base []zap.Field, extra []zap.Field) []zap.Field {
-	switch {
-	case len(base) == 0:
-		return extra
-	case len(extra) == 0:
-		return base
-	default:
-		merged := make([]zap.Field, 0, len(base)+len(extra))
-		merged = append(merged, base...)
-		merged = append(merged, extra...)
-		return merged
-	}
 }
