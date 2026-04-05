@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -174,6 +175,12 @@ func TestHTTPMiddleware_StreamedPayloadHonorsMaxTotal(t *testing.T) {
 func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
 	buf := &bytes.Buffer{}
 	runtime := newRuntimeForTest(buf)
+	preloadedTrace := TraceContext{
+		TraceID:      "preloaded-trace-id-123",
+		SpanID:       "preloaded-span-id-123",
+		AppSessionID: "preloaded-session-id-123",
+		Source:       "http-test",
+	}
 
 	handler := runtime.HTTPMiddleware("ai-assistant-web", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trace, ok := TraceContextFromContext(r.Context())
@@ -188,7 +195,9 @@ func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/chat/summary-stream", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/summary-stream", nil).WithContext(
+		WithTraceContext(context.Background(), preloadedTrace),
+	)
 	req.Body = errReader{}
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -211,11 +220,10 @@ func TestHTTPMiddleware_ReusesRequestContextTrace(t *testing.T) {
 			t.Fatalf("expected event %s to have non-empty trace_id, got %#v", event, traceByEvent)
 		}
 	}
-	if traceByEvent["http.request.body.read_failed"] != traceByEvent["http.request.completed"] {
-		t.Fatalf("expected read_failed and completed to reuse trace_id, got %#v", traceByEvent)
-	}
-	if traceByEvent["http.request.handler_trace"] != traceByEvent["http.request.completed"] {
-		t.Fatalf("expected handler context trace to match completed trace, got %#v", traceByEvent)
+	for _, event := range []string{"http.request.body.read_failed", "http.request.handler_trace", "http.request.completed"} {
+		if traceByEvent[event] != preloadedTrace.TraceID {
+			t.Fatalf("expected event %s to reuse preloaded trace_id %q, got %#v", event, preloadedTrace.TraceID, traceByEvent[event])
+		}
 	}
 	if errorClassByEvent["http.request.body.read_failed"] != "http_error" {
 		t.Fatalf("expected read_failed to include error_class=http_error, got %#v", errorClassByEvent["http.request.body.read_failed"])
