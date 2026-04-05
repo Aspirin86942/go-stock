@@ -36,6 +36,27 @@ func NormalizeFrontendError(optionalData []interface{}) FrontendErrorPayload {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return FrontendErrorPayload{}
 	}
+
+	var rawPayload map[string]any
+	if err := json.Unmarshal(raw, &rawPayload); err != nil {
+		return payload
+	}
+
+	mergedExtra := make(map[string]any)
+	for key, value := range payload.Extra {
+		mergedExtra[key] = value
+	}
+	for _, key := range []string{"page", "route", "message", "source", "lineno", "colno", "error", "extra"} {
+		delete(rawPayload, key)
+	}
+	for key, value := range rawPayload {
+		mergedExtra[key] = value
+	}
+	if len(mergedExtra) > 0 {
+		payload.Extra = mergedExtra
+	} else {
+		payload.Extra = nil
+	}
 	return payload
 }
 

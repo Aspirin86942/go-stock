@@ -33,6 +33,8 @@ func MustInit(cfg Config) *Runtime {
 	}
 	runtime.AttachPayloadStore(newDefaultPayloadStore(cfg.Paths))
 
+	// 让新 runtime 成为唯一真源，避免 Default()/CoreLogger/SugaredLogger 分叉到不同 sink。
+	initLegacyGlobals(runtime)
 	defaultRuntime.Store(runtime)
 	return runtime
 }

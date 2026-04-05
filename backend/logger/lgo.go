@@ -21,9 +21,7 @@ func InitLogger() {
 		panic(fmt.Sprintf("init app paths for logger: %v", err))
 	}
 
-	runtime := MustInit(DefaultConfig(paths))
-	CoreLogger = runtime.getSinkLogger(SinkApp)
-	initLegacyGlobals(runtime)
+	MustInit(DefaultConfig(paths))
 }
 
 func initLegacyGlobals(runtime *Runtime) {

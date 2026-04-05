@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -92,6 +93,85 @@ func TestNormalizeFrontendError_PreservesRouteAndStack(t *testing.T) {
 	}
 	if payload.Stack != "stack-line-1" {
 		t.Fatalf("expected stack to be preserved, got %#v", payload)
+	}
+}
+
+func TestNormalizeFrontendError_PreservesUnknownTopLevelFieldsInExtra(t *testing.T) {
+	payload := NormalizeFrontendError([]interface{}{
+		map[string]interface{}{
+			"page":      "stock.vue",
+			"route":     "/stock",
+			"message":   "ResizeObserver loop limit exceeded",
+			"error":     "stack-line-1",
+			"component": "StockPanel",
+			"severity":  "warning",
+			"extra": map[string]interface{}{
+				"existing": "value",
+			},
+		},
+	})
+
+	if payload.Extra == nil {
+		t.Fatalf("expected extra fields to be preserved, got %#v", payload)
+	}
+	if payload.Extra["existing"] != "value" {
+		t.Fatalf("expected existing extra fields to be preserved, got %#v", payload.Extra)
+	}
+	if payload.Extra["component"] != "StockPanel" {
+		t.Fatalf("expected unknown top-level field to be merged into extra, got %#v", payload.Extra)
+	}
+	if payload.Extra["severity"] != "warning" {
+		t.Fatalf("expected unknown top-level field to be merged into extra, got %#v", payload.Extra)
+	}
+}
+
+func TestMustInit_RebindsLegacyGlobalsToLatestRuntime(t *testing.T) {
+	previousRuntime := Default()
+	previousCoreLogger := CoreLogger
+	previousSugaredLogger := SugaredLogger
+	t.Cleanup(func() {
+		defaultRuntime.Store(previousRuntime)
+		CoreLogger = previousCoreLogger
+		SugaredLogger = previousSugaredLogger
+	})
+
+	legacyAppBuf := &bytes.Buffer{}
+	legacyErrorBuf := &bytes.Buffer{}
+	initLegacyGlobals(newRuntimeForTestWithSinks(legacyAppBuf, legacyErrorBuf))
+
+	rootDir, err := os.MkdirTemp("", "go-stock-logger-rebind-*")
+	if err != nil {
+		t.Fatalf("create temp dir for latest runtime: %v", err)
+	}
+	logsDir := filepath.Join(rootDir, "logs")
+	latestRuntime := MustInit(Config{
+		Paths: apppath.Paths{
+			RootDir: rootDir,
+			LogsDir: logsDir,
+		},
+		EnableStdout: false,
+	})
+
+	if Default() != latestRuntime {
+		t.Fatalf("expected MustInit to publish latest runtime")
+	}
+
+	CoreLogger.Info("core-to-latest-runtime")
+	SugaredLogger.Infof("sugar-to-latest-runtime")
+
+	appLog, err := os.ReadFile(filepath.Join(logsDir, "app.log"))
+	if err != nil {
+		t.Fatalf("read app log from latest runtime: %v", err)
+	}
+	appLogContent := string(appLog)
+	if !strings.Contains(appLogContent, "core-to-latest-runtime") {
+		t.Fatalf("expected CoreLogger to write to latest runtime sink, got %s", appLogContent)
+	}
+	if !strings.Contains(appLogContent, "sugar-to-latest-runtime") {
+		t.Fatalf("expected SugaredLogger to write to latest runtime sink, got %s", appLogContent)
+	}
+	if strings.Contains(legacyAppBuf.String(), "core-to-latest-runtime") || strings.Contains(legacyAppBuf.String(), "sugar-to-latest-runtime") {
+		t.Fatalf("expected legacy globals to stop writing to previous runtime, got %s", legacyAppBuf.String())
 	}
 }
 
