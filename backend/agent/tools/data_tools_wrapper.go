@@ -24,10 +24,11 @@ import (
 )
 
 type DataToolWrapper struct {
-	name        string
-	description string
-	params      map[string]*schema.ParameterInfo
-	handler     func(args string) (string, error)
+	name           string
+	description    string
+	params         map[string]*schema.ParameterInfo
+	handler        func(args string) (string, error)
+	contextHandler func(ctx context.Context, args string) (string, error)
 }
 
 func NewDataToolWrapper(name, description string, params map[string]*schema.ParameterInfo, handler func(args string) (string, error)) *DataToolWrapper {
@@ -36,6 +37,15 @@ func NewDataToolWrapper(name, description string, params map[string]*schema.Para
 		description: description,
 		params:      params,
 		handler:     handler,
+	}
+}
+
+func NewContextDataToolWrapper(name, description string, params map[string]*schema.ParameterInfo, handler func(ctx context.Context, args string) (string, error)) *DataToolWrapper {
+	return &DataToolWrapper{
+		name:           name,
+		description:    description,
+		params:         params,
+		contextHandler: handler,
 	}
 }
 
@@ -57,7 +67,15 @@ func (t *DataToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON stri
 			logger.String("arguments", argumentsInJSON),
 		)
 	}
-	result, err := t.handler(argumentsInJSON)
+	var (
+		result string
+		err    error
+	)
+	if t.contextHandler != nil {
+		result, err = t.contextHandler(ctx, argumentsInJSON)
+	} else {
+		result, err = t.handler(argumentsInJSON)
+	}
 	if err != nil {
 		if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
 			log.WithTrace(trace).Error(
@@ -873,12 +891,12 @@ func GetAllDataTools() []tool.BaseTool {
 		},
 	))
 
-	tools = append(tools, NewDataToolWrapper(
+	tools = append(tools, NewContextDataToolWrapper(
 		"GetMarketData",
 		"获取市场行情数据，包括指数行情、上涨/下跌/涨停/跌停家数、涨跌分布和今日申购信息",
 		map[string]*schema.ParameterInfo{},
-		func(args string) (string, error) {
-			return getMarketDataContent()
+		func(ctx context.Context, args string) (string, error) {
+			return getMarketDataContent(ctx)
 		},
 	))
 
@@ -2571,7 +2589,7 @@ type APIPurchase struct {
 	LotRate      *float64 `json:"lot_rate"`
 }
 
-func getMarketDataContent() (string, error) {
+func getMarketDataContent(ctx context.Context) (string, error) {
 	client := resty.New()
 	apiURL := "https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6"
 
@@ -2650,7 +2668,7 @@ func getMarketDataContent() (string, error) {
 	}
 
 	if log := toolModuleLogger("agent.tool.data_wrapper"); log != nil {
-		log.WithTrace(toolTrace("tool-market-data")).Info(
+		log.WithTrace(toolTrace(ctx, "tool-market-data")).Info(
 			"tool.market_data.generated",
 			"generated market data content",
 			logger.Int("content_length", content.Len()),

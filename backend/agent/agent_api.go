@@ -351,11 +351,12 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 	return ch
 }
 
-func safeSend(ch chan *schema.Message, msg *schema.Message) {
+func safeSend(ctx context.Context, ch chan *schema.Message, msg *schema.Message) {
+	trace := moduleTrace(ctx, "safe-send")
 	defer func() {
 		if r := recover(); r != nil {
 			if log := aiLogger("agent.api"); log != nil {
-				log.WithTrace(moduleTrace("safe-send")).Error(
+				log.WithTrace(trace).Error(
 					"agent.channel_send_panic",
 					"panic when sending message to channel",
 					logger.String("error_class", "ai_error"),
@@ -368,7 +369,7 @@ func safeSend(ch chan *schema.Message, msg *schema.Message) {
 	case ch <- msg:
 	default:
 		if log := aiLogger("agent.api"); log != nil {
-			log.WithTrace(moduleTrace("safe-send")).Warn(
+			log.WithTrace(trace).Warn(
 				"agent.channel_full",
 				"message channel is full and message was dropped",
 			)
@@ -452,7 +453,7 @@ func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch
 
 			if msg.ReasoningContent != "" {
 				reasoningBuilder.WriteString(msg.ReasoningContent)
-				safeSend(ch, &schema.Message{
+				safeSend(ctx, ch, &schema.Message{
 					Role: schema.Assistant,
 					Content: strutil.ReplaceWithMap(msg.ReasoningContent, map[string]string{
 						"# ":     "\r\n# ",
@@ -493,7 +494,7 @@ func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch
 
 			if msg.Role == schema.Assistant && msg.Content != "" {
 				contentBuilder.WriteString(msg.Content)
-				safeSend(ch, &schema.Message{
+				safeSend(ctx, ch, &schema.Message{
 					Role: schema.Assistant,
 					Content: strutil.ReplaceWithMap(msg.Content, map[string]string{
 						"# ":     "\r\n# ",
@@ -516,7 +517,7 @@ func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch
 					logger.String("content", reasoningBuilder.String()),
 				)
 			}
-			safeSend(ch, &schema.Message{
+			safeSend(ctx, ch, &schema.Message{
 				Role:    schema.Assistant,
 				Content: "\r\n",
 			})
@@ -534,7 +535,7 @@ func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch
 							logger.String("arguments", builder.String()),
 						)
 					}
-					safeSend(ch, &schema.Message{
+					safeSend(ctx, ch, &schema.Message{
 						Role:    schema.Assistant,
 						Content: fmt.Sprintf("\r\n```\r\n开始调用工具： %s(%s)\r\n```\r\n", name, builder.String()),
 					})
@@ -551,7 +552,7 @@ func processMessageFuture(ctx context.Context, msgFuture react.MessageFuture, ch
 					logger.String("content", truncateString(toolResult.content, 300)),
 				)
 			}
-			safeSend(ch, &schema.Message{
+			safeSend(ctx, ch, &schema.Message{
 				Role:    schema.Assistant,
 				Content: "\r\n",
 			})
