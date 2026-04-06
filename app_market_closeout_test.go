@@ -292,10 +292,14 @@ func TestApp_MarketLegacyReadsDelegateToService(t *testing.T) {
 	if got := app.GetStockEastMoneyKLinePageResult("sz000001", "平安银行", "101", 500, "20260401"); !reflect.DeepEqual(got, legacy.eastMoneyKLinePageResult) {
 		t.Fatalf("GetStockEastMoneyKLinePageResult() mismatch, got=%#v want=%#v", got, legacy.eastMoneyKLinePageResult)
 	}
-	if got := app.GetStockRealtimePrice("sz000001"); !reflect.DeepEqual(got, legacy.realtimePrice) {
-		t.Fatalf("GetStockRealtimePrice() mismatch, got=%#v want=%#v", got, legacy.realtimePrice)
+	if got := app.GetStockRealTimePrice("sz000001"); !reflect.DeepEqual(got, map[string]any{
+		"code":    0,
+		"message": "success",
+		"price":   12.34,
+		"name":    "平安银行",
+	}) {
+		t.Fatalf("GetStockRealTimePrice() mismatch, got=%#v", got)
 	}
-
 	if legacy.lastLongTigerDate != "2026-04-01" {
 		t.Fatalf("LongTigerRank() arg mismatch, got=%q", legacy.lastLongTigerDate)
 	}

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  loadRealtimePrice,
   normalizeMarketFeeds,
   normalizeMarketFeed,
   normalizeMarketIndexes,
@@ -263,4 +264,39 @@ test('normalizeRealtimePrice 缺失价格时保留稳定字段', () => {
       time: '',
     },
   );
+});
+
+test('loadRealtimePrice 走旧版 GetStockRealTimePrice 绑定', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    go: {
+      main: {
+        App: {
+          GetStockRealTimePrice: async (stockCode) => ({
+            stockCode,
+            stockName: '平安银行',
+            price: '12.34',
+          }),
+        },
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await loadRealtimePrice('sz000001'), {
+      stockCode: 'sz000001',
+      stockName: '平安银行',
+      price: '12.34',
+      bid: '',
+      ask: '',
+      open: '',
+      high: '',
+      low: '',
+      preClose: '',
+      date: '',
+      time: '',
+    });
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

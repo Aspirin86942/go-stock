@@ -1982,13 +1982,6 @@ func (a *App) GetStockEastMoneyKLinePageResult(stockCode, stockName string, klt 
 	return marketservice.EastMoneyKLinePageResult{Data: []data.KLineData{}}
 }
 
-func (a *App) GetStockRealtimePrice(stockCode string) marketservice.RealtimePrice {
-	if service := a.legacyMarketReads(); service != nil {
-		return service.LoadRealtimePrice(stockCode)
-	}
-	return marketservice.RealtimePrice{StockCode: stockCode}
-}
-
 func (a *App) GetMarketFeeds() marketservice.FeedSet {
 	return a.marketReadService.LoadFeeds()
 }

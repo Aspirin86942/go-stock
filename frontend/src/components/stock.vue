@@ -9,9 +9,7 @@ import {
   GetConfig,
   GetFollowList,
   GetGroupList,
-  GetStockKLine,
   GetStockList,
-  GetStockMinutePriceLineData,
   GetVersionInfo,
   Greet,
   InitializeGroupSort,
@@ -75,6 +73,10 @@ import {
   shareAnalysis,
   startStockAnalysis,
 } from "../services/analysisService.mjs";
+import {
+  loadMinutePriceLine,
+  loadStockKLine,
+} from "../services/marketService.mjs";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 import { normalizeFollowStockCode, resolveFollowStockCode } from "../utils/stockCode.mjs";
 
@@ -986,7 +988,7 @@ function showFsChart(code, name) {
   data.name = name
   data.code = code
   const chart = echarts.init(kLineChartRef2.value);
-  GetStockMinutePriceLineData(code, name).then(result => {
+  loadMinutePriceLine(code, name).then(result => {
     // console.log("GetStockMinutePriceLineData", result)
     const priceData = result.priceData
     let category = []
@@ -1250,7 +1252,7 @@ function calculateMA(dayCount, values) {
 }
 
 function handleKLine() {
-  GetStockKLine(data.code, data.name, 365).then(result => {
+  loadStockKLine(data.code, data.name, 365).then(result => {
     //console.log("GetStockKLine",result)
     const chart = echarts.init(kLineChartRef.value);
     const categoryData = [];

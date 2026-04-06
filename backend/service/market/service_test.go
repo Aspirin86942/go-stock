@@ -402,6 +402,19 @@ func TestService_LoadRealtimePriceFallsBackThroughBidLevels(t *testing.T) {
 	if price.Price != "12.34" {
 		t.Fatalf("expected fallback price from bid ladder, got %+v", price)
 	}
+
+	preCloseSvc := NewService(&fakeSource{
+		realtimePrice: &data.StockInfo{
+			Code:     "sz000002",
+			Name:     "万科A",
+			PreClose: "21.08",
+		},
+	})
+
+	preClosePrice := preCloseSvc.LoadRealtimePrice("sz000002")
+	if preClosePrice.Price != "21.08" {
+		t.Fatalf("expected fallback price from pre-close, got %+v", preClosePrice)
+	}
 }
 
 func TestService_LoadHotTopicsReturnsEmptySliceWhenSourceReturnsNil(t *testing.T) {

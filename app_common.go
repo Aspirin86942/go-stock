@@ -456,29 +456,20 @@ func (a *App) GetAllConcepts() []string {
 }
 
 func (a *App) GetStockRealTimePrice(stockCode string) map[string]any {
-	stockDatas, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
-	if err != nil || stockDatas == nil || len(*stockDatas) == 0 {
+	service := a.legacyMarketReads()
+	if service == nil {
 		return map[string]any{
 			"code":    -1,
 			"message": "获取股票价格失败",
 			"price":   0,
 		}
 	}
-	stock := (*stockDatas)[0]
+	stock := service.LoadRealtimePrice(stockCode)
 	price, _ := convertor.ToFloat(stock.Price)
-	if price == 0 {
-		price, _ = convertor.ToFloat(stock.A1P)
-	}
-	if price == 0 {
-		price, _ = convertor.ToFloat(stock.B1P)
-	}
-	if price == 0 {
-		price, _ = convertor.ToFloat(stock.PreClose)
-	}
 	return map[string]any{
 		"code":    0,
 		"message": "success",
 		"price":   price,
-		"name":    stock.Name,
+		"name":    stock.StockName,
 	}
 }

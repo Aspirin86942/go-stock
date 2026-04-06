@@ -401,6 +401,7 @@ func (s *Service) LoadRealtimePrice(stockCode string) RealtimePrice {
 			raw.A3P,
 			raw.A4P,
 			raw.A5P,
+			raw.PreClose,
 		),
 		Bid:      raw.Bid,
 		Ask:      raw.Ask,

@@ -13,11 +13,6 @@ function toObject(value) {
   return value && typeof value === 'object' ? value : {};
 }
 
-function getAppBinding(name) {
-  const binding = AppBindings?.[name] ?? globalThis?.window?.go?.main?.App?.[name];
-  return typeof binding === 'function' ? binding : null;
-}
-
 export function normalizeMarketFeeds(value) {
   const data = value ?? {};
   return {
@@ -268,9 +263,5 @@ export async function loadEastMoneyKLinePageResult(stockCode, stockName, klt, li
 }
 
 export async function loadRealtimePrice(stockCode) {
-  const binding = getAppBinding('GetStockRealtimePrice');
-  if (!binding) {
-    return normalizeRealtimePrice({ stockCode });
-  }
-  return normalizeRealtimePrice(await binding(stockCode));
+  return normalizeRealtimePrice(await AppBindings.GetStockRealTimePrice(stockCode));
 }
