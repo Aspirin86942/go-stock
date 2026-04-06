@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
@@ -128,7 +129,7 @@ func (s *Service) DeletePromptTemplate(ctx context.Context, id uint) string {
 
 // parseHistory 把 JSON 字符串解码成用于回放的历史条目。
 func parseHistory(raw string) ([]map[string]interface{}, error) {
-	if raw == "" {
+	if strings.TrimSpace(raw) == "" {
 		return nil, nil
 	}
 	var items []models.AiAssistantMessage

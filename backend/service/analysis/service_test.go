@@ -310,6 +310,16 @@ func TestMapChunksHandlesNil(t *testing.T) {
 	}
 }
 
+func TestParseHistoryTreatsWhitespaceAsEmpty(t *testing.T) {
+	history, err := parseHistory("   \n\t")
+	if err != nil {
+		t.Fatalf("expected no error for blank history, got %v", err)
+	}
+	if history != nil {
+		t.Fatalf("expected nil history, got %#v", history)
+	}
+}
+
 func toEventChannel(items []map[string]any) <-chan map[string]any {
 	ch := make(chan map[string]any, len(items))
 	for _, item := range items {
