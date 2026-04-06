@@ -2,6 +2,7 @@ package analysis
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go-stock/backend/models"
@@ -27,8 +28,9 @@ func (f *fakeStreams) MarketSummaryStream(ctx context.Context, request MarketSum
 }
 
 type fakeResults struct {
-	latest *models.AIResponseResult
-	page   *models.AIResponseResultPageData
+	latest  *models.AIResponseResult
+	page    *models.AIResponseResultPageData
+	pageErr error
 
 	savedStockCode string
 	savedStockName string
@@ -55,6 +57,9 @@ func (f *fakeResults) GetLatestResult(ctx context.Context, stockCode string) *mo
 }
 
 func (f *fakeResults) GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error) {
+	if f.pageErr != nil {
+		return nil, f.pageErr
+	}
 	return f.page, nil
 }
 
@@ -75,6 +80,7 @@ type fakePrompts struct {
 	deletedID     uint
 	saveResult    string
 	deleteResult  string
+	pageErr       error
 }
 
 func (f *fakePrompts) GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate {
@@ -82,6 +88,9 @@ func (f *fakePrompts) GetPromptTemplates(ctx context.Context, name, promptType s
 }
 
 func (f *fakePrompts) GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error) {
+	if f.pageErr != nil {
+		return nil, f.pageErr
+	}
 	return f.page, nil
 }
 
@@ -174,11 +183,26 @@ func TestService_ReadAndPromptMethodsDelegateToStores(t *testing.T) {
 func TestService_StartStreamsDelegateAndParseHistory(t *testing.T) {
 	streams := &fakeStreams{
 		stockEvents: []map[string]any{
-			{"chatId": "stock-1", "question": "怎么看", "content": "第一段"},
+			{
+				"chatId":            "stock-1",
+				"question":          "怎么看",
+				"content":           "第一段",
+				"reasoning_content": "stock reasoning",
+				"tool_calls": []map[string]any{
+					{"id": "call-1", "type": "function"},
+				},
+			},
 		},
 		marketEvents: []map[string]any{
 			{"chatId": "summary-1", "question": "总结市场", "content": "市场第一段"},
-			{"extraContent": "市场第二段", "model": "deepseek-chat", "time": "2026-04-06 10:00:00"},
+			{
+				"extraContent": "市场第二段",
+				"model":        "deepseek-chat",
+				"time":         "2026-04-06 10:00:00",
+				"tool_calls": []map[string]any{
+					{"id": "call-2", "function": map[string]any{"name": "tool"}},
+				},
+			},
 		},
 	}
 	svc := NewService(streams, &fakeResults{}, &fakePrompts{})
@@ -197,6 +221,18 @@ func TestService_StartStreamsDelegateAndParseHistory(t *testing.T) {
 	if len(streams.stockRequests) != 1 || streams.stockRequests[0].StockCode != "000001.SZ" {
 		t.Fatalf("unexpected stock request capture: %#v", streams.stockRequests)
 	}
+	if !streams.stockRequests[0].EnableTools || !streams.stockRequests[0].Think {
+		t.Fatalf("enable/think flags not preserved: %#v", streams.stockRequests[0])
+	}
+	if streams.stockRequests[0].AIConfigID != 3 || streams.stockRequests[0].Question != "怎么看" {
+		t.Fatalf("unexpected stock request details: %#v", streams.stockRequests[0])
+	}
+	if stockChunks[0].ReasoningContent != "stock reasoning" {
+		t.Fatalf("reasoning_content missing: %#v", stockChunks[0])
+	}
+	if len(stockChunks[0].ToolCalls) != 1 || stockChunks[0].ToolCalls[0]["id"] != "call-1" {
+		t.Fatalf("tool_calls missing: %#v", stockChunks[0])
+	}
 
 	marketChunks := collectChunks(svc.StartMarketSummary(context.Background(), MarketSummaryRequest{
 		Question:    "总结市场",
@@ -208,11 +244,69 @@ func TestService_StartStreamsDelegateAndParseHistory(t *testing.T) {
 	if len(marketChunks) != 2 || marketChunks[1].ExtraContent != "市场第二段" {
 		t.Fatalf("unexpected market chunks: %#v", marketChunks)
 	}
+	if len(marketChunks[1].ToolCalls) != 1 || marketChunks[1].ToolCalls[0]["id"] != "call-2" {
+		t.Fatalf("market tool calls missing: %#v", marketChunks[1])
+	}
 	if len(streams.marketHistory) != 1 {
 		t.Fatalf("unexpected market history: %#v", streams.marketHistory)
 	}
 	if got := streams.marketHistory[0]["reasoning_content"]; got != "旧推理" {
 		t.Fatalf("unexpected reasoning_content: %#v", got)
+	}
+}
+
+func TestService_GetResultPagePropagatesError(t *testing.T) {
+	expected := errors.New("boom")
+	svc := NewService(&fakeStreams{}, &fakeResults{pageErr: expected}, &fakePrompts{})
+	if _, err := svc.GetResultPage(context.Background(), models.AIResponseResultQuery{}); !errors.Is(err, expected) {
+		t.Fatalf("expected error, got %v", err)
+	}
+}
+
+func TestService_GetPromptTemplatePagePropagatesError(t *testing.T) {
+	expected := errors.New("boom")
+	svc := NewService(&fakeStreams{}, &fakeResults{}, &fakePrompts{pageErr: expected})
+	if _, err := svc.GetPromptTemplatePage(context.Background(), models.PromptTemplateQuery{}); !errors.Is(err, expected) {
+		t.Fatalf("expected error, got %v", err)
+	}
+}
+
+func TestService_GetPromptTemplatesHandlesNilSource(t *testing.T) {
+	svc := NewService(&fakeStreams{}, &fakeResults{}, &fakePrompts{templates: nil})
+	got := svc.GetPromptTemplates(context.Background(), "", "")
+	if got == nil {
+		t.Fatalf("expected non-nil template slice")
+	}
+	if len(*got) != 0 {
+		t.Fatalf("expected empty slice when source returns nil, got %#v", got)
+	}
+}
+
+func TestService_StartMarketSummaryInvalidHistory(t *testing.T) {
+	streams := &fakeStreams{
+		marketEvents: []map[string]any{
+			{"chatId": "summary-1", "content": "段落"},
+		},
+	}
+	svc := NewService(streams, &fakeResults{}, &fakePrompts{})
+	chunks := collectChunks(svc.StartMarketSummary(context.Background(), MarketSummaryRequest{
+		Question:    "总结市场",
+		AIConfigID:  1,
+		EnableTools: false,
+		Think:       false,
+		HistoryJSON: "{bad",
+	}))
+	if len(chunks) != 1 {
+		t.Fatalf("expected chunk despite invalid history, got %#v", chunks)
+	}
+	if len(streams.marketHistory) != 0 {
+		t.Fatalf("history should not be replayed on parse failure: %#v", streams.marketHistory)
+	}
+}
+
+func TestMapChunksHandlesNil(t *testing.T) {
+	if got := collectChunks(mapChunks(nil)); len(got) != 0 {
+		t.Fatalf("expected empty slice for nil stream, got %#v", got)
 	}
 }
 

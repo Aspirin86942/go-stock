@@ -18,7 +18,7 @@ type MarketSummaryRequest struct {
 	SysPromptID *int   `json:"sysPromptId"`
 	EnableTools bool   `json:"enableTools"`
 	Think       bool   `json:"think"`
-	HistoryJSON string `json:"historyJson"`
+	HistoryJSON string `json:"historyJSON"`
 }
 
 // StreamChunk is a normalized event consumed by the callers.
@@ -29,4 +29,6 @@ type StreamChunk struct {
 	ExtraContent string `json:"extraContent"`
 	Model        string `json:"model"`
 	Time         string `json:"time"`
+	ReasoningContent string               `json:"reasoning_content"`
+	ToolCalls        []map[string]any     `json:"tool_calls"`
 }
