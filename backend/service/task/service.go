@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,6 +24,7 @@ type Store interface {
 	CalculateNextRunTime(expr string) time.Time
 	CalculateNextRunTimes(expr string, count int) []time.Time
 	Search(keyword string) []models.CronTask
+	GetAllEnabled() []models.CronTask
 }
 
 type Scheduler interface {
@@ -182,4 +184,19 @@ func (s *Service) CalculateNextRunTime(ctx context.Context, cronExpr string) tim
 func (s *Service) CalculateNextRunTimes(ctx context.Context, cronExpr string, count int) []time.Time {
 	_ = ctx
 	return s.store.CalculateNextRunTimes(cronExpr, count)
+}
+
+func (s *Service) RestoreSchedules(ctx context.Context) error {
+	_ = ctx
+
+	tasks := s.store.GetAllEnabled()
+	errs := make([]error, 0)
+	for i := range tasks {
+		task := tasks[i]
+		if err := s.syncSchedule(&task); err != nil {
+			errs = append(errs, fmt.Errorf("restore task %d (%s): %w", task.ID, task.Name, err))
+		}
+	}
+
+	return errors.Join(errs...)
 }

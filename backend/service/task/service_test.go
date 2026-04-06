@@ -13,6 +13,7 @@ import (
 
 type fakeStore struct {
 	task        *models.CronTask
+	enabled     []models.CronTask
 	page        *models.CronTaskPageResp
 	createErr   error
 	updateErr   error
@@ -102,9 +103,14 @@ func (f *fakeStore) Search(keyword string) []models.CronTask {
 	return f.search
 }
 
+func (f *fakeStore) GetAllEnabled() []models.CronTask {
+	return f.enabled
+}
+
 type fakeScheduler struct {
 	registeredKey  string
 	registeredSpec string
+	registered     []string
 	unregistered   []string
 	registerErr    error
 }
@@ -112,6 +118,7 @@ type fakeScheduler struct {
 func (f *fakeScheduler) Register(key, spec string, job func()) error {
 	f.registeredKey = key
 	f.registeredSpec = spec
+	f.registered = append(f.registered, key)
 	return f.registerErr
 }
 
@@ -176,5 +183,26 @@ func TestService_ValidateCronExprPropagatesFailure(t *testing.T) {
 
 	if msg := svc.ValidateCronExpr(context.Background(), "*"); msg == "有效表达式" {
 		t.Fatalf("expected validation failure, got %q", msg)
+	}
+}
+
+func TestService_RestoreSchedulesUsesStableKeysForEnabledTasks(t *testing.T) {
+	store := &fakeStore{
+		enabled: []models.CronTask{
+			{ID: 21, Name: "市场分析", CronExpr: "0 */5 * * * *", Enable: true},
+			{ID: 22, Name: "个股分析", CronExpr: "0 */10 * * * *", Enable: true},
+		},
+	}
+	scheduler := &fakeScheduler{}
+	svc := NewService(store, scheduler, context.Background)
+
+	if err := svc.RestoreSchedules(context.Background()); err != nil {
+		t.Fatalf("unexpected restore error: %v", err)
+	}
+	if len(scheduler.registered) != 2 {
+		t.Fatalf("expected 2 registered tasks, got %#v", scheduler.registered)
+	}
+	if scheduler.registered[0] != "cron-task-21" || scheduler.registered[1] != "cron-task-22" {
+		t.Fatalf("unexpected registered keys: %#v", scheduler.registered)
 	}
 }

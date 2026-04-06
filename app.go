@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"go-stock/backend/agent"
 	"go-stock/backend/agent/tools"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
@@ -106,6 +105,7 @@ type taskService interface {
 	Search(ctx context.Context, keyword string) []models.CronTask
 	CalculateNextRunTime(ctx context.Context, cronExpr string) time.Time
 	CalculateNextRunTimes(ctx context.Context, cronExpr string, count int) []time.Time
+	RestoreSchedules(ctx context.Context) error
 }
 
 type legacyPromptBridge interface {
@@ -2152,26 +2152,8 @@ func (a *App) FetchAiModels(baseUrl, apiKey string) []string {
 
 // InitCronTasks 在应用启动时，自动为启用状态的定时任务创建调度
 func (a *App) InitCronTasks() {
-	tasks := agent.NewCronTaskApi().GetAll()
-	if len(tasks) == 0 {
-		return
-	}
-	for _, t := range tasks {
-		// 避免闭包捕获循环变量
-		taskCopy := t
-		entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
-			err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
-			if err != nil {
-				appError("init-cron-tasks", "cron.task_start_failed", "execute initial cron task failed", logger.String("task_name", taskCopy.Name), logger.Err(err))
-				return
-			}
-		})
-		if err != nil {
-			appError("init-cron-tasks", "cron.task_add_failed", "auto create cron task failed", logger.String("task_name", taskCopy.Name), logger.Err(err))
-			continue
-		}
-		a.setCronEntry(convertor.ToString(taskCopy.ID)+"_"+taskCopy.Name, entryID)
-		//logger.SugaredLogger.Infof("自动创建定时任务成功：%s (ID:%d) entryID:%v", taskCopy.Name, taskCopy.ID, entryID)
+	if err := a.taskService.RestoreSchedules(a.ctx); err != nil {
+		appError("init-cron-tasks", "cron.task_restore_failed", "restore cron tasks failed", logger.Err(err))
 	}
 }
 

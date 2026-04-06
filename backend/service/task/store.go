@@ -63,3 +63,7 @@ func (s *AgentStore) CalculateNextRunTimes(expr string, count int) []time.Time {
 func (s *AgentStore) Search(keyword string) []models.CronTask {
 	return agent.NewCronTaskApi().SearchTasks(keyword)
 }
+
+func (s *AgentStore) GetAllEnabled() []models.CronTask {
+	return agent.NewCronTaskApi().GetAll()
+}

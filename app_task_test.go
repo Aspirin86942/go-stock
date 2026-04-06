@@ -17,6 +17,7 @@ type fakeTaskService struct {
 	enableResult string
 	validateResp string
 	runErr       error
+	restoreErr   error
 	task         *models.CronTask
 	page         *models.CronTaskPageResp
 	types        []lo.Tuple2[string, string]
@@ -33,6 +34,7 @@ type fakeTaskService struct {
 	nextRunExpr  string
 	nextRunsExpr string
 	nextRunsCnt  int
+	restoreCalled bool
 }
 
 func (f *fakeTaskService) Create(ctx context.Context, task *models.CronTask) string {
@@ -98,6 +100,11 @@ func (f *fakeTaskService) CalculateNextRunTimes(ctx context.Context, cronExpr st
 		time.Date(2026, 4, 6, 10, 0, 0, 0, time.Local),
 		time.Date(2026, 4, 6, 10, 5, 0, 0, time.Local),
 	}
+}
+
+func (f *fakeTaskService) RestoreSchedules(ctx context.Context) error {
+	f.restoreCalled = true
+	return f.restoreErr
 }
 
 func TestApp_TaskMethodsDelegateToTaskService(t *testing.T) {
@@ -176,5 +183,17 @@ func TestApp_TaskMethodsDelegateToTaskService(t *testing.T) {
 
 	if got := app.CalculateNextRunTimes("0 */5 * * * *", 2); len(got) != 2 || got[1] != "2026-04-06 10:05:00" || fake.nextRunsExpr != "0 */5 * * * *" || fake.nextRunsCnt != 2 {
 		t.Fatalf("unexpected next run times: got=%#v expr=%q count=%d", got, fake.nextRunsExpr, fake.nextRunsCnt)
+	}
+}
+
+func TestApp_InitCronTasksDelegatesToTaskService(t *testing.T) {
+	app := NewApp()
+	fake := &fakeTaskService{}
+	app.taskService = fake
+
+	app.InitCronTasks()
+
+	if !fake.restoreCalled {
+		t.Fatal("expected InitCronTasks to delegate to taskService")
 	}
 }
