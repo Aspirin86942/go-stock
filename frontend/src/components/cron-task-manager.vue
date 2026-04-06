@@ -488,17 +488,17 @@ import {
   TimeOutline
 } from '@vicons/ionicons5'
 import {
-  CreateCronTask,
-  UpdateCronTask,
-  DeleteCronTask,
-  GetCronTaskByID,
-  GetCronTaskList,
-  EnableCronTask,
-  ExecuteCronTaskNow,
-  GetCronTaskTypes,
-  ValidateCronExpr,
-  CalculateNextRunTimes,
-} from '../../wailsjs/go/main/App'
+  calculateNextRunTimes as loadNextRunTimes,
+  createCronTask,
+  deleteCronTask,
+  executeCronTaskNow,
+  loadCronTask,
+  loadCronTaskList,
+  loadCronTaskTypes,
+  toggleCronTask,
+  updateCronTask,
+  validateCronExpression,
+} from '../services/taskService.mjs'
 import {
   loadAiConfigs,
   loadPromptTemplates,
@@ -851,7 +851,7 @@ watch([
   }
 
   // 预览未来最近 5 次执行时间
-  CalculateNextRunTimes(generatedCronExpr.value, 5)
+  loadNextRunTimes(generatedCronExpr.value, 5)
     .then(res => {
       nextRunTimes.value = Array.isArray(res) ? res : []
       calculateNextRunTime.value = nextRunTimes.value[0] || ''
@@ -1063,7 +1063,7 @@ const pagination = computed(() => ({
 // 加载任务类型
 const loadTaskTypes = async () => {
   try {
-    const types = await GetCronTaskTypes()
+    const types = await loadCronTaskTypes()
     taskTypeOptions.value = types.map(t => ({
       label: t.B,
       value: t.A
@@ -1078,7 +1078,6 @@ const aiConfigOptions=ref([])
 const loadAiConfigsForTask = async () => {
   try {
     const configs = await loadAiConfigs()
-    console.log('aiConfigOptions', configs)
     aiConfigOptions.value = configs.map(c => ({
       label: c.name+"["+c.modelName+"]",
       value: c.ID
@@ -1122,11 +1121,9 @@ const loadTaskList = async () => {
       status: filterStatus.value
     }
     
-    const result = await GetCronTaskList(query)
-    if (result) {
-      taskList.value = result.data || []
-      total.value = result.total || 0
-    }
+    const result = await loadCronTaskList(query)
+    taskList.value = result.data || []
+    total.value = result.total || 0
   } catch (error) {
     console.error('加载任务列表失败:', error)
     message.error('加载任务列表失败')
@@ -1156,7 +1153,7 @@ const handlePageSizeChange = (size) => {
 // 执行任务
 const handleExecute = async (row) => {
   try {
-    const result = await ExecuteCronTaskNow(row.id)
+    const result = await executeCronTaskNow(row.id)
     message.success(result)
   } catch (error) {
     message.error('执行任务失败：' + error.message)
@@ -1167,7 +1164,7 @@ const handleExecute = async (row) => {
 const handleToggleEnable = async (row) => {
   try {
     const newEnable = !row.enable
-    const result = await EnableCronTask(row.id, newEnable)
+    const result = await toggleCronTask(row.id, newEnable)
     if (result === '操作成功') {
       message.success(newEnable ? '任务已启用' : '任务已禁用')
       await loadTaskList()
@@ -1190,8 +1187,7 @@ const handleCreate = () => {
 const handleEdit = async (row) => {
   editingTask.value = true
   try {
-    const task = await GetCronTaskByID(row.id)
-    console.log("task",task)
+    const task = await loadCronTask(row.id)
     if (task) {
       // 先重置表单和 Cron 配置器
       resetForm()
@@ -1199,8 +1195,7 @@ const handleEdit = async (row) => {
       // 然后填充表单数据
       formData.id = task.id
       formData.name = task.name
-      // 兼容后端返回 cronExpr 或 CronExpr
-      formData.cronExpr = (task.cronExpr ?? task.CronExpr ?? '').trim()
+      formData.cronExpr = (task.cronExpr ?? '').trim()
       formData.taskType = task.taskType
       formData.target = task.target
       formData.params = task.params
@@ -1211,7 +1206,6 @@ const handleEdit = async (row) => {
       // 解析 Cron 表达式并回填到配置器
       parseCronExpression(formData.cronExpr)
 
-      console.log("task.params",task.params)
       // 如果是股票分析任务，解析参数到表单
       if (task.taskType === 'stock_analysis' && task.params) {
         try {
@@ -1250,7 +1244,7 @@ const handleEdit = async (row) => {
 // 删除任务
 const handleDelete = async (id) => {
   try {
-    const result = await DeleteCronTask(id)
+    const result = await deleteCronTask(id)
     if (result === '删除成功') {
       message.success('任务已删除')
       await loadTaskList()
@@ -1266,7 +1260,7 @@ const handleDelete = async (id) => {
 const checkCronInterval = async (cronExpr) => {
   if (!cronExpr) return { ok: true }
   try {
-    const times = await CalculateNextRunTimes(cronExpr, 10)
+    const times = await loadNextRunTimes(cronExpr, 10)
     if (!Array.isArray(times) || times.length < 2) return { ok: true }
     let minSeconds = Infinity
     for (let i = 1; i < times.length; i++) {
@@ -1300,7 +1294,7 @@ const handleSubmit = async () => {
     }
 
     // 简单验证 Cron 表达式
-    if (!await validateCronExpression()) {
+    if (!await validateCronExpressionUI()) {
       return
     }
 
@@ -1320,9 +1314,9 @@ const handleSubmit = async () => {
     
     let result
     if (formData.id) {
-      result = await UpdateCronTask(submitData)
+      result = await updateCronTask(submitData)
     } else {
-      result = await CreateCronTask(submitData)
+      result = await createCronTask(submitData)
     }
 
     if (result.includes('成功')) {
@@ -1340,11 +1334,11 @@ const handleSubmit = async () => {
 }
 
 // 验证 Cron 表达式
-const validateCronExpression = async () => {
+const validateCronExpressionUI = async () => {
   if (!formData.cronExpr) return false
   
   try {
-    const result = await ValidateCronExpr(formData.cronExpr)
+    const result = await validateCronExpression(formData.cronExpr)
     if (result.includes('有效')) {
       //message.success('Cron 表达式有效')
       return true
