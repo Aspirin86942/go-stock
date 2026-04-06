@@ -98,19 +98,6 @@ type legacyPromptBridge interface {
 	DeletePromptTemplate(ctx context.Context, id uint) string
 }
 
-func safeConfigCall[T any](call func() T) (result T, ok bool) {
-	ok = true
-	defer func() {
-		if recover() != nil {
-			var zero T
-			result = zero
-			ok = false
-		}
-	}()
-	result = call()
-	return
-}
-
 func (a *App) legacyPromptBridge() legacyPromptBridge {
 	if a.analysisService == nil {
 		return nil
@@ -120,6 +107,19 @@ func (a *App) legacyPromptBridge() legacyPromptBridge {
 		return nil
 	}
 	return bridge
+}
+
+func (a *App) shouldFallbackToLegacyPromptBridge() bool {
+	if a.configService == nil {
+		return true
+	}
+	if _, isDefaultConfigService := a.configService.(*configservice.Service); !isDefaultConfigService {
+		return false
+	}
+	if db.Dao != nil {
+		return false
+	}
+	return a.legacyPromptBridge() != nil
 }
 
 const (
@@ -1708,12 +1708,8 @@ func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 }
 
 func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	if a.configService != nil {
-		if templates, ok := safeConfigCall(func() *[]models.PromptTemplate {
-			return a.configService.GetPromptTemplates(a.ctx, name, promptType)
-		}); ok {
-			return templates
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.GetPromptTemplates(a.ctx, name, promptType)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.GetPromptTemplates(a.ctx, name, promptType)
@@ -1722,12 +1718,8 @@ func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTempla
 	return &empty
 }
 func (a *App) AddPrompt(prompt models.Prompt) string {
-	if a.configService != nil {
-		if message, ok := safeConfigCall(func() string {
-			return a.configService.SaveLegacyPrompt(a.ctx, prompt)
-		}); ok {
-			return message
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.SaveLegacyPrompt(a.ctx, prompt)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.SavePromptTemplate(a.ctx, models.PromptTemplate{
@@ -1740,12 +1732,8 @@ func (a *App) AddPrompt(prompt models.Prompt) string {
 	return "保存失败"
 }
 func (a *App) DelPrompt(id uint) string {
-	if a.configService != nil {
-		if message, ok := safeConfigCall(func() string {
-			return a.configService.DeleteLegacyPrompt(a.ctx, id)
-		}); ok {
-			return message
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.DeleteLegacyPrompt(a.ctx, id)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.DeletePromptTemplate(a.ctx, id)

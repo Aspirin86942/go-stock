@@ -323,17 +323,12 @@ func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
 }
 
 func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.PromptTemplatePageData {
-	if a.configService != nil {
-		page, ok := safeConfigCall(func() *models.PromptTemplatePageData {
-			result, err := a.configService.GetPromptTemplatePage(a.ctx, query)
-			if err != nil {
-				return nil
-			}
-			return result
-		})
-		if ok && page != nil {
-			return page
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		page, err := a.configService.GetPromptTemplatePage(a.ctx, query)
+		if err != nil {
+			return &models.PromptTemplatePageData{}
 		}
+		return page
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		page, err := legacy.GetPromptTemplatePage(a.ctx, query)
@@ -345,12 +340,8 @@ func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.Pr
 }
 
 func (a *App) AddPromptTemplate(template models.PromptTemplate) string {
-	if a.configService != nil {
-		if message, ok := safeConfigCall(func() string {
-			return a.configService.SavePromptTemplate(a.ctx, template)
-		}); ok {
-			return message
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.SavePromptTemplate(a.ctx, template)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.SavePromptTemplate(a.ctx, template)
@@ -359,12 +350,8 @@ func (a *App) AddPromptTemplate(template models.PromptTemplate) string {
 }
 
 func (a *App) UpdatePromptTemplate(template models.PromptTemplate) string {
-	if a.configService != nil {
-		if message, ok := safeConfigCall(func() string {
-			return a.configService.SavePromptTemplate(a.ctx, template)
-		}); ok {
-			return message
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.SavePromptTemplate(a.ctx, template)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.SavePromptTemplate(a.ctx, template)
@@ -373,12 +360,8 @@ func (a *App) UpdatePromptTemplate(template models.PromptTemplate) string {
 }
 
 func (a *App) DeletePromptTemplate(id uint) string {
-	if a.configService != nil {
-		if message, ok := safeConfigCall(func() string {
-			return a.configService.DeletePromptTemplate(a.ctx, id)
-		}); ok {
-			return message
-		}
+	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
+		return a.configService.DeletePromptTemplate(a.ctx, id)
 	}
 	if legacy := a.legacyPromptBridge(); legacy != nil {
 		return legacy.DeletePromptTemplate(a.ctx, id)

@@ -318,18 +318,28 @@ func TestApp_PromptMethodsFallbackToLegacyAnalysisServiceWhenConfigServiceNil(t 
 	}
 
 	prompt := models.Prompt{ID: 9, Name: "legacy prompt", Type: "模型用户Prompt", Content: "A"}
-	if msg := app.AddPrompt(prompt); msg != "legacy-prompt-saved" {
-		t.Fatalf("AddPrompt() should fallback to SaveLegacyPrompt, got=%q", msg)
+	if msg := app.AddPrompt(prompt); msg != "legacy-template-saved" {
+		t.Fatalf("AddPrompt() should fallback to SavePromptTemplate mapping, got=%q", msg)
 	}
-	if legacy.saveLegacyCalled != 1 || legacy.legacySavedPrompt != prompt {
-		t.Fatalf("AddPrompt() legacy call mismatch: called=%d prompt=%#v", legacy.saveLegacyCalled, legacy.legacySavedPrompt)
+	if legacy.saveTemplateCalled != 1 {
+		t.Fatalf("AddPrompt() should call legacy SavePromptTemplate once, got=%d", legacy.saveTemplateCalled)
+	}
+	lastTemplate := legacy.legacySavedTemplate
+	if lastTemplate.ID != prompt.ID || lastTemplate.Name != prompt.Name || lastTemplate.Content != prompt.Content || lastTemplate.Type != prompt.Type {
+		t.Fatalf("AddPrompt() should map Prompt -> PromptTemplate, got=%#v prompt=%#v", lastTemplate, prompt)
+	}
+	if legacy.saveLegacyCalled != 0 {
+		t.Fatalf("AddPrompt() should not call SaveLegacyPrompt in legacy fallback, got=%d", legacy.saveLegacyCalled)
 	}
 
-	if msg := app.DelPrompt(77); msg != "legacy-prompt-deleted" {
-		t.Fatalf("DelPrompt() should fallback to DeleteLegacyPrompt, got=%q", msg)
+	if msg := app.DelPrompt(77); msg != "legacy-template-deleted" {
+		t.Fatalf("DelPrompt() should fallback to DeletePromptTemplate, got=%q", msg)
 	}
-	if legacy.deleteLegacyCalled != 1 || legacy.legacyDeletedPrompt != 77 {
-		t.Fatalf("DelPrompt() legacy call mismatch: called=%d id=%d", legacy.deleteLegacyCalled, legacy.legacyDeletedPrompt)
+	if legacy.deleteTemplateCalled != 1 || legacy.legacyDeletedTmplID != 77 {
+		t.Fatalf("DelPrompt() should call legacy DeletePromptTemplate with id, called=%d id=%d", legacy.deleteTemplateCalled, legacy.legacyDeletedTmplID)
+	}
+	if legacy.deleteLegacyCalled != 0 {
+		t.Fatalf("DelPrompt() should not call DeleteLegacyPrompt in legacy fallback, got=%d", legacy.deleteLegacyCalled)
 	}
 
 	query := models.PromptTemplateQuery{Page: 1, PageSize: 10}
@@ -347,13 +357,13 @@ func TestApp_PromptMethodsFallbackToLegacyAnalysisServiceWhenConfigServiceNil(t 
 	if msg := app.UpdatePromptTemplate(template); msg != "legacy-template-saved" {
 		t.Fatalf("UpdatePromptTemplate() should fallback to legacy SavePromptTemplate, got=%q", msg)
 	}
-	if legacy.saveTemplateCalled != 2 {
-		t.Fatalf("legacy SavePromptTemplate should be called twice, got=%d", legacy.saveTemplateCalled)
+	if legacy.saveTemplateCalled != 3 {
+		t.Fatalf("legacy SavePromptTemplate should be called three times (AddPrompt/AddPromptTemplate/UpdatePromptTemplate), got=%d", legacy.saveTemplateCalled)
 	}
 	if msg := app.DeletePromptTemplate(11); msg != "legacy-template-deleted" {
 		t.Fatalf("DeletePromptTemplate() should fallback to legacy DeletePromptTemplate, got=%q", msg)
 	}
-	if legacy.deleteTemplateCalled != 1 || legacy.legacyDeletedTmplID != 11 {
+	if legacy.deleteTemplateCalled != 2 || legacy.legacyDeletedTmplID != 11 {
 		t.Fatalf("DeletePromptTemplate() legacy call mismatch: called=%d id=%d", legacy.deleteTemplateCalled, legacy.legacyDeletedTmplID)
 	}
 }
