@@ -1,15 +1,14 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
 import {
-  GetAiRecommendStocksList,
-  GetConfig,
-  DeleteAiRecommendStocks,
-  UpdateAiRecommendStocksAlert,
-  ShareAnalysis
-} from "../../wailsjs/go/main/App";
+  deleteAiRecommendStock as DeleteAiRecommendStocks,
+  loadAiRecommendPage as GetAiRecommendStocksList,
+  updateAiRecommendStockAlert as UpdateAiRecommendStocksAlert,
+} from "../services/researchService.mjs";
 import {NAvatar, NButton, NEllipsis, NSwitch, NTag, NText, useMessage, useNotification} from "naive-ui";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 import sparkLine from "./stockSparkLine.vue"
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
 
 const notify = useNotification()
 

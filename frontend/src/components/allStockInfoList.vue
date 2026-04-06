@@ -1,12 +1,11 @@
 <script setup>
 import { h, onBeforeMount, onMounted, ref, reactive } from 'vue'
 import {
-  GetAllStockInfoList,
-  GetAllMarkets,
-  GetAllIndustries,
-  GetAllConcepts,
-  GetConfig
-} from "../../wailsjs/go/main/App";
+  loadAllConcepts as GetAllConcepts,
+  loadAllIndustries as GetAllIndustries,
+  loadAllMarkets as GetAllMarkets,
+  loadAllStockInfoPage as GetAllStockInfoList,
+} from "../services/researchService.mjs";
 import {
   NButton,
   NInput,
@@ -25,6 +24,7 @@ import {
   NFormItem
 } from "naive-ui";
 import sparkLine from "./stockSparkLine.vue"
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
 
 const notify = useNotification()
 const message = useMessage()

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"go-stock/backend/agent/tools"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -17,11 +16,13 @@ import (
 	contractservice "go-stock/backend/service/contract"
 	marketservice "go-stock/backend/service/market"
 	notificationservice "go-stock/backend/service/notification"
+	researchservice "go-stock/backend/service/research"
 	taskservice "go-stock/backend/service/task"
 	watchlistservice "go-stock/backend/service/watchlist"
 	analysissource "go-stock/backend/source/analysis"
 	marketsource "go-stock/backend/source/marketnews"
 	notificationsource "go-stock/backend/source/notification"
+	researchsource "go-stock/backend/source/research"
 	watchlistsource "go-stock/backend/source/watchlist"
 	"os"
 	"path/filepath"
@@ -68,6 +69,7 @@ type App struct {
 	taskService           taskService
 	notificationService   notificationService
 	watchlistService      watchlistService
+	researchService       researchService
 	saveFileDialog        func(ctx context.Context, options runtime.SaveDialogOptions) (string, error)
 	writeFile             func(name string, data []byte, perm os.FileMode) error
 	shareAnalysisUploader func(artifact analysisservice.ResultArtifact) (string, error)
@@ -166,6 +168,49 @@ type watchlistService interface {
 	SaveStockAICron(ctx context.Context, cronText, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError)
 	ListScheduledStocks(ctx context.Context) []watchlistservice.ScheduledStock
 	RunScheduledAnalysis(ctx context.Context, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError)
+	Follow(ctx context.Context, stockCode string) string
+	Unfollow(ctx context.Context, stockCode string) string
+	GetFollowList(ctx context.Context, groupID int) []data.FollowedStock
+	SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string
+	SetTradingPrice(ctx context.Context, stockCode string, entryPrice, takeProfitPrice, stopLossPrice, costPrice float64) string
+	SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string
+	SetStockSort(ctx context.Context, stockCode string, sort int64)
+	ListGroups(ctx context.Context) []data.Group
+	AddGroup(ctx context.Context, group data.Group) string
+	UpdateGroupSort(ctx context.Context, id int, newSort int) bool
+	InitializeGroupSort(ctx context.Context) bool
+	ListGroupStocks(ctx context.Context, groupID int) []data.GroupStock
+	AddGroupStock(ctx context.Context, groupID int, stockCode string) string
+	RemoveGroupStock(ctx context.Context, stockCode, name string, groupID int) string
+	RemoveGroup(ctx context.Context, groupID int) string
+	EvaluateCostAlerts(ctx context.Context, now time.Time) []notificationservice.Delivery
+}
+
+type researchService interface {
+	GetStockChanges(ctx context.Context, changeTypes []int, pageIndex, pageSize int) *data.StockChangesResponse
+	GetAllStockChangesWithPaging(ctx context.Context, pageSize int) *data.StockChangesResponse
+	GetStockChangeHistory(ctx context.Context, query models.StockChangeHistoryQuery) *models.StockChangeHistoryPageData
+	SaveStockChangesToHistory(ctx context.Context, changeTypes []int) string
+	DeleteStockChangeHistory(ctx context.Context, days int) string
+	GetAiRecommendPage(ctx context.Context, query models.AiRecommendStocksQuery) *models.AiRecommendStocksPageData
+	DeleteAiRecommend(ctx context.Context, id uint) string
+	SetAiRecommendAlert(ctx context.Context, id uint, enable bool) string
+	GetAllStockInfoPage(ctx context.Context, query data.AllStockInfoQuery) *data.AllStockInfoPageData
+	GetAllStockInfoByID(ctx context.Context, id uint) *models.AllStockInfo
+	AddAllStockInfo(ctx context.Context, stock models.AllStockInfo) string
+	DeleteAllStockInfo(ctx context.Context, id uint) string
+	BatchDeleteAllStockInfo(ctx context.Context, ids []uint) string
+	GetAllMarkets(ctx context.Context) []string
+	GetAllIndustries(ctx context.Context) []string
+	GetAllConcepts(ctx context.Context) []string
+	GetTradingRecordList(ctx context.Context, query data.TradingRecordListQuery) *data.TradingRecordPageData
+	AddTradingRecord(ctx context.Context, record data.TradingRecord) (uint, error)
+	GetTradingRecordByID(ctx context.Context, id uint) (*data.TradingRecord, error)
+	GetTradingRecordStatistics(ctx context.Context) *data.TradingRecordStatistics
+	UpdateTradingRecord(ctx context.Context, record data.TradingRecord) error
+	DeleteTradingRecord(ctx context.Context, id uint) error
+	CheckFrequentTrading(ctx context.Context, stockCode string) researchservice.FrequentTradingCheck
+	EvaluateAiRecommendAlerts(ctx context.Context, now time.Time) []notificationservice.Delivery
 }
 
 func (a *App) residualMarketReads() marketResidualReadService {
@@ -221,6 +266,7 @@ func NewApp() *App {
 	analysisStore := analysissource.NewStore()
 	analysisSvc := analysisservice.NewService(analysisProvider, analysisStore, analysisStore)
 	configSvc := configservice.NewService(configservice.NewStore())
+	researchSvc := researchservice.NewService(researchsource.NewStore())
 	app := &App{
 		cache:                 cache,
 		cron:                  c,
@@ -233,6 +279,7 @@ func NewApp() *App {
 		configService:         configSvc,
 		notificationService:   notificationservice.NewService(cache, notificationsource.NewAdapter()),
 		watchlistService:      watchlistservice.NewService(watchlistsource.NewStore(), analysisSvc),
+		researchService:       researchSvc,
 		saveFileDialog:        runtime.SaveFileDialog,
 		writeFile:             os.WriteFile,
 		shareAnalysisUploader: uploadSharedAnalysis,
@@ -1045,6 +1092,10 @@ func MonitorFundPrices(a *App) {
 
 // MonitorAiRecommendStockPrices 监控 AI 推荐股票的价格，当股价达到预警线时发送通知
 func MonitorAiRecommendStockPrices(a *App) {
+	if a.researchService == nil {
+		return
+	}
+
 	isAStockOpen := isTradingTime(time.Now())
 	isHKStockOpen := IsHKTradingTime(time.Now())
 	isUSStockOpen := IsUSTradingTime(time.Now())
@@ -1054,150 +1105,15 @@ func MonitorAiRecommendStockPrices(a *App) {
 		return
 	}
 
-	var aiRecommendStocks []models.AiRecommendStocks
-	db.Dao.Model(&models.AiRecommendStocks{}).Where("enable_alert = ?", true).Find(&aiRecommendStocks)
-
-	if len(aiRecommendStocks) == 0 {
-		return
-	}
-
-	stockCodes := make([]string, 0)
-	stockCodeMap := make(map[string]*models.AiRecommendStocks)
-	for i := range aiRecommendStocks {
-		stock := &aiRecommendStocks[i]
-		stopLossPrice, _ := convertor.ToFloat(stock.RecommendStopLossPrice)
-		if stock.RecommendBuyPriceMin <= 0 && stock.RecommendStopProfitPriceMin <= 0 && stopLossPrice <= 0 {
-			continue
-		}
-		stockCodes = append(stockCodes, tools.GetStockCode(stock.StockCode))
-		stockCodeMap[tools.GetStockCode(stock.StockCode)] = stock
-	}
-
-	if len(stockCodes) == 0 {
-		appInfo("monitor-ai-recommend-stock-prices", "stock.ai_recommend_monitor_empty", "skip ai recommend stock price monitor because no alert price is configured")
-		return
-	}
-
-	stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
-	if err != nil || stockData == nil || len(*stockData) == 0 {
-		appError("monitor-ai-recommend-stock-prices", "stock.ai_recommend_realtime_failed", "get ai recommend stock realtime data failed", logger.Err(err))
-		return
-	}
-
-	for _, stockInfo := range *stockData {
-		aiStock, ok := stockCodeMap[tools.GetStockCode(stockInfo.Code)]
-		if !ok {
-			continue
-		}
-
-		currentPrice, _ := convertor.ToFloat(stockInfo.Price)
-		if currentPrice <= 0 {
-			continue
-		}
-
-		baseAlertKey := fmt.Sprintf("%s:%s", aiStock.StockCode, aiStock.DataTime.Format("20060102"))
-
-		buyAlertKey := baseAlertKey + ":BUY"
-		if aiStock.RecommendBuyPriceMin > 0 && currentPrice <= aiStock.RecommendBuyPriceMin {
-			priceSinceLastBuyAlert := a.getPriceAtAlertReset(buyAlertKey)
-			if priceSinceLastBuyAlert == 0 || priceSinceLastBuyAlert > aiStock.RecommendBuyPriceMin {
-				title := fmt.Sprintf("【买入预警】%s", aiStock.StockName)
-				content := fmt.Sprintf("## %s\n\n- **股票代码**: %s\n- **当前价格**: %.2f\n- **建议买入价**: %.2f - %.2f\n- **推荐时间**: %s",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendBuyPriceMin, aiStock.RecommendBuyPriceMax,
-					aiStock.DataTime.Format("2006-01-02 15:04:05"))
-				plainContent := fmt.Sprintf("%s(%s)\n当前价格: %.2f\n建议买入价: %.2f-%.2f",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendBuyPriceMin, aiStock.RecommendBuyPriceMax)
-				if a.canSendAlert(buyAlertKey, 5*time.Minute) {
-					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
-					go data.NewDingDingAPI().SendToDingDing(title, content)
-					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
-						"time":    title,
-						"isRed":   true,
-						"source":  "go-stock",
-						"content": plainContent,
-					})
-					a.updateAlertSentTime(buyAlertKey)
-					a.updatePriceAtAlertReset(buyAlertKey, currentPrice)
-				}
-			} else {
-				a.updatePriceAtAlertReset(buyAlertKey, currentPrice)
-			}
-		} else {
-			priceSinceLastBuyAlert := a.getPriceAtAlertReset(buyAlertKey)
-			if currentPrice > aiStock.RecommendBuyPriceMin && (priceSinceLastBuyAlert == 0 || currentPrice > priceSinceLastBuyAlert) {
-				a.updatePriceAtAlertReset(buyAlertKey, currentPrice)
-			}
-		}
-
-		profitAlertKey := baseAlertKey + ":PROFIT"
-		if aiStock.RecommendStopProfitPriceMin > 0 && currentPrice >= aiStock.RecommendStopProfitPriceMin {
-			priceSinceLastProfitAlert := a.getPriceAtAlertReset(profitAlertKey)
-			if priceSinceLastProfitAlert == 0 || priceSinceLastProfitAlert < aiStock.RecommendStopProfitPriceMin {
-				title := fmt.Sprintf("【止盈预警】%s", aiStock.StockName)
-				content := fmt.Sprintf("## %s\n\n- **股票代码**: %s\n- **当前价格**: %.2f\n- **建议止盈价**: %.2f - %.2f\n- **推荐时间**: %s",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendStopProfitPriceMin, aiStock.RecommendStopProfitPriceMax,
-					aiStock.DataTime.Format("2006-01-02 15:04:05"))
-				plainContent := fmt.Sprintf("%s(%s)\n当前价格: %.2f\n建议止盈价: %.2f-%.2f",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendStopProfitPriceMin, aiStock.RecommendStopProfitPriceMax)
-				if a.canSendAlert(profitAlertKey, 5*time.Minute) {
-					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
-					go data.NewDingDingAPI().SendToDingDing(title, content)
-					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
-						"time":    title,
-						"isRed":   true,
-						"source":  "go-stock",
-						"content": plainContent,
-					})
-					a.updateAlertSentTime(profitAlertKey)
-					a.updatePriceAtAlertReset(profitAlertKey, currentPrice)
-				}
-			} else {
-				a.updatePriceAtAlertReset(profitAlertKey, currentPrice)
-			}
-		} else {
-			priceSinceLastProfitAlert := a.getPriceAtAlertReset(profitAlertKey)
-			if currentPrice < aiStock.RecommendStopProfitPriceMin && (priceSinceLastProfitAlert == 0 || currentPrice < priceSinceLastProfitAlert) {
-				a.updatePriceAtAlertReset(profitAlertKey, currentPrice)
-			}
-		}
-
-		stopLossAlertKey := baseAlertKey + ":LOSS"
-		stopLossPrice, _ := convertor.ToFloat(aiStock.RecommendStopLossPrice)
-		if stopLossPrice > 0 && currentPrice <= stopLossPrice {
-			priceSinceLastLossAlert := a.getPriceAtAlertReset(stopLossAlertKey)
-			if priceSinceLastLossAlert == 0 || priceSinceLastLossAlert > stopLossPrice {
-				title := fmt.Sprintf("【止损预警】%s", aiStock.StockName)
-				content := fmt.Sprintf("## %s\n\n- **股票代码**: %s\n- **当前价格**: %.2f\n- **建议止损价**: %s\n- **推荐时间**: %s",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendStopLossPrice,
-					aiStock.DataTime.Format("2006-01-02 15:04:05"))
-				plainContent := fmt.Sprintf("%s(%s)\n当前价格: %.2f\n建议止损价: %s",
-					aiStock.StockName, aiStock.StockCode, currentPrice, aiStock.RecommendStopLossPrice)
-				if a.canSendAlert(stopLossAlertKey, 5*time.Minute) {
-					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
-					go data.NewDingDingAPI().SendToDingDing(title, content)
-					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
-						"time":    title,
-						"isRed":   true,
-						"source":  "go-stock",
-						"content": plainContent,
-					})
-					a.updateAlertSentTime(stopLossAlertKey)
-					a.updatePriceAtAlertReset(stopLossAlertKey, currentPrice)
-				}
-			} else {
-				a.updatePriceAtAlertReset(stopLossAlertKey, currentPrice)
-			}
-		} else {
-			priceSinceLastLossAlert := a.getPriceAtAlertReset(stopLossAlertKey)
-			if currentPrice > stopLossPrice && (priceSinceLastLossAlert == 0 || currentPrice > priceSinceLastLossAlert) {
-				a.updatePriceAtAlertReset(stopLossAlertKey, currentPrice)
-			}
-		}
-	}
+	a.dispatchNotificationDeliveries(a.researchService.EvaluateAiRecommendAlerts(a.ctx, time.Now()))
 }
 
 // MonitorFollowedStockCostPrices 监控自选股的持仓成本价，当股价低于成本价时发送预警
 func MonitorFollowedStockCostPrices(a *App) {
+	if a.watchlistService == nil {
+		return
+	}
+
 	isAStockOpen := isTradingTime(time.Now())
 	isHKStockOpen := IsHKTradingTime(time.Now())
 	isUSStockOpen := IsUSTradingTime(time.Now())
@@ -1207,114 +1123,7 @@ func MonitorFollowedStockCostPrices(a *App) {
 		return
 	}
 
-	var followedStocks []data.FollowedStock
-	db.Dao.Model(&data.FollowedStock{}).Where("cost_price > 0").Find(&followedStocks)
-
-	if len(followedStocks) == 0 {
-		return
-	}
-
-	stockCodes := make([]string, 0)
-	stockMap := make(map[string]*data.FollowedStock)
-	for i := range followedStocks {
-		stock := &followedStocks[i]
-		stockCodes = append(stockCodes, tools.GetStockCode(stock.StockCode))
-		stockMap[tools.GetStockCode(stock.StockCode)] = stock
-	}
-
-	stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
-	if err != nil || stockData == nil || len(*stockData) == 0 {
-		appError("monitor-followed-stock-cost-prices", "stock.cost_realtime_failed", "get followed stock realtime data failed", logger.Err(err))
-		return
-	}
-
-	for _, stockInfo := range *stockData {
-		followedStock, ok := stockMap[tools.GetStockCode(stockInfo.Code)]
-		if !ok {
-			continue
-		}
-
-		currentPrice, _ := convertor.ToFloat(stockInfo.Price)
-		if currentPrice <= 0 {
-			continue
-		}
-
-		costPrice := followedStock.CostPrice
-		if costPrice <= 0 {
-			continue
-		}
-
-		alertKey := fmt.Sprintf("COST:%s:%s", followedStock.StockCode, followedStock.Time.Format("20060102"))
-
-		if currentPrice < costPrice {
-			priceSinceLastAlert := a.getPriceAtAlertReset(alertKey)
-			if priceSinceLastAlert == 0 || priceSinceLastAlert >= costPrice {
-				dropPercent := ((costPrice - currentPrice) / costPrice) * 100
-				title := fmt.Sprintf("【成本价预警】%s", followedStock.Name)
-				content := fmt.Sprintf("## %s\n\n- **股票代码**: %s\n- **当前价格**: %.2f\n- **持仓成本价**: %.2f\n- **亏损比例**: %.2f%%\n- **关注时间**: %s",
-					followedStock.Name, followedStock.StockCode, currentPrice, costPrice, dropPercent,
-					followedStock.Time.Format("2006-01-02 15:04:05"))
-				plainContent := fmt.Sprintf("%s(%s)\n当前价格: %.2f\n成本价: %.2f\n亏损: %.2f%%",
-					followedStock.Name, followedStock.StockCode, currentPrice, costPrice, dropPercent)
-				if a.canSendAlert(alertKey, 5*time.Minute) {
-					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
-					go data.NewDingDingAPI().SendToDingDing(title, content)
-					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
-						"time":    title,
-						"isRed":   true,
-						"source":  "go-stock",
-						"content": plainContent,
-					})
-					a.updateAlertSentTime(alertKey)
-					a.updatePriceAtAlertReset(alertKey, currentPrice)
-				}
-			} else {
-				a.updatePriceAtAlertReset(alertKey, currentPrice)
-			}
-		} else {
-			priceSinceLastAlert := a.getPriceAtAlertReset(alertKey)
-			if currentPrice >= costPrice && (priceSinceLastAlert == 0 || currentPrice < priceSinceLastAlert) {
-				a.updatePriceAtAlertReset(alertKey, currentPrice)
-			}
-		}
-	}
-}
-
-// canSendAlert 检查是否可以发送预警，避免重复发送
-// alertKey: 预警的唯一标识
-// interval: 发送间隔
-// 返回 true 表示可以发送，false 表示需要在间隔后才能发送
-func (a *App) canSendAlert(alertKey string, interval time.Duration) bool {
-	a.stockAlertMu.Lock()
-	defer a.stockAlertMu.Unlock()
-
-	lastSent, exists := a.stockAlertLastSent[alertKey]
-	if !exists {
-		return true
-	}
-
-	return time.Since(lastSent) >= interval
-}
-
-// updateAlertSentTime 更新预警发送时间
-func (a *App) updateAlertSentTime(alertKey string) {
-	a.stockAlertMu.Lock()
-	defer a.stockAlertMu.Unlock()
-	a.stockAlertLastSent[alertKey] = time.Now()
-}
-
-// getPriceAtAlertReset 获取预警重置后的价格（用于判断是否需要重新触发预警）
-func (a *App) getPriceAtAlertReset(alertKey string) float64 {
-	a.stockAlertMu.Lock()
-	defer a.stockAlertMu.Unlock()
-	return a.priceAtAlertReset[alertKey]
-}
-
-// updatePriceAtAlertReset 更新预警重置后的价格
-func (a *App) updatePriceAtAlertReset(alertKey string, price float64) {
-	a.stockAlertMu.Lock()
-	defer a.stockAlertMu.Unlock()
-	a.priceAtAlertReset[alertKey] = price
+	a.dispatchNotificationDeliveries(a.watchlistService.EvaluateCostAlerts(a.ctx, time.Now()))
 }
 
 func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
@@ -1473,15 +1282,26 @@ func (a *App) Greet(stockCode string) *data.StockInfo {
 }
 
 func (a *App) Follow(stockCode string) string {
-	return data.NewStockDataApi().Follow(stockCode)
+	if a.watchlistService == nil {
+		return "操作失败"
+	}
+	return a.watchlistService.Follow(a.ctx, stockCode)
 }
 
 func (a *App) UnFollow(stockCode string) string {
-	return data.NewStockDataApi().UnFollow(stockCode)
+	if a.watchlistService == nil {
+		return "操作失败"
+	}
+	return a.watchlistService.Unfollow(a.ctx, stockCode)
 }
 
 func (a *App) GetFollowList(groupId int) *[]data.FollowedStock {
-	return data.NewStockDataApi().GetFollowList(groupId)
+	if a.watchlistService == nil {
+		empty := []data.FollowedStock{}
+		return &empty
+	}
+	list := a.watchlistService.GetFollowList(a.ctx, groupId)
+	return &list
 }
 
 func (a *App) GetStockList(key string) []data.StockBasic {
@@ -1489,18 +1309,30 @@ func (a *App) GetStockList(key string) []data.StockBasic {
 }
 
 func (a *App) SetCostPriceAndVolume(stockCode string, price float64, volume int64) string {
-	return data.NewStockDataApi().SetCostPriceAndVolume(price, volume, stockCode)
+	if a.watchlistService == nil {
+		return "操作失败"
+	}
+	return a.watchlistService.SetCostPriceAndVolume(a.ctx, stockCode, price, volume)
 }
 
 func (a *App) SetTradingPrice(stockCode string, entryPrice, takeProfitPrice, stopLossPrice, costPrice float64) string {
-	return data.NewStockDataApi().SetTradingPrice(entryPrice, takeProfitPrice, stopLossPrice, costPrice, stockCode)
+	if a.watchlistService == nil {
+		return "操作失败"
+	}
+	return a.watchlistService.SetTradingPrice(a.ctx, stockCode, entryPrice, takeProfitPrice, stopLossPrice, costPrice)
 }
 
 func (a *App) SetAlarmChangePercent(val, alarmPrice float64, stockCode string) string {
-	return data.NewStockDataApi().SetAlarmChangePercent(val, alarmPrice, stockCode)
+	if a.watchlistService == nil {
+		return "操作失败"
+	}
+	return a.watchlistService.SetAlarmChangePercent(a.ctx, stockCode, val, alarmPrice)
 }
 func (a *App) SetStockSort(sort int64, stockCode string) {
-	data.NewStockDataApi().SetStockSort(sort, stockCode)
+	if a.watchlistService == nil {
+		return
+	}
+	a.watchlistService.SetStockSort(a.ctx, stockCode, sort)
 }
 func (a *App) SendDingDingMessage(message string, stockCode string) string {
 	if a.notificationService == nil {
@@ -1535,6 +1367,16 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 		})
 	}
 	return result.DingResult
+}
+
+func (a *App) dispatchNotificationDeliveries(deliveries []notificationservice.Delivery) {
+	for _, delivery := range deliveries {
+		msgType, err := convertor.ToInt(delivery.EventContent)
+		if err != nil || msgType <= 0 {
+			continue
+		}
+		a.SendDingDingMessageByType(delivery.DingResult, delivery.EventTitle, int(msgType))
+	}
 }
 
 func (a *App) NewChatStream(stock, stockCode, question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool) {
@@ -1868,54 +1710,58 @@ func (a *App) SetStockAICron(cronText, stockCode string) {
 	a.registerStockAICron(result.StockCode, result.Cron)
 }
 func (a *App) AddGroup(group data.Group) string {
-	ok := data.NewStockGroupApi(db.Dao).AddGroup(group)
-	if ok {
-		return "添加成功"
-	} else {
+	if a.watchlistService == nil {
 		return "添加失败"
 	}
+	return a.watchlistService.AddGroup(a.ctx, group)
 }
 func (a *App) GetGroupList() []data.Group {
-	return data.NewStockGroupApi(db.Dao).GetGroupList()
+	if a.watchlistService == nil {
+		return []data.Group{}
+	}
+	return a.watchlistService.ListGroups(a.ctx)
 }
 
 func (a *App) UpdateGroupSort(id int, newSort int) bool {
-	return data.NewStockGroupApi(db.Dao).UpdateGroupSort(id, newSort)
+	if a.watchlistService == nil {
+		return false
+	}
+	return a.watchlistService.UpdateGroupSort(a.ctx, id, newSort)
 }
 
 func (a *App) InitializeGroupSort() bool {
-	return data.NewStockGroupApi(db.Dao).InitializeGroupSort()
+	if a.watchlistService == nil {
+		return false
+	}
+	return a.watchlistService.InitializeGroupSort(a.ctx)
 }
 
 func (a *App) GetGroupStockList(groupId int) []data.GroupStock {
-	return data.NewStockGroupApi(db.Dao).GetGroupStockByGroupId(groupId)
+	if a.watchlistService == nil {
+		return []data.GroupStock{}
+	}
+	return a.watchlistService.ListGroupStocks(a.ctx, groupId)
 }
 
 func (a *App) AddStockGroup(groupId int, stockCode string) string {
-	ok := data.NewStockGroupApi(db.Dao).AddStockGroup(groupId, stockCode)
-	if ok {
-		return "添加成功"
-	} else {
+	if a.watchlistService == nil {
 		return "添加失败"
 	}
+	return a.watchlistService.AddGroupStock(a.ctx, groupId, stockCode)
 }
 
 func (a *App) RemoveStockGroup(code, name string, groupId int) string {
-	ok := data.NewStockGroupApi(db.Dao).RemoveStockGroup(code, name, groupId)
-	if ok {
-		return "移除成功"
-	} else {
+	if a.watchlistService == nil {
 		return "移除失败"
 	}
+	return a.watchlistService.RemoveGroupStock(a.ctx, code, name, groupId)
 }
 
 func (a *App) RemoveGroup(groupId int) string {
-	ok := data.NewStockGroupApi(db.Dao).RemoveGroup(groupId)
-	if ok {
-		return "移除成功"
-	} else {
+	if a.watchlistService == nil {
 		return "移除失败"
 	}
+	return a.watchlistService.RemoveGroup(a.ctx, groupId)
 }
 
 func (a *App) GetStockKLine(stockCode, stockName string, days int64) *[]data.KLineData {
@@ -2412,16 +2258,18 @@ func (a *App) CalculateNextRunTimes(cron string, count int) []string {
 //   - uint: 新添加的交易记录ID
 //   - error: 错误信息
 func (a *App) AddTradingRecord(record data.TradingRecord) (uint, error) {
-	return data.NewStockDataApi().AddTradingRecord(record)
+	if a.researchService == nil {
+		return 0, nil
+	}
+	return a.researchService.AddTradingRecord(a.ctx, record)
 }
 
 // GetTradingRecordList 获取交易记录列表（分页与筛选，返回结构与 AI 推荐列表一致）
 func (a *App) GetTradingRecordList(query data.TradingRecordListQuery) *data.TradingRecordPageData {
-	page, err := data.NewStockDataApi().GetTradingRecordList(query)
-	if err != nil {
+	if a.researchService == nil {
 		return &data.TradingRecordPageData{}
 	}
-	return page
+	return a.researchService.GetTradingRecordList(a.ctx, query)
 }
 
 // GetTradingRecordById 根据ID获取单个交易记录
@@ -2432,7 +2280,10 @@ func (a *App) GetTradingRecordList(query data.TradingRecordListQuery) *data.Trad
 //   - *data.TradingRecord: 交易记录指针
 //   - error: 错误信息
 func (a *App) GetTradingRecordById(id uint) (*data.TradingRecord, error) {
-	return data.NewStockDataApi().GetTradingRecordById(id)
+	if a.researchService == nil {
+		return &data.TradingRecord{}, nil
+	}
+	return a.researchService.GetTradingRecordByID(a.ctx, id)
 }
 
 // GetTradingRecordStatistics 获取交易记录统计数据
@@ -2440,11 +2291,10 @@ func (a *App) GetTradingRecordById(id uint) (*data.TradingRecord, error) {
 // 返回值:
 //   - *data.TradingRecordStatistics: 统计数据指针
 func (a *App) GetTradingRecordStatistics() *data.TradingRecordStatistics {
-	stats, err := data.NewStockDataApi().GetTradingRecordStatistics()
-	if err != nil {
+	if a.researchService == nil {
 		return &data.TradingRecordStatistics{}
 	}
-	return stats
+	return a.researchService.GetTradingRecordStatistics(a.ctx)
 }
 
 // UpdateTradingRecord 更新交易记录
@@ -2454,7 +2304,10 @@ func (a *App) GetTradingRecordStatistics() *data.TradingRecordStatistics {
 // 返回值:
 //   - error: 错误信息
 func (a *App) UpdateTradingRecord(record data.TradingRecord) error {
-	return data.NewStockDataApi().UpdateTradingRecord(record)
+	if a.researchService == nil {
+		return nil
+	}
+	return a.researchService.UpdateTradingRecord(a.ctx, record)
 }
 
 // DeleteTradingRecord 删除交易记录
@@ -2464,7 +2317,10 @@ func (a *App) UpdateTradingRecord(record data.TradingRecord) error {
 // 返回值:
 //   - error: 错误信息
 func (a *App) DeleteTradingRecord(id uint) error {
-	return data.NewStockDataApi().DeleteTradingRecord(id)
+	if a.researchService == nil {
+		return nil
+	}
+	return a.researchService.DeleteTradingRecord(a.ctx, id)
 }
 
 // CheckFrequentTrading 检查是否频繁交易
@@ -2474,9 +2330,15 @@ func (a *App) DeleteTradingRecord(id uint) error {
 // 返回值:
 //   - map[string]any: 包含 canTrade (bool) 和 msg (string)
 func (a *App) CheckFrequentTrading(stockCode string) map[string]any {
-	canTrade, msg := data.NewStockDataApi().CheckFrequentTrading(stockCode)
+	if a.researchService == nil {
+		return map[string]any{
+			"canTrade": true,
+			"msg":      "",
+		}
+	}
+	result := a.researchService.CheckFrequentTrading(a.ctx, stockCode)
 	return map[string]any{
-		"canTrade": canTrade,
-		"msg":      msg,
+		"canTrade": result.CanTrade,
+		"msg":      result.Message,
 	}
 }

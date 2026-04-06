@@ -2,32 +2,6 @@
 import {computed, h, nextTick, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import * as echarts from 'echarts';
 import {
-  AddGroup,
-  AddStockGroup,
-  Follow,
-  GetAiConfigs,
-  GetConfig,
-  GetFollowList,
-  GetGroupList,
-  GetStockList,
-  GetVersionInfo,
-  Greet,
-  InitializeGroupSort,
-  OpenURL,
-  RemoveGroup,
-  RemoveStockGroup,
-  SaveImage,
-  SaveWordFile,
-  SendDingDingMessageByType,
-  SetAlarmChangePercent,
-  SetCostPriceAndVolume,
-  SetStockAICron,
-  SetStockSort,
-  SetTradingPrice,
-  UnFollow,
-  UpdateGroupSort
-} from '../../wailsjs/go/main/App'
-import {
   NAvatar,
   NButton,
   NFlex,
@@ -74,9 +48,39 @@ import {
   startStockAnalysis,
 } from "../services/analysisService.mjs";
 import {
+  addGroup as AddGroup,
+  addGroupStock as AddStockGroup,
+  followStock as Follow,
+  initializeGroupSort as InitializeGroupSort,
+  loadFollowList as GetFollowList,
+  loadGroupList as GetGroupList,
+  removeGroup as RemoveGroup,
+  removeGroupStock as RemoveStockGroup,
+  saveStockAICron as SetStockAICron,
+  setAlarmChangePercent as SetAlarmChangePercent,
+  setCostPriceAndVolume as SetCostPriceAndVolume,
+  setStockSort as SetStockSort,
+  setTradingPrice as SetTradingPrice,
+  unfollowStock as UnFollow,
+  updateGroupSort as UpdateGroupSort,
+} from "../services/watchlistService.mjs";
+import {
   loadMinutePriceLine,
+  loadStockList as GetStockList,
+  loadStockSnapshot as Greet,
   loadStockKLine,
 } from "../services/marketService.mjs";
+import {
+  loadAiConfigs as GetAiConfigs,
+  loadAppConfig as GetConfig,
+  sendTypedNotification as SendDingDingMessageByType,
+} from "../services/configService.mjs";
+import {
+  getVersionInfo as GetVersionInfo,
+  openExternalUrl as OpenURL,
+  saveImageFile as SaveImage,
+  saveWordFile as SaveWordFile,
+} from "../services/appShellService.mjs";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 import { normalizeFollowStockCode, resolveFollowStockCode } from "../utils/stockCode.mjs";
 

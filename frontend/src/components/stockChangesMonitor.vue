@@ -1,7 +1,13 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, onUnmounted, ref, reactive} from 'vue'
-import {GetStockChanges, GetConfig, GetStockChangeHistory, SaveStockChangesToHistory, GetAllStockChangesWithPaging} from "../../wailsjs/go/main/App";
 import {NButton, NTag, NText, useMessage, useNotification} from "naive-ui";
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
+import {
+  loadAllStockChangesWithPaging as GetAllStockChangesWithPaging,
+  loadStockChangeHistory as GetStockChangeHistory,
+  loadStockChanges as GetStockChanges,
+  saveStockChangesToHistory as SaveStockChangesToHistory,
+} from "../services/researchService.mjs";
 
 const notify = useNotification()
 const message = useMessage()

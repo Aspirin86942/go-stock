@@ -1,8 +1,5 @@
 <script setup>
 import {computed, h, onBeforeMount, onMounted, ref, reactive} from 'vue'
-import {
-  GetConfig,
-} from "../../wailsjs/go/main/App";
 import { EventsEmit } from "../../wailsjs/runtime";
 import {NButton, NInput, NTag, NText, useMessage, useNotification,useDialog, NModal, NCard, NForm, NFormItem, NSpace} from "naive-ui";
 import {
@@ -10,6 +7,7 @@ import {
   loadPromptTemplatePage,
   savePromptTemplate as persistPromptTemplate,
 } from "../services/analysisService.mjs";
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
 
 const notify = useNotification()
 const message = useMessage()

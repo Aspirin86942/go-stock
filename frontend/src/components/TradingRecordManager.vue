@@ -1,16 +1,14 @@
 <script setup>
 import { h, onMounted, onUnmounted, ref, reactive } from 'vue'
 import {
-  AddTradingRecord,
-  GetTradingRecordList,
-  GetTradingRecordStatistics,
-  UpdateTradingRecord,
-  DeleteTradingRecord,
-  CheckFrequentTrading,
-  GetAllStockInfoList,
-  GetStockRealTimePrice,
-  GetConfig
-} from '../../wailsjs/go/main/App'
+  addTradingRecord as AddTradingRecord,
+  checkFrequentTrading as CheckFrequentTrading,
+  deleteTradingRecord as DeleteTradingRecord,
+  loadAllStockInfoPage as GetAllStockInfoList,
+  loadTradingRecordPage as GetTradingRecordList,
+  loadTradingRecordStatistics as GetTradingRecordStatistics,
+  updateTradingRecord as UpdateTradingRecord,
+} from '../services/researchService.mjs'
 import {
   NButton,
   NDataTable,
@@ -34,6 +32,8 @@ import {
 } from 'naive-ui'
 import sparkLine from "./stockSparkLine.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
+import { loadRealtimePrice as GetStockRealTimePrice } from "../services/marketService.mjs";
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
 
 const message = useMessage()
 const notify = useNotification()

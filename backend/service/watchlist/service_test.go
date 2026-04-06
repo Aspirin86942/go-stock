@@ -3,10 +3,12 @@ package watchlist
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go-stock/backend/data"
 	analysisservice "go-stock/backend/service/analysis"
 	contractservice "go-stock/backend/service/contract"
+	marketservice "go-stock/backend/service/market"
 )
 
 type fakeStore struct {
@@ -14,6 +16,15 @@ type fakeStore struct {
 	savedCode     string
 	follow        data.FollowedStock
 	list          []data.FollowedStock
+	follows       []data.FollowedStock
+	quotes        []marketservice.RealtimePrice
+
+	lastTradingStockCode      string
+	lastTradingEntryPrice     float64
+	lastTradingTakeProfit     float64
+	lastTradingStopLoss       float64
+	lastTradingCostPrice      float64
+	setTradingPriceReturnText string
 }
 
 func (f *fakeStore) SaveStockAICron(ctx context.Context, cronText, stockCode string) {
@@ -29,8 +40,81 @@ func (f *fakeStore) GetFollowedStock(ctx context.Context, stockCode string) data
 }
 
 func (f *fakeStore) ListFollowedStocks(ctx context.Context) []data.FollowedStock {
+	if f.follows != nil {
+		return append([]data.FollowedStock(nil), f.follows...)
+	}
 	return append([]data.FollowedStock(nil), f.list...)
 }
+
+func (f *fakeStore) ListFollowedStocksByGroup(ctx context.Context, groupID int) []data.FollowedStock {
+	return f.ListFollowedStocks(ctx)
+}
+
+func (f *fakeStore) Follow(ctx context.Context, stockCode string) string {
+	return "关注成功"
+}
+
+func (f *fakeStore) Unfollow(ctx context.Context, stockCode string) string {
+	return "取消关注成功"
+}
+
+func (f *fakeStore) ListGroups(ctx context.Context) []data.Group {
+	return []data.Group{}
+}
+
+func (f *fakeStore) AddGroup(ctx context.Context, group data.Group) bool {
+	return true
+}
+
+func (f *fakeStore) UpdateGroupSort(ctx context.Context, id int, newSort int) bool {
+	return true
+}
+
+func (f *fakeStore) InitializeGroupSort(ctx context.Context) bool {
+	return true
+}
+
+func (f *fakeStore) ListGroupStocks(ctx context.Context, groupID int) []data.GroupStock {
+	return []data.GroupStock{}
+}
+
+func (f *fakeStore) AddGroupStock(ctx context.Context, groupID int, stockCode string) bool {
+	return true
+}
+
+func (f *fakeStore) RemoveGroupStock(ctx context.Context, stockCode, name string, groupID int) bool {
+	return true
+}
+
+func (f *fakeStore) RemoveGroup(ctx context.Context, groupID int) bool {
+	return true
+}
+
+func (f *fakeStore) SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string {
+	return "设置成功"
+}
+
+func (f *fakeStore) SetTradingPrice(ctx context.Context, stockCode string, entryPrice, takeProfitPrice, stopLossPrice, costPrice float64) string {
+	f.lastTradingStockCode = stockCode
+	f.lastTradingEntryPrice = entryPrice
+	f.lastTradingTakeProfit = takeProfitPrice
+	f.lastTradingStopLoss = stopLossPrice
+	f.lastTradingCostPrice = costPrice
+	if f.setTradingPriceReturnText != "" {
+		return f.setTradingPriceReturnText
+	}
+	return "设置成功"
+}
+
+func (f *fakeStore) GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice {
+	return append([]marketservice.RealtimePrice(nil), f.quotes...)
+}
+
+func (f *fakeStore) SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string {
+	return "设置成功"
+}
+
+func (f *fakeStore) SetStockSort(ctx context.Context, stockCode string, sort int64) {}
 
 type fakeAnalyzer struct {
 	request  analysisservice.StockRequest
@@ -129,5 +213,39 @@ func TestService_RunScheduledAnalysisReturnsUserVisibleErrorWhenStockMissing(t *
 	}
 	if userErr.Code != "watchlist.stock_not_followed" || userErr.Stage != contractservice.StageService {
 		t.Fatalf("unexpected user visible error: %#v", userErr)
+	}
+}
+
+func TestWatchlistService_SetTradingPriceDelegatesToStore(t *testing.T) {
+	store := &fakeStore{
+		setTradingPriceReturnText: "操作成功",
+	}
+	svc := NewService(store, nil)
+
+	result := svc.SetTradingPrice(context.Background(), "sz000001", 10, 12, 9, 10.5)
+
+	if result != "操作成功" {
+		t.Fatalf("expected success message, got %q", result)
+	}
+	if store.lastTradingStockCode != "sz000001" {
+		t.Fatalf("expected stock code to be forwarded")
+	}
+}
+
+func TestWatchlistService_EvaluateCostAlertsBuildsDeliveries(t *testing.T) {
+	store := &fakeStore{
+		follows: []data.FollowedStock{
+			{StockCode: "sz000001", Name: "平安银行", CostPrice: 12},
+		},
+		quotes: []marketservice.RealtimePrice{
+			{StockCode: "sz000001", StockName: "平安银行", Price: "11.5"},
+		},
+	}
+	svc := NewService(store, nil)
+
+	deliveries := svc.EvaluateCostAlerts(context.Background(), time.Now())
+
+	if len(deliveries) != 1 {
+		t.Fatalf("expected one alert delivery, got %d", len(deliveries))
 	}
 }

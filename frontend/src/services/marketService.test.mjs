@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  loadAllStocks,
   loadRealtimePrice,
+  loadStockList,
+  loadStockSnapshot,
   normalizeMarketFeeds,
   normalizeMarketFeed,
   normalizeMarketIndexes,
@@ -289,6 +292,51 @@ test('loadRealtimePrice 走旧版 GetStockRealTimePrice 绑定', async () => {
       message: 'success',
       price: 12.34,
       name: '股票-sz000001',
+    });
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('loadStockList 在绑定返回非数组时回退为空数组', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    go: {
+      main: {
+        App: {
+          GetStockList: async () => null,
+        },
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await loadStockList('平安'), []);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('loadAllStocks 与 loadStockSnapshot 保持对象返回', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {
+    go: {
+      main: {
+        App: {
+          GetAllStocks: async () => ({ result: { data: [{ SECUCODE: '000001.SZ' }], count: 1 } }),
+          Greet: async () => ({ StockCode: 'sz000001', Name: '平安银行' }),
+        },
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await loadAllStocks(1, 10, '平安', {}), {
+      result: { data: [{ SECUCODE: '000001.SZ' }], count: 1 },
+    });
+    assert.deepEqual(await loadStockSnapshot('sz000001'), {
+      StockCode: 'sz000001',
+      Name: '平安银行',
     });
   } finally {
     globalThis.window = originalWindow;

@@ -155,6 +155,18 @@ export async function analyzeMarketSentiment(keyword = '') {
   return AppBindings.AnalyzeSentimentWithFreqWeight(keyword);
 }
 
+export async function loadStockList(keyword = '') {
+  return toArray(await AppBindings.GetStockList(keyword));
+}
+
+export async function loadAllStocks(page, pageSize, keyword = '', technicalIndicators = {}) {
+  return toObject(await AppBindings.GetAllStocks(page, pageSize, keyword, technicalIndicators));
+}
+
+export async function loadStockSnapshot(stockCode) {
+  return toObject(await AppBindings.Greet(stockCode));
+}
+
 export async function loadMarketFeeds() {
   const result = await AppBindings.GetMarketFeeds();
   return normalizeMarketFeeds(result);

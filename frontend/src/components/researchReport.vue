@@ -1,6 +1,5 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
-import {GetConfig} from "../../wailsjs/go/main/App";
 import {NAvatar, NButton, NEllipsis, NText, useMessage} from "naive-ui";
 import {MdEditor, MdPreview} from 'md-editor-v3';
 import {
@@ -9,6 +8,7 @@ import {
   saveAnalysisMarkdown,
   shareAnalysis,
 } from "../services/analysisService.mjs";
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
 
 
 

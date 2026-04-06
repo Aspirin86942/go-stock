@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"go-stock/backend/data"
 	"go-stock/backend/models"
@@ -194,6 +195,69 @@ func (s *closeoutWatchlistServiceStub) RunScheduledAnalysis(ctx context.Context,
 		s.runHook()
 	}
 	return s.runResult, nil
+}
+
+func (s *closeoutWatchlistServiceStub) Follow(ctx context.Context, stockCode string) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) Unfollow(ctx context.Context, stockCode string) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) GetFollowList(ctx context.Context, groupID int) []data.FollowedStock {
+	return []data.FollowedStock{}
+}
+
+func (s *closeoutWatchlistServiceStub) SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) SetTradingPrice(ctx context.Context, stockCode string, entryPrice, takeProfitPrice, stopLossPrice, costPrice float64) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) SetStockSort(ctx context.Context, stockCode string, sort int64) {
+}
+
+func (s *closeoutWatchlistServiceStub) ListGroups(ctx context.Context) []data.Group {
+	return []data.Group{}
+}
+
+func (s *closeoutWatchlistServiceStub) AddGroup(ctx context.Context, group data.Group) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) UpdateGroupSort(ctx context.Context, id int, newSort int) bool {
+	return false
+}
+
+func (s *closeoutWatchlistServiceStub) InitializeGroupSort(ctx context.Context) bool {
+	return false
+}
+
+func (s *closeoutWatchlistServiceStub) ListGroupStocks(ctx context.Context, groupID int) []data.GroupStock {
+	return []data.GroupStock{}
+}
+
+func (s *closeoutWatchlistServiceStub) AddGroupStock(ctx context.Context, groupID int, stockCode string) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) RemoveGroupStock(ctx context.Context, stockCode, name string, groupID int) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) RemoveGroup(ctx context.Context, groupID int) string {
+	return ""
+}
+
+func (s *closeoutWatchlistServiceStub) EvaluateCostAlerts(ctx context.Context, now time.Time) []notificationservice.Delivery {
+	return []notificationservice.Delivery{}
 }
 
 func TestApp_CloseoutMarketHelpersDelegateToMarketService(t *testing.T) {

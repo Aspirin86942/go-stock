@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/logger"
@@ -296,67 +295,58 @@ func (a *App) BatchDeleteAIResponseResult(ids []uint) string {
 }
 
 func (a *App) GetStockChanges(changeTypes []int, pageIndex, pageSize int) *data.StockChangesResponse {
-	return data.NewStockChangesApi().GetStockChanges(changeTypes, pageIndex, pageSize)
+	if a.researchService == nil {
+		return &data.StockChangesResponse{Data: []data.StockChangeItem{}}
+	}
+	return a.researchService.GetStockChanges(a.ctx, changeTypes, pageIndex, pageSize)
 }
 
 func (a *App) GetAllStockChangesWithPaging(pageSize int) *data.StockChangesResponse {
-	all := data.NewStockChangesApi().GetAllStockChangesWithPaging(pageSize)
-	historyService := data.NewStockChangeHistoryService()
-	_, _ = historyService.SaveStockChangesWithDedup(all.Data)
-	return all
+	if a.researchService == nil {
+		return &data.StockChangesResponse{Data: []data.StockChangeItem{}}
+	}
+	return a.researchService.GetAllStockChangesWithPaging(a.ctx, pageSize)
 }
 
 func (a *App) GetStockChangeHistory(query models.StockChangeHistoryQuery) *models.StockChangeHistoryPageData {
-	result, err := data.NewStockChangeHistoryService().GetHistoryList(query)
-	if err != nil {
+	if a.researchService == nil {
 		return &models.StockChangeHistoryPageData{}
 	}
-	return result
+	return a.researchService.GetStockChangeHistory(a.ctx, query)
 }
 
 func (a *App) SaveStockChangesToHistory(changeTypes []int) string {
-	api := data.NewStockChangesApi()
-	result := api.GetStockChanges(changeTypes, 0, 500)
-	if result == nil || len(result.Data) == 0 {
-		return "没有获取到异动数据"
+	if a.researchService == nil {
+		return "保存失败"
 	}
-
-	err := data.NewStockChangeHistoryService().SaveStockChanges(result.Data)
-	if err != nil {
-		return "保存失败: " + err.Error()
-	}
-	return fmt.Sprintf("成功保存 %d 条异动数据", len(result.Data))
+	return a.researchService.SaveStockChangesToHistory(a.ctx, changeTypes)
 }
 
 func (a *App) DeleteStockChangeHistory(days int) string {
-	err := data.NewStockChangeHistoryService().DeleteOldData(days)
-	if err != nil {
-		return "删除失败: " + err.Error()
+	if a.researchService == nil {
+		return "删除失败"
 	}
-	return fmt.Sprintf("已删除 %d 天前的历史数据", days)
+	return a.researchService.DeleteStockChangeHistory(a.ctx, days)
 }
 
 func (a *App) GetAiRecommendStocksList(query models.AiRecommendStocksQuery) *models.AiRecommendStocksPageData {
-	page, err := data.NewAiRecommendStocksService().GetAiRecommendStocksList(&query)
-	if err != nil {
+	if a.researchService == nil {
 		return &models.AiRecommendStocksPageData{}
 	}
-	return page
+	return a.researchService.GetAiRecommendPage(a.ctx, query)
 }
 func (a *App) DeleteAiRecommendStocks(id uint) string {
-	err := data.NewAiRecommendStocksService().DeleteAiRecommendStocks(id)
-	if err != nil {
+	if a.researchService == nil {
 		return "删除失败"
 	}
-	return "删除成功"
+	return a.researchService.DeleteAiRecommend(a.ctx, id)
 }
 
 func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
-	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(id, enableAlert)
-	if err != nil {
+	if a.researchService == nil {
 		return "更新预警状态失败"
 	}
-	return "更新预警状态成功"
+	return a.researchService.SetAiRecommendAlert(a.ctx, id, enableAlert)
 }
 
 func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.PromptTemplatePageData {
@@ -392,67 +382,59 @@ func (a *App) DeletePromptTemplate(id uint) string {
 }
 
 func (a *App) GetAllStockInfoList(query data.AllStockInfoQuery) *data.AllStockInfoPageData {
-	page, err := data.NewStockDataApi().GetAllStockInfoList(&query)
-	if err != nil {
+	if a.researchService == nil {
 		return &data.AllStockInfoPageData{}
 	}
-	return page
+	return a.researchService.GetAllStockInfoPage(a.ctx, query)
 }
 
 func (a *App) GetAllStockInfoById(id uint) *models.AllStockInfo {
-	stock, err := data.NewStockDataApi().GetAllStockInfoById(id)
-	if err != nil {
+	if a.researchService == nil {
 		return &models.AllStockInfo{}
 	}
-	return stock
+	return a.researchService.GetAllStockInfoByID(a.ctx, id)
 }
 
 func (a *App) AddAllStockInfo(stock models.AllStockInfo) string {
-	err := data.NewStockDataApi().AddAllStockInfo(stock)
-	if err != nil {
-		return "操作失败: " + err.Error()
+	if a.researchService == nil {
+		return "操作失败"
 	}
-	return "操作成功"
+	return a.researchService.AddAllStockInfo(a.ctx, stock)
 }
 
 func (a *App) DeleteAllStockInfo(id uint) string {
-	err := data.NewStockDataApi().DeleteAllStockInfo(id)
-	if err != nil {
-		return "删除失败: " + err.Error()
+	if a.researchService == nil {
+		return "删除失败"
 	}
-	return "删除成功"
+	return a.researchService.DeleteAllStockInfo(a.ctx, id)
 }
 
 func (a *App) BatchDeleteAllStockInfo(ids []uint) string {
-	err := data.NewStockDataApi().BatchDeleteAllStockInfo(ids)
-	if err != nil {
-		return "批量删除失败: " + err.Error()
+	if a.researchService == nil {
+		return "批量删除失败"
 	}
-	return "批量删除成功"
+	return a.researchService.BatchDeleteAllStockInfo(a.ctx, ids)
 }
 
 func (a *App) GetAllMarkets() []string {
-	markets, err := data.NewStockDataApi().GetAllMarkets()
-	if err != nil {
+	if a.researchService == nil {
 		return []string{}
 	}
-	return markets
+	return a.researchService.GetAllMarkets(a.ctx)
 }
 
 func (a *App) GetAllIndustries() []string {
-	industries, err := data.NewStockDataApi().GetAllIndustries()
-	if err != nil {
+	if a.researchService == nil {
 		return []string{}
 	}
-	return industries
+	return a.researchService.GetAllIndustries(a.ctx)
 }
 
 func (a *App) GetAllConcepts() []string {
-	concepts, err := data.NewStockDataApi().GetAllConcepts()
-	if err != nil {
+	if a.researchService == nil {
 		return []string{}
 	}
-	return concepts
+	return a.researchService.GetAllConcepts(a.ctx)
 }
 
 func (a *App) GetStockRealTimePrice(stockCode string) map[string]any {

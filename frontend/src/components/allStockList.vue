@@ -1,14 +1,14 @@
 <script setup>
 import {h, onBeforeMount, onMounted, ref, reactive} from 'vue'
 import {
-  GetAllStockInfoList,
-  GetAllStocks,
-  GetConfig
-} from "../../wailsjs/go/main/App";
+  loadAllStocks as GetAllStocks,
+} from "../services/marketService.mjs";
 import {NButton, NInput, NTag, NText, useMessage, useNotification, NDataTable, NSpace, NPagination} from "naive-ui";
 import sparkLine from "./stockSparkLine.vue"
 import klineChart from "./KLineChart.vue"
 import KLineChart from "./KLineChart.vue";
+import { loadAppConfig as GetConfig } from "../services/configService.mjs";
+import { loadAllStockInfoPage as GetAllStockInfoList } from "../services/researchService.mjs";
 
 const notify = useNotification()
 const message = useMessage()

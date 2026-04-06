@@ -5,6 +5,8 @@ import {
   buildCenteredWindowFeatures,
   getGroupList,
   openExternalUrl,
+  saveImageFile,
+  saveWordFile,
 } from './appShellService.mjs';
 
 test('buildCenteredWindowFeatures 生成稳定的窗口参数字符串', () => {
@@ -86,6 +88,39 @@ test('getGroupList 在后端返回 null 或 undefined 时回退到空数组', as
       },
     };
     assert.deepEqual(await getGroupList(), []);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('saveImageFile 与 saveWordFile 透传给 Wails 绑定', async () => {
+  const originalWindow = globalThis.window;
+  const calls = [];
+
+  try {
+    globalThis.window = {
+      go: {
+        main: {
+          App: {
+            SaveImage: async (name, base64) => {
+              calls.push({ type: 'image', name, base64 });
+              return `saved:${name}`;
+            },
+            SaveWordFile: async (name, base64) => {
+              calls.push({ type: 'word', name, base64 });
+              return `saved:${name}`;
+            },
+          },
+        },
+      },
+    };
+
+    assert.equal(await saveImageFile('chart.png', 'base64-image'), 'saved:chart.png');
+    assert.equal(await saveWordFile('report.docx', 'base64-docx'), 'saved:report.docx');
+    assert.deepEqual(calls, [
+      { type: 'image', name: 'chart.png', base64: 'base64-image' },
+      { type: 'word', name: 'report.docx', base64: 'base64-docx' },
+    ]);
   } finally {
     globalThis.window = originalWindow;
   }

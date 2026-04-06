@@ -21,6 +21,14 @@ export async function getGroupList() {
   return Array.isArray(result) ? result : [];
 }
 
+export async function saveImageFile(name, base64) {
+  return AppBindings.SaveImage(name, base64);
+}
+
+export async function saveWordFile(name, base64) {
+  return AppBindings.SaveWordFile(name, base64);
+}
+
 export async function openBrowserUrl(url, { browserOpener = BrowserOpenURL } = {}) {
   await browserOpener(url);
   return 'browser';
