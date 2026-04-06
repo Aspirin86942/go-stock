@@ -91,6 +91,37 @@ type configService interface {
 	DeleteLegacyPrompt(ctx context.Context, id uint) string
 }
 
+type legacyPromptBridge interface {
+	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
+	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
+	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
+	DeletePromptTemplate(ctx context.Context, id uint) string
+}
+
+func safeConfigCall[T any](call func() T) (result T, ok bool) {
+	ok = true
+	defer func() {
+		if recover() != nil {
+			var zero T
+			result = zero
+			ok = false
+		}
+	}()
+	result = call()
+	return
+}
+
+func (a *App) legacyPromptBridge() legacyPromptBridge {
+	if a.analysisService == nil {
+		return nil
+	}
+	bridge, ok := any(a.analysisService).(legacyPromptBridge)
+	if !ok {
+		return nil
+	}
+	return bridge
+}
+
 const (
 	// 兼容保留：当前版本全部功能开放，但旧前端仍依赖 VIP 结构字段。
 	unlockedVipLevel      = 2
@@ -1677,13 +1708,49 @@ func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 }
 
 func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	return a.configService.GetPromptTemplates(a.ctx, name, promptType)
+	if a.configService != nil {
+		if templates, ok := safeConfigCall(func() *[]models.PromptTemplate {
+			return a.configService.GetPromptTemplates(a.ctx, name, promptType)
+		}); ok {
+			return templates
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.GetPromptTemplates(a.ctx, name, promptType)
+	}
+	empty := []models.PromptTemplate{}
+	return &empty
 }
 func (a *App) AddPrompt(prompt models.Prompt) string {
-	return a.configService.SaveLegacyPrompt(a.ctx, prompt)
+	if a.configService != nil {
+		if message, ok := safeConfigCall(func() string {
+			return a.configService.SaveLegacyPrompt(a.ctx, prompt)
+		}); ok {
+			return message
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.SavePromptTemplate(a.ctx, models.PromptTemplate{
+			ID:      prompt.ID,
+			Content: prompt.Content,
+			Name:    prompt.Name,
+			Type:    prompt.Type,
+		})
+	}
+	return "保存失败"
 }
 func (a *App) DelPrompt(id uint) string {
-	return a.configService.DeleteLegacyPrompt(a.ctx, id)
+	if a.configService != nil {
+		if message, ok := safeConfigCall(func() string {
+			return a.configService.DeleteLegacyPrompt(a.ctx, id)
+		}); ok {
+			return message
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.DeletePromptTemplate(a.ctx, id)
+	}
+	return "删除失败"
 }
 func (a *App) SetStockAICron(cronText, stockCode string) {
 	data.NewStockDataApi().SetStockAICron(cronText, stockCode)

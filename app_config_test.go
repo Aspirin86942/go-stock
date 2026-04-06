@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	"go-stock/backend/data"
 	"go-stock/backend/models"
+	analysisservice "go-stock/backend/service/analysis"
+
+	"github.com/robfig/cron/v3"
 )
 
 type fakeConfigService struct {
@@ -15,6 +19,7 @@ type fakeConfigService struct {
 	aiConfigsResult []*data.AIConfig
 	promptsResult   *[]models.PromptTemplate
 	promptPage      *models.PromptTemplatePageData
+	promptPageErr   error
 
 	getConfigCalled          int
 	updateConfigCalled       int
@@ -68,7 +73,7 @@ func (f *fakeConfigService) GetPromptTemplatePage(ctx context.Context, query mod
 	f.getPromptPageCalled++
 	f.lastCtx = ctx
 	f.lastPromptQuery = query
-	return f.promptPage, nil
+	return f.promptPage, f.promptPageErr
 }
 
 func (f *fakeConfigService) SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string {
@@ -209,5 +214,203 @@ func TestApp_ConfigAndPromptMethodsDelegateToConfigService(t *testing.T) {
 
 	if fake.lastCtx != ctx {
 		t.Fatalf("all delegated methods should pass app ctx")
+	}
+}
+
+type legacyPromptAwareAnalysisServiceStub struct {
+	legacyTemplates      *[]models.PromptTemplate
+	legacyTemplatePage   *models.PromptTemplatePageData
+	legacySavedPrompt    models.Prompt
+	legacySavedTemplate  models.PromptTemplate
+	legacyDeletedPrompt  uint
+	legacyDeletedTmplID  uint
+	getPromptCalled      int
+	getPromptPageCalled  int
+	saveLegacyCalled     int
+	saveTemplateCalled   int
+	deleteLegacyCalled   int
+	deleteTemplateCalled int
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) StartStockAnalysis(ctx context.Context, request analysisservice.StockRequest) <-chan analysisservice.StreamChunk {
+	ch := make(chan analysisservice.StreamChunk)
+	close(ch)
+	return ch
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) StartMarketSummary(ctx context.Context, request analysisservice.MarketSummaryRequest) <-chan analysisservice.StreamChunk {
+	ch := make(chan analysisservice.StreamChunk)
+	close(ch)
+	return ch
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) SaveResult(ctx context.Context, stockCode, stockName, result, chatID, question string, aiConfigID int) {
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) GetLatestResult(ctx context.Context, stockCode string) *models.AIResponseResult {
+	return nil
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error) {
+	return &models.AIResponseResultPageData{}, nil
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) DeleteResult(ctx context.Context, id uint) error {
+	return nil
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) BatchDeleteResults(ctx context.Context, ids []uint) error {
+	return nil
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate {
+	s.getPromptCalled++
+	return s.legacyTemplates
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error) {
+	s.getPromptPageCalled++
+	return s.legacyTemplatePage, nil
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string {
+	s.saveTemplateCalled++
+	s.legacySavedTemplate = template
+	return "legacy-template-saved"
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) DeletePromptTemplate(ctx context.Context, id uint) string {
+	s.deleteTemplateCalled++
+	s.legacyDeletedTmplID = id
+	return "legacy-template-deleted"
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) SaveLegacyPrompt(ctx context.Context, prompt models.Prompt) string {
+	s.saveLegacyCalled++
+	s.legacySavedPrompt = prompt
+	return "legacy-prompt-saved"
+}
+
+func (s *legacyPromptAwareAnalysisServiceStub) DeleteLegacyPrompt(ctx context.Context, id uint) string {
+	s.deleteLegacyCalled++
+	s.legacyDeletedPrompt = id
+	return "legacy-prompt-deleted"
+}
+
+func TestApp_PromptMethodsFallbackToLegacyAnalysisServiceWhenConfigServiceNil(t *testing.T) {
+	templates := []models.PromptTemplate{{ID: 8, Name: "legacy", Type: "模型系统Prompt"}}
+	legacyPage := &models.PromptTemplatePageData{List: templates, Total: 1, Page: 1, PageSize: 10, TotalPages: 1}
+	legacy := &legacyPromptAwareAnalysisServiceStub{
+		legacyTemplates:    &templates,
+		legacyTemplatePage: legacyPage,
+	}
+	app := &App{
+		ctx:             context.Background(),
+		analysisService: legacy,
+		configService:   nil,
+	}
+
+	if got := app.GetPromptTemplates("legacy", "模型系统Prompt"); got != legacy.legacyTemplates {
+		t.Fatalf("GetPromptTemplates() should fallback to legacy analysis prompt method")
+	}
+	if legacy.getPromptCalled != 1 {
+		t.Fatalf("legacy GetPromptTemplates should be called once, got=%d", legacy.getPromptCalled)
+	}
+
+	prompt := models.Prompt{ID: 9, Name: "legacy prompt", Type: "模型用户Prompt", Content: "A"}
+	if msg := app.AddPrompt(prompt); msg != "legacy-prompt-saved" {
+		t.Fatalf("AddPrompt() should fallback to SaveLegacyPrompt, got=%q", msg)
+	}
+	if legacy.saveLegacyCalled != 1 || legacy.legacySavedPrompt != prompt {
+		t.Fatalf("AddPrompt() legacy call mismatch: called=%d prompt=%#v", legacy.saveLegacyCalled, legacy.legacySavedPrompt)
+	}
+
+	if msg := app.DelPrompt(77); msg != "legacy-prompt-deleted" {
+		t.Fatalf("DelPrompt() should fallback to DeleteLegacyPrompt, got=%q", msg)
+	}
+	if legacy.deleteLegacyCalled != 1 || legacy.legacyDeletedPrompt != 77 {
+		t.Fatalf("DelPrompt() legacy call mismatch: called=%d id=%d", legacy.deleteLegacyCalled, legacy.legacyDeletedPrompt)
+	}
+
+	query := models.PromptTemplateQuery{Page: 1, PageSize: 10}
+	if got := app.GetPromptTemplateList(query); got != legacyPage {
+		t.Fatalf("GetPromptTemplateList() should fallback to legacy prompt page method")
+	}
+	if legacy.getPromptPageCalled != 1 {
+		t.Fatalf("legacy GetPromptTemplatePage should be called once, got=%d", legacy.getPromptPageCalled)
+	}
+
+	template := models.PromptTemplate{ID: 11, Name: "legacy-template", Type: "模型系统Prompt", Content: "B"}
+	if msg := app.AddPromptTemplate(template); msg != "legacy-template-saved" {
+		t.Fatalf("AddPromptTemplate() should fallback to legacy SavePromptTemplate, got=%q", msg)
+	}
+	if msg := app.UpdatePromptTemplate(template); msg != "legacy-template-saved" {
+		t.Fatalf("UpdatePromptTemplate() should fallback to legacy SavePromptTemplate, got=%q", msg)
+	}
+	if legacy.saveTemplateCalled != 2 {
+		t.Fatalf("legacy SavePromptTemplate should be called twice, got=%d", legacy.saveTemplateCalled)
+	}
+	if msg := app.DeletePromptTemplate(11); msg != "legacy-template-deleted" {
+		t.Fatalf("DeletePromptTemplate() should fallback to legacy DeletePromptTemplate, got=%q", msg)
+	}
+	if legacy.deleteTemplateCalled != 1 || legacy.legacyDeletedTmplID != 11 {
+		t.Fatalf("DeletePromptTemplate() legacy call mismatch: called=%d id=%d", legacy.deleteTemplateCalled, legacy.legacyDeletedTmplID)
+	}
+}
+
+func TestApp_UpdateConfigRefreshesMonitorStockPricesAndDelegates(t *testing.T) {
+	fake := &fakeConfigService{updateResult: "更新成功"}
+	cronScheduler := cron.New(cron.WithSeconds())
+	cronScheduler.Start()
+	t.Cleanup(func() { cronScheduler.Stop() })
+
+	app := &App{
+		ctx:           context.Background(),
+		cron:          cronScheduler,
+		cronEntrys:    make(map[string]cron.EntryID),
+		configService: fake,
+	}
+
+	oldID, err := app.cron.AddFunc("@every 100s", func() {})
+	if err != nil {
+		t.Fatalf("setup old cron entry failed: %v", err)
+	}
+	app.setCronEntry("MonitorStockPrices", oldID)
+
+	cfg := &data.SettingConfig{Settings: &data.Settings{RefreshInterval: 5}}
+	if msg := app.UpdateConfig(cfg); msg != "更新成功" {
+		t.Fatalf("UpdateConfig() should return delegated result, got=%q", msg)
+	}
+	if fake.updateConfigCalled != 1 || fake.lastUpdatedSettingConfig != cfg {
+		t.Fatalf("UpdateConfig() should delegate to configService.UpdateConfig, called=%d cfg=%#v", fake.updateConfigCalled, fake.lastUpdatedSettingConfig)
+	}
+
+	newID, exists := app.getCronEntry("MonitorStockPrices")
+	if !exists {
+		t.Fatalf("UpdateConfig() with RefreshInterval>0 should register MonitorStockPrices cron entry")
+	}
+	if newID == oldID {
+		t.Fatalf("UpdateConfig() should refresh MonitorStockPrices cron entry id, old=%d new=%d", oldID, newID)
+	}
+}
+
+func TestApp_GetPromptTemplateListFallsBackToEmptyPageOnError(t *testing.T) {
+	fake := &fakeConfigService{
+		promptPageErr: errors.New("query failed"),
+	}
+	app := &App{
+		ctx:           context.Background(),
+		configService: fake,
+	}
+
+	page := app.GetPromptTemplateList(models.PromptTemplateQuery{Page: 1, PageSize: 10})
+	if page == nil {
+		t.Fatalf("GetPromptTemplateList() should return empty page instead of nil on error")
+	}
+	if len(page.List) != 0 || page.Total != 0 {
+		t.Fatalf("GetPromptTemplateList() on error should return zero-value empty page, got=%#v", page)
+	}
+	if fake.getPromptPageCalled != 1 {
+		t.Fatalf("GetPromptTemplateList() should still call configService once, got=%d", fake.getPromptPageCalled)
 	}
 }

@@ -323,23 +323,67 @@ func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
 }
 
 func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.PromptTemplatePageData {
-	page, err := a.configService.GetPromptTemplatePage(a.ctx, query)
-	if err != nil {
-		return &models.PromptTemplatePageData{}
+	if a.configService != nil {
+		page, ok := safeConfigCall(func() *models.PromptTemplatePageData {
+			result, err := a.configService.GetPromptTemplatePage(a.ctx, query)
+			if err != nil {
+				return nil
+			}
+			return result
+		})
+		if ok && page != nil {
+			return page
+		}
 	}
-	return page
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		page, err := legacy.GetPromptTemplatePage(a.ctx, query)
+		if err == nil && page != nil {
+			return page
+		}
+	}
+	return &models.PromptTemplatePageData{}
 }
 
 func (a *App) AddPromptTemplate(template models.PromptTemplate) string {
-	return a.configService.SavePromptTemplate(a.ctx, template)
+	if a.configService != nil {
+		if message, ok := safeConfigCall(func() string {
+			return a.configService.SavePromptTemplate(a.ctx, template)
+		}); ok {
+			return message
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.SavePromptTemplate(a.ctx, template)
+	}
+	return "保存失败"
 }
 
 func (a *App) UpdatePromptTemplate(template models.PromptTemplate) string {
-	return a.configService.SavePromptTemplate(a.ctx, template)
+	if a.configService != nil {
+		if message, ok := safeConfigCall(func() string {
+			return a.configService.SavePromptTemplate(a.ctx, template)
+		}); ok {
+			return message
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.SavePromptTemplate(a.ctx, template)
+	}
+	return "保存失败"
 }
 
 func (a *App) DeletePromptTemplate(id uint) string {
-	return a.configService.DeletePromptTemplate(a.ctx, id)
+	if a.configService != nil {
+		if message, ok := safeConfigCall(func() string {
+			return a.configService.DeletePromptTemplate(a.ctx, id)
+		}); ok {
+			return message
+		}
+	}
+	if legacy := a.legacyPromptBridge(); legacy != nil {
+		return legacy.DeletePromptTemplate(a.ctx, id)
+	}
+	return "删除失败"
 }
 
 func (a *App) GetAllStockInfoList(query data.AllStockInfoQuery) *data.AllStockInfoPageData {
