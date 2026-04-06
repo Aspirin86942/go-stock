@@ -331,3 +331,22 @@ func TestApp_MarketLegacyReadsDelegateToService(t *testing.T) {
 		t.Fatalf("realtime price args mismatch: %#v", legacy)
 	}
 }
+
+func TestApp_GetStockRealTimePriceReturnsFailureWhenServiceHasNoUsablePrice(t *testing.T) {
+	app := &App{
+		marketReadService: &marketLegacyReadServiceStub{
+			realtimePrice: marketservice.RealtimePrice{
+				StockCode: "sz000001",
+				StockName: "平安银行",
+			},
+		},
+	}
+
+	if got := app.GetStockRealTimePrice("sz000001"); !reflect.DeepEqual(got, map[string]any{
+		"code":    -1,
+		"message": "获取股票价格失败",
+		"price":   0,
+	}) {
+		t.Fatalf("GetStockRealTimePrice() should keep legacy failure contract, got=%#v", got)
+	}
+}

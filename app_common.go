@@ -466,6 +466,13 @@ func (a *App) GetStockRealTimePrice(stockCode string) map[string]any {
 	}
 	stock := service.LoadRealtimePrice(stockCode)
 	price, _ := convertor.ToFloat(stock.Price)
+	if price <= 0 {
+		return map[string]any{
+			"code":    -1,
+			"message": "获取股票价格失败",
+			"price":   0,
+		}
+	}
 	return map[string]any{
 		"code":    0,
 		"message": "success",
