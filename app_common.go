@@ -192,7 +192,21 @@ func (a *App) GetHotStrategy() models.HotStrategy {
 }
 
 func (a *App) GetAllStocks(page int, pageSize int, name string, technicalIndicators models.TechnicalIndicators) *models.AllStocksResp {
-	return data.NewStockDataApi().GetAllStocks(page, pageSize, name, technicalIndicators)
+	if a.researchService == nil {
+		return &models.AllStocksResp{
+			Result: struct {
+				Nextpage    bool               `json:"nextpage"`
+				Currentpage int                `json:"currentpage"`
+				Data        []models.StockInfo `json:"data"`
+				Config      []interface{}      `json:"config"`
+				Count       int                `json:"count"`
+			}{
+				Data:   []models.StockInfo{},
+				Config: []interface{}{},
+			},
+		}
+	}
+	return a.researchService.LoadAllStocks(a.ctx, page, pageSize, name, technicalIndicators)
 }
 
 // Phase-5 compatibility allowlist: multi-turn assistant orchestration remains bridge-owned until a dedicated assistant refactor.

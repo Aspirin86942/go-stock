@@ -4,8 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	marketservice "go-stock/backend/service/market"
+	"go-stock/backend/data"
 	"go-stock/backend/models"
+	marketservice "go-stock/backend/service/market"
 )
 
 type marketReadServiceMock struct {
@@ -34,6 +35,10 @@ func (m *marketReadServiceMock) RefreshFeed(source string) marketservice.Feed {
 	return m.refreshFeedResult
 }
 
+func (m *marketReadServiceMock) RefreshAllFeeds() marketservice.FeedSet {
+	return m.loadFeedsResult
+}
+
 func (m *marketReadServiceMock) LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet {
 	m.loadGlobalIndexesCalled++
 	m.lastGlobalIndexesTimout = crawlTimeout
@@ -45,6 +50,14 @@ func (m *marketReadServiceMock) LoadIndustryRanks(sort string, cnt int) []market
 	m.lastIndustryRankSort = sort
 	m.lastIndustryRankCount = cnt
 	return m.industryRanksResult
+}
+
+func (m *marketReadServiceMock) LoadStockList(keyword string) []data.StockBasic {
+	return []data.StockBasic{}
+}
+
+func (m *marketReadServiceMock) SaveNtfyNews(news models.NtfyNews) (*models.Telegraph, bool) {
+	return nil, false
 }
 
 func TestApp_MarketReadMethodsDelegateToService(t *testing.T) {

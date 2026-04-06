@@ -61,12 +61,24 @@ func (s *marketLegacyReadServiceStub) RefreshFeed(source string) marketservice.F
 	return marketservice.Feed{}
 }
 
+func (s *marketLegacyReadServiceStub) RefreshAllFeeds() marketservice.FeedSet {
+	return marketservice.FeedSet{}
+}
+
 func (s *marketLegacyReadServiceStub) LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet {
 	return marketservice.IndexSet{}
 }
 
 func (s *marketLegacyReadServiceStub) LoadIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry {
 	return []marketservice.IndustryRankEntry{}
+}
+
+func (s *marketLegacyReadServiceStub) LoadStockList(keyword string) []data.StockBasic {
+	return []data.StockBasic{}
+}
+
+func (s *marketLegacyReadServiceStub) SaveNtfyNews(news models.NtfyNews) (*models.Telegraph, bool) {
+	return nil, false
 }
 
 func (s *marketLegacyReadServiceStub) LoadLongTiger(date string) []models.LongTigerRankData {

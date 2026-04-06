@@ -3,8 +3,11 @@ package market
 import (
 	"encoding/json"
 	"go-stock/backend/data"
+	"go-stock/backend/db"
 	"go-stock/backend/models"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
 )
@@ -53,6 +56,11 @@ func (s *Service) LoadFeeds() FeedSet {
 func (s *Service) RefreshFeed(source string) Feed {
 	s.source.RefreshFeeds()
 	return s.loadFeed(source)
+}
+
+func (s *Service) RefreshAllFeeds() FeedSet {
+	s.source.RefreshFeeds()
+	return s.LoadFeeds()
 }
 
 func (s *Service) LoadGlobalIndexes(crawlTimeOut uint) IndexSet {
@@ -302,6 +310,58 @@ func (s *Service) LoadHotStrategies() models.HotStrategy {
 	return resp
 }
 
+func (s *Service) LoadStockList(keyword string) []data.StockBasic {
+	result := data.NewStockDataApi().GetStockList(keyword)
+	if result == nil {
+		return []data.StockBasic{}
+	}
+	return append([]data.StockBasic(nil), result...)
+}
+
+func (s *Service) SaveNtfyNews(news models.NtfyNews) (*models.Telegraph, bool) {
+	source := normalizeNtfySource(news.Tags)
+	if source == "" {
+		return nil, false
+	}
+
+	dataTime := time.UnixMilli(int64(news.Time * 1000))
+	telegraph := &models.Telegraph{
+		Title:           news.Title,
+		Content:         news.Message,
+		DataTime:        &dataTime,
+		IsRed:           slices.Contains(news.Tags, "rotating_light"),
+		Time:            dataTime.Format("15:04:05"),
+		Source:          source,
+		SentimentResult: data.AnalyzeSentiment(news.Message).Description,
+	}
+
+	cnt := int64(0)
+	query := db.Dao.Model(telegraph)
+	if strings.TrimSpace(telegraph.Title) == "" {
+		query = query.Where("content = ?", telegraph.Content)
+	} else {
+		query = query.Where("title = ?", telegraph.Title)
+	}
+	query.Count(&cnt)
+	if cnt > 0 {
+		return nil, false
+	}
+
+	db.Dao.Model(telegraph).Create(telegraph)
+	for _, subject := range filterNtfySubjects(news.Tags) {
+		tag := &models.Tags{
+			Name: subject,
+			Type: "subject",
+		}
+		db.Dao.Model(tag).Where("name = ? and type = ?", subject, "subject").FirstOrCreate(tag)
+		db.Dao.Model(&models.TelegraphTags{}).Where("telegraph_id = ? and tag_id = ?", telegraph.ID, tag.ID).FirstOrCreate(&models.TelegraphTags{
+			TelegraphId: telegraph.ID,
+			TagId:       tag.ID,
+		})
+	}
+	return telegraph, true
+}
+
 func (s *Service) LoadStockKLine(stockCode string, days int64) []data.KLineData {
 	source, ok := s.source.(legacyMarketSource)
 	if !ok {
@@ -523,6 +583,41 @@ func normalizeSearchColumns(columns []SearchStockColumn) []SearchStockColumn {
 		result = append(result, column)
 	}
 	return result
+}
+
+func normalizeNtfySource(tags []string) string {
+	if containsAny(tags, []string{"外媒简讯", "外媒资讯", "外媒"}) {
+		return "外媒"
+	}
+	if slices.Contains(tags, "财联社电报") {
+		return "财联社电报"
+	}
+	if slices.Contains(tags, "新浪财经") {
+		return "新浪财经"
+	}
+	return ""
+}
+
+func filterNtfySubjects(tags []string) []string {
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		switch tag {
+		case "rotating_light", "loudspeaker":
+			continue
+		default:
+			result = append(result, tag)
+		}
+	}
+	return result
+}
+
+func containsAny(tags []string, targets []string) bool {
+	for _, target := range targets {
+		if slices.Contains(tags, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstNonEmpty(values ...string) string {

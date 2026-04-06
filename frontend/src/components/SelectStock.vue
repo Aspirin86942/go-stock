@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {Follow, GetFollowList} from "../../wailsjs/go/main/App";
 import {useMessage, NText, NTag, NButton} from 'naive-ui'
 import {RefreshCircleSharp} from "@vicons/ionicons5";
 import {EventsEmit} from "../../wailsjs/runtime";
 import {loadHotStrategy, searchStocks} from "../services/marketService.mjs";
 import {openExternalUrl} from "../services/appShellService.mjs";
+import {followStock as Follow} from "../services/watchlistService.mjs";
 
 const message = useMessage()
 const search = ref('')

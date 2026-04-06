@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"go-stock/backend/data"
-	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	analysisservice "go-stock/backend/service/analysis"
@@ -35,7 +34,6 @@ import (
 
 	"github.com/inconshreveable/go-update"
 	"github.com/samber/lo"
-	"golang.org/x/exp/slices"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/coocood/freecache"
@@ -83,8 +81,11 @@ type App struct {
 type marketReadService interface {
 	LoadFeeds() marketservice.FeedSet
 	RefreshFeed(source string) marketservice.Feed
+	RefreshAllFeeds() marketservice.FeedSet
 	LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet
 	LoadIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry
+	LoadStockList(keyword string) []data.StockBasic
+	SaveNtfyNews(news models.NtfyNews) (*models.Telegraph, bool)
 }
 
 type analysisService interface {
@@ -175,10 +176,13 @@ type watchlistService interface {
 	Follow(ctx context.Context, stockCode string) string
 	Unfollow(ctx context.Context, stockCode string) string
 	GetFollowList(ctx context.Context, groupID int) []data.FollowedStock
+	GetFollowedStock(ctx context.Context, stockCode string) data.FollowedStock
+	GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice
 	SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string
 	SetTradingPrice(ctx context.Context, stockCode string, entryPrice, takeProfitPrice, stopLossPrice, costPrice float64) string
 	SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string
 	SetStockSort(ctx context.Context, stockCode string, sort int64)
+	UpdateObservedPrice(ctx context.Context, stockCode string, price float64)
 	ListGroups(ctx context.Context) []data.Group
 	AddGroup(ctx context.Context, group data.Group) string
 	UpdateGroupSort(ctx context.Context, id int, newSort int) bool
@@ -191,6 +195,9 @@ type watchlistService interface {
 }
 
 type researchService interface {
+	LoadAllStocks(ctx context.Context, page, pageSize int, name string, technicalIndicators models.TechnicalIndicators) *models.AllStocksResp
+	SyncAllStockInfo(ctx context.Context) error
+	RefreshStockBaseInfo(ctx context.Context) error
 	GetStockChanges(ctx context.Context, changeTypes []int, pageIndex, pageSize int) *data.StockChangesResponse
 	GetAllStockChangesWithPaging(ctx context.Context, pageSize int) *data.StockChangesResponse
 	GetStockChangeHistory(ctx context.Context, query models.StockChangeHistoryQuery) *models.StockChangeHistoryPageData
@@ -506,61 +513,15 @@ func (a *App) syncNews() {
 		dataTime := time.UnixMilli(int64(news.Time * 1000))
 
 		if slice.ContainAny(news.Tags, []string{"外媒资讯", "财联社电报", "新浪财经", "外媒简讯", "外媒"}) {
-			isRed := false
-			if slice.Contain(news.Tags, "rotating_light") {
-				isRed = true
+			if a.marketReadService == nil {
+				continue
 			}
-			telegraph := &models.Telegraph{
-				Title:           news.Title,
-				Content:         news.Message,
-				DataTime:        &dataTime,
-				IsRed:           isRed,
-				Time:            dataTime.Format("15:04:05"),
-				Source:          GetSource(news.Tags),
-				SentimentResult: data.AnalyzeSentiment(news.Message).Description,
-			}
-			cnt := int64(0)
-			if telegraph.Title == "" {
-				db.Dao.Model(telegraph).Where("content=?", telegraph.Content).Count(&cnt)
-			} else {
-				db.Dao.Model(telegraph).Where("title=?", telegraph.Title).Count(&cnt)
-			}
-			if cnt == 0 {
-				db.Dao.Model(telegraph).Create(&telegraph)
-				//计算时间差如果<5分钟则推送
-				if time.Now().Sub(dataTime) < 5*time.Minute {
-					a.NewsPush(&[]models.Telegraph{*telegraph})
-				}
-				tags := slice.Filter(news.Tags, func(index int, item string) bool {
-					return !(item == "rotating_light" || item == "loudspeaker")
-				})
-				for _, subject := range tags {
-					tag := &models.Tags{
-						Name: subject,
-						Type: "subject",
-					}
-					db.Dao.Model(tag).Where("name=? and type=?", subject, "subject").FirstOrCreate(&tag)
-					db.Dao.Model(models.TelegraphTags{}).Where("telegraph_id=? and tag_id=?", telegraph.ID, tag.ID).FirstOrCreate(&models.TelegraphTags{
-						TelegraphId: telegraph.ID,
-						TagId:       tag.ID,
-					})
-				}
+			telegraph, inserted := a.marketReadService.SaveNtfyNews(*news)
+			if inserted && telegraph != nil && time.Since(dataTime) < 5*time.Minute {
+				a.NewsPush(&[]models.Telegraph{*telegraph})
 			}
 		}
 	}
-}
-
-func GetSource(tags []string) string {
-	if slice.ContainAny(tags, []string{"外媒简讯", "外媒资讯", "外媒"}) {
-		return "外媒"
-	}
-	if slices.Contains(tags, "财联社电报") {
-		return "财联社电报"
-	}
-	if slices.Contains(tags, "新浪财经") {
-		return "新浪财经"
-	}
-	return ""
 }
 
 // domReady is called after front-end resources have been loaded
@@ -600,9 +561,9 @@ func (a *App) domReady(ctx context.Context) {
 	//定时更新数据
 	config := data.GetSettingConfig()
 	go func() {
-		go data.NewMarketNewsApi().TelegraphList(30)
-		go data.NewMarketNewsApi().GetSinaNews(30)
-		go data.NewMarketNewsApi().TradingViewNews()
+		if a.marketReadService != nil {
+			go a.marketReadService.RefreshAllFeeds()
+		}
 
 		interval := config.RefreshInterval
 		if interval <= 0 {
@@ -622,9 +583,12 @@ func (a *App) domReady(ctx context.Context) {
 			a.setCronEntry("MonitorStockPrices", id)
 		}
 		entryID, err := a.cron.AddFunc(fmt.Sprintf("@every %ds", interval+10), func() {
-			//news := data.NewMarketNewsApi().GetNewTelegraph(30)
-			news := data.NewMarketNewsApi().TelegraphList(30)
-			if config.EnablePushNews {
+			if a.marketReadService == nil {
+				return
+			}
+			feed := a.marketReadService.RefreshFeed("财联社电报")
+			news := copyTelegraphValues(feed.Items)
+			if config.EnablePushNews && news != nil {
 				go a.NewsPush(news)
 			}
 			go runtime.EventsEmit(a.ctx, "newTelegraph", news)
@@ -636,8 +600,12 @@ func (a *App) domReady(ctx context.Context) {
 		}
 
 		entryIDSina, err := a.cron.AddFunc(fmt.Sprintf("@every %ds", interval+10), func() {
-			news := data.NewMarketNewsApi().GetSinaNews(30)
-			if config.EnablePushNews {
+			if a.marketReadService == nil {
+				return
+			}
+			feed := a.marketReadService.RefreshFeed("新浪财经")
+			news := copyTelegraphValues(feed.Items)
+			if config.EnablePushNews && news != nil {
 				go a.NewsPush(news)
 			}
 			go runtime.EventsEmit(a.ctx, "newSinaNews", news)
@@ -649,8 +617,12 @@ func (a *App) domReady(ctx context.Context) {
 		}
 
 		entryIDTradingViewNews, err := a.cron.AddFunc(fmt.Sprintf("@every %ds", interval+10), func() {
-			news := data.NewMarketNewsApi().TradingViewNews()
-			if config.EnablePushNews {
+			if a.marketReadService == nil {
+				return
+			}
+			feed := a.marketReadService.RefreshFeed("外媒")
+			news := copyTelegraphValues(feed.Items)
+			if config.EnablePushNews && news != nil {
 				go a.NewsPush(news)
 			}
 			go runtime.EventsEmit(a.ctx, "tradingViewNews", news)
@@ -742,7 +714,7 @@ func (a *App) domReady(ctx context.Context) {
 	go func() {
 		a.CheckUpdate(0)
 		go a.CheckStockBaseInfo(a.ctx)
-		go syncAllStockInfo(a.ctx)
+		go a.syncAllStockInfo(a.ctx)
 
 		a.cron.AddFunc("0 0 2 * * *", func() {
 			appInfo("dom-ready", "cron.check_stock_base_info_started", "scheduled stock base info check started")
@@ -753,7 +725,7 @@ func (a *App) domReady(ctx context.Context) {
 			a.CheckUpdate(0)
 		})
 		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
-			syncAllStockInfo(a.ctx)
+			a.syncAllStockInfo(a.ctx)
 		})
 	}()
 
@@ -779,119 +751,38 @@ func (a *App) domReady(ctx context.Context) {
 
 }
 
-func syncAllStockInfo(ctx context.Context) {
+func (a *App) syncAllStockInfo(ctx context.Context) {
 	defer PanicHandler()
 	defer func() {
 		go runtime.EventsEmit(ctx, "loadingMsg", "done")
 	}()
-	db.Dao.Unscoped().Model(&models.AllStockInfo{}).Where("1=1").Delete(&models.AllStockInfo{})
-	for page := 1; page < 3; page++ {
-		res := data.NewStockDataApi().GetAllStocks(page, 3000, "", models.TechnicalIndicators{})
-		var datas []models.AllStockInfo
-		for _, data := range (*res).Result.Data {
-			datas = append(datas, data.ToAllStockInfo())
-		}
-		err := db.Dao.CreateInBatches(&datas, 1000).Error
-		if err != nil {
-			appError("sync-all-stock-info", "stock.sync_batch_insert_failed", "create all stock info batch failed", logger.Err(err))
-		}
+	if a.researchService == nil {
+		return
+	}
+	if err := a.researchService.SyncAllStockInfo(ctx); err != nil {
+		appError("sync-all-stock-info", "stock.sync_batch_insert_failed", "create all stock info batch failed", logger.Err(err))
 	}
 }
+
 func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	defer PanicHandler()
 	defer func() {
 		go runtime.EventsEmit(ctx, "loadingMsg", "done")
 	}()
-	stockBasics := &[]data.StockBasic{}
-	resty.New().R().
-		SetHeader("user", "go-stock").
-		SetResult(stockBasics).
-		Get("http://8.134.249.145:18080/go-stock/stock_basic.json")
-
-	db.Dao.Unscoped().Model(&data.StockBasic{}).Where("1=1").Delete(&data.StockBasic{})
-	err := db.Dao.CreateInBatches(stockBasics, 400).Error
-	if err != nil {
-		appError("check-stock-base-info", "stock.base_info_save_failed", "save stock basic info failed", logger.Err(err))
+	if a.researchService == nil {
+		return
 	}
-
-	//count := int64(0)
-	//db.Dao.Model(&data.StockBasic{}).Count(&count)
-	//if count == int64(len(*stockBasics)) {
-	//	return
-	//}
-	//for _, stock := range *stockBasics {
-	//	stockInfo := &data.StockBasic{
-	//		TsCode: stock.TsCode,
-	//		Name:   stock.Name,
-	//		Symbol: stock.Symbol,
-	//		BKCode: stock.BKCode,
-	//		BKName: stock.BKName,
-	//	}
-	//	db.Dao.Model(&data.StockBasic{}).Where("ts_code = ?", stock.TsCode).First(stockInfo)
-	//	if stockInfo.ID == 0 {
-	//		db.Dao.Model(&data.StockBasic{}).Create(stockInfo)
-	//	} else {
-	//		db.Dao.Model(&data.StockBasic{}).Where("ts_code = ?", stock.TsCode).Updates(stockInfo)
-	//	}
-	//}
-
-	stockHKBasics := &[]models.StockInfoHK{}
-	resty.New().R().
-		SetHeader("user", "go-stock").
-		SetResult(stockHKBasics).
-		Get("http://8.134.249.145:18080/go-stock/stock_base_info_hk.json")
-
-	db.Dao.Unscoped().Model(&models.StockInfoHK{}).Where("1=1").Delete(&models.StockInfoHK{})
-	err = db.Dao.CreateInBatches(stockHKBasics, 400).Error
-	if err != nil {
-		appError("check-stock-base-info", "stock.hk_base_info_save_failed", "save stock hk basic info failed", logger.Err(err))
+	if err := a.researchService.RefreshStockBaseInfo(ctx); err != nil {
+		appError("check-stock-base-info", "stock.base_info_save_failed", "save stock base info failed", logger.Err(err))
 	}
-
-	//for _, stock := range *stockHKBasics {
-	//	stockInfo := &models.StockInfoHK{
-	//		Code:   stock.Code,
-	//		Name:   stock.Name,
-	//		BKName: stock.BKName,
-	//		BKCode: stock.BKCode,
-	//	}
-	//	db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stock.Code).First(stockInfo)
-	//	if stockInfo.ID == 0 {
-	//		db.Dao.Model(&models.StockInfoHK{}).Create(stockInfo)
-	//	} else {
-	//		db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stock.Code).Updates(stockInfo)
-	//	}
-	//}
-	stockUSBasics := &[]models.StockInfoUS{}
-	resty.New().R().
-		SetHeader("user", "go-stock").
-		SetResult(stockUSBasics).
-		Get("http://8.134.249.145:18080/go-stock/stock_base_info_us.json")
-
-	db.Dao.Unscoped().Model(&models.StockInfoUS{}).Where("1=1").Delete(&models.StockInfoUS{})
-	err = db.Dao.CreateInBatches(stockUSBasics, 400).Error
-	if err != nil {
-		appError("check-stock-base-info", "stock.us_base_info_save_failed", "save stock us basic info failed", logger.Err(err))
-	}
-	//for _, stock := range *stockUSBasics {
-	//	stockInfo := &models.StockInfoUS{
-	//		Code:   stock.Code,
-	//		Name:   stock.Name,
-	//		BKName: stock.BKName,
-	//		BKCode: stock.BKCode,
-	//	}
-	//	db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stock.Code).First(stockInfo)
-	//	if stockInfo.ID == 0 {
-	//		db.Dao.Model(&models.StockInfoUS{}).Create(stockInfo)
-	//	} else {
-	//		db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stock.Code).Updates(stockInfo)
-	//	}
-	//}
-
 }
-func (a *App) NewsPush(news *[]models.Telegraph) {
 
-	follows := data.NewStockDataApi().GetFollowList(0)
-	stockNames := slice.Map(*follows, func(index int, item data.FollowedStock) string {
+func (a *App) NewsPush(news *[]models.Telegraph) {
+	if news == nil || a.watchlistService == nil {
+		return
+	}
+	follows := a.watchlistService.GetFollowList(a.ctx, 0)
+	stockNames := slice.Map(follows, func(index int, item data.FollowedStock) string {
 		return item.Name
 	})
 
@@ -903,8 +794,6 @@ func (a *App) NewsPush(news *[]models.Telegraph) {
 		} else {
 			go runtime.EventsEmit(a.ctx, "newsPush", telegraph)
 		}
-		//go data.NewAlertWindowsApi("go-stock", telegraph.Source+" "+telegraph.Time, telegraph.Content, string(icon)).SendNotification()
-		//}
 	}
 }
 
@@ -1145,8 +1034,11 @@ func MonitorFollowedStockCostPrices(a *App) {
 	a.dispatchNotificationDeliveries(a.watchlistService.EvaluateCostAlerts(a.ctx, time.Now()))
 }
 
-func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
+func (a *App) GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 	stockInfos := make([]data.StockInfo, 0)
+	if a == nil || a.watchlistService == nil {
+		return &stockInfos
+	}
 	stockCodes := make([]string, 0)
 	for _, follow := range follows {
 		if strutil.HasPrefixAny(follow.StockCode, []string{"SZ", "SH", "sh", "sz"}) && (!isTradingTime(time.Now())) {
@@ -1160,8 +1052,11 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 		}
 		stockCodes = append(stockCodes, follow.StockCode)
 	}
-	stockData, _ := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
-	for _, info := range *stockData {
+	if len(stockCodes) == 0 {
+		return &stockInfos
+	}
+	for _, quote := range a.watchlistService.GetRealtimePrices(a.ctx, stockCodes...) {
+		info := realtimePriceToStockInfo(quote)
 		v, ok := slice.FindBy(follows, func(idx int, follow data.FollowedStock) bool {
 			if strutil.HasPrefixAny(follow.StockCode, []string{"US", "us"}) {
 				return strings.ToLower(strings.Replace(follow.StockCode, "us", "gb_", 1)) == info.Code
@@ -1170,24 +1065,27 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 			return follow.StockCode == info.Code
 		})
 		if ok {
-			addStockFollowData(v, &info)
+			a.addStockFollowData(v, &info)
 			stockInfos = append(stockInfos, info)
 		}
 	}
 	return &stockInfos
 }
-func getStockInfo(follow data.FollowedStock) *data.StockInfo {
-	stockCode := follow.StockCode
-	stockDatas, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
-	if err != nil || len(*stockDatas) == 0 {
+
+func (a *App) getStockInfo(follow data.FollowedStock) *data.StockInfo {
+	if a == nil || a.watchlistService == nil {
 		return &data.StockInfo{}
 	}
-	stockData := (*stockDatas)[0]
-	addStockFollowData(follow, &stockData)
+	quotes := a.watchlistService.GetRealtimePrices(a.ctx, follow.StockCode)
+	if len(quotes) == 0 {
+		return &data.StockInfo{}
+	}
+	stockData := realtimePriceToStockInfo(quotes[0])
+	a.addStockFollowData(follow, &stockData)
 	return &stockData
 }
 
-func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
+func (a *App) addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 	stockData.PrePrice = follow.Price //上次当前价格
 	stockData.Sort = follow.Sort
 	stockData.CostPrice = follow.CostPrice //成本价
@@ -1255,10 +1153,24 @@ func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 	}
 
 	//logger.SugaredLogger.Debugf("stockData:%+v", stockData)
-	if follow.Price != price && price > 0 {
-		go db.Dao.Model(follow).Where("stock_code = ?", follow.StockCode).Updates(map[string]interface{}{
-			"price": price,
-		})
+	if follow.Price != price && price > 0 && a != nil && a.watchlistService != nil {
+		go a.watchlistService.UpdateObservedPrice(a.ctx, follow.StockCode, price)
+	}
+}
+
+func realtimePriceToStockInfo(quote marketservice.RealtimePrice) data.StockInfo {
+	return data.StockInfo{
+		Code:     quote.StockCode,
+		Name:     quote.StockName,
+		Price:    quote.Price,
+		Bid:      quote.Bid,
+		Ask:      quote.Ask,
+		Open:     quote.Open,
+		High:     quote.High,
+		Low:      quote.Low,
+		PreClose: quote.PreClose,
+		Date:     quote.Date,
+		Time:     quote.Time,
 	}
 }
 
@@ -1290,14 +1202,11 @@ func (a *App) shutdown(ctx context.Context) {
 
 // Greet returns a greeting for the given name
 func (a *App) Greet(stockCode string) *data.StockInfo {
-	//stockInfo, _ := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
-
-	follow := &data.FollowedStock{
-		StockCode: stockCode,
+	if a.watchlistService == nil {
+		return &data.StockInfo{}
 	}
-	db.Dao.Model(follow).Where("stock_code = ?", stockCode).Preload("Groups").Preload("Groups.GroupInfo").First(follow)
-	stockInfo := getStockInfo(*follow)
-	return stockInfo
+	follow := a.watchlistService.GetFollowedStock(a.ctx, stockCode)
+	return a.getStockInfo(follow)
 }
 
 func (a *App) Follow(stockCode string) string {
@@ -1324,7 +1233,10 @@ func (a *App) GetFollowList(groupId int) *[]data.FollowedStock {
 }
 
 func (a *App) GetStockList(key string) []data.StockBasic {
-	return data.NewStockDataApi().GetStockList(key)
+	if a.marketReadService == nil {
+		return []data.StockBasic{}
+	}
+	return a.marketReadService.LoadStockList(key)
 }
 
 func (a *App) SetCostPriceAndVolume(stockCode string, price float64, volume int64) string {
@@ -1886,6 +1798,17 @@ func feedItemsForSource(feeds marketservice.FeedSet, source string) []*models.Te
 	default:
 		return []*models.Telegraph{}
 	}
+}
+
+func copyTelegraphValues(items []*models.Telegraph) *[]models.Telegraph {
+	result := make([]models.Telegraph, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		result = append(result, *item)
+	}
+	return &result
 }
 
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {

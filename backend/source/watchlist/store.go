@@ -141,3 +141,10 @@ func (s *Store) GetRealtimePrices(ctx context.Context, stockCodes ...string) []m
 	}
 	return result
 }
+
+func (s *Store) UpdateObservedPrice(ctx context.Context, stockCode string, price float64) {
+	_ = ctx
+	db.Dao.Model(&data.FollowedStock{}).Where("stock_code = ?", stockCode).Updates(map[string]any{
+		"price": price,
+	})
+}

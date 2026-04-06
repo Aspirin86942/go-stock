@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"go-stock/backend/data"
+	"go-stock/backend/db"
 	"go-stock/backend/models"
 	marketservice "go-stock/backend/service/market"
 	notificationservice "go-stock/backend/service/notification"
 
 	"github.com/duke-git/lancet/v2/convertor"
+	"github.com/go-resty/resty/v2"
 )
 
 type Store interface {
@@ -61,6 +63,93 @@ func NewService(store Store) *Service {
 		alertLastSent:     make(map[string]time.Time),
 		priceAtAlertReset: make(map[string]float64),
 	}
+}
+
+func (s *Service) LoadAllStocks(ctx context.Context, page, pageSize int, name string, technicalIndicators models.TechnicalIndicators) *models.AllStocksResp {
+	_ = ctx
+	result := data.NewStockDataApi().GetAllStocks(page, pageSize, name, technicalIndicators)
+	if result == nil {
+		return &models.AllStocksResp{
+			Result: struct {
+				Nextpage    bool               `json:"nextpage"`
+				Currentpage int                `json:"currentpage"`
+				Data        []models.StockInfo `json:"data"`
+				Config      []interface{}      `json:"config"`
+				Count       int                `json:"count"`
+			}{
+				Data:   []models.StockInfo{},
+				Config: []interface{}{},
+			},
+		}
+	}
+	if result.Result.Data == nil {
+		result.Result.Data = []models.StockInfo{}
+	}
+	if result.Result.Config == nil {
+		result.Result.Config = []interface{}{}
+	}
+	return result
+}
+
+func (s *Service) SyncAllStockInfo(ctx context.Context) error {
+	_ = ctx
+	db.Dao.Unscoped().Model(&models.AllStockInfo{}).Where("1 = 1").Delete(&models.AllStockInfo{})
+	for page := 1; page < 3; page++ {
+		result := s.LoadAllStocks(ctx, page, 3000, "", models.TechnicalIndicators{})
+		datas := make([]models.AllStockInfo, 0, len(result.Result.Data))
+		for _, item := range result.Result.Data {
+			datas = append(datas, item.ToAllStockInfo())
+		}
+		if len(datas) == 0 {
+			continue
+		}
+		if err := db.Dao.CreateInBatches(&datas, 1000).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) RefreshStockBaseInfo(ctx context.Context) error {
+	_ = ctx
+
+	stockBasics := &[]data.StockBasic{}
+	if _, err := resty.New().R().
+		SetHeader("user", "go-stock").
+		SetResult(stockBasics).
+		Get("http://8.134.249.145:18080/go-stock/stock_basic.json"); err != nil {
+		return err
+	}
+	db.Dao.Unscoped().Model(&data.StockBasic{}).Where("1 = 1").Delete(&data.StockBasic{})
+	if err := db.Dao.CreateInBatches(stockBasics, 400).Error; err != nil {
+		return err
+	}
+
+	stockHKBasics := &[]models.StockInfoHK{}
+	if _, err := resty.New().R().
+		SetHeader("user", "go-stock").
+		SetResult(stockHKBasics).
+		Get("http://8.134.249.145:18080/go-stock/stock_base_info_hk.json"); err != nil {
+		return err
+	}
+	db.Dao.Unscoped().Model(&models.StockInfoHK{}).Where("1 = 1").Delete(&models.StockInfoHK{})
+	if err := db.Dao.CreateInBatches(stockHKBasics, 400).Error; err != nil {
+		return err
+	}
+
+	stockUSBasics := &[]models.StockInfoUS{}
+	if _, err := resty.New().R().
+		SetHeader("user", "go-stock").
+		SetResult(stockUSBasics).
+		Get("http://8.134.249.145:18080/go-stock/stock_base_info_us.json"); err != nil {
+		return err
+	}
+	db.Dao.Unscoped().Model(&models.StockInfoUS{}).Where("1 = 1").Delete(&models.StockInfoUS{})
+	if err := db.Dao.CreateInBatches(stockUSBasics, 400).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) GetStockChanges(ctx context.Context, changeTypes []int, pageIndex, pageSize int) *data.StockChangesResponse {

@@ -38,12 +38,24 @@ func (s *closeoutMarketServiceStub) RefreshFeed(source string) marketservice.Fee
 	return s.refreshFeedResult
 }
 
+func (s *closeoutMarketServiceStub) RefreshAllFeeds() marketservice.FeedSet {
+	return s.loadFeedsResult
+}
+
 func (s *closeoutMarketServiceStub) LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet {
 	return s.globalIndexesResult
 }
 
 func (s *closeoutMarketServiceStub) LoadIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry {
 	return s.industryRanksResult
+}
+
+func (s *closeoutMarketServiceStub) LoadStockList(keyword string) []data.StockBasic {
+	return []data.StockBasic{}
+}
+
+func (s *closeoutMarketServiceStub) SaveNtfyNews(news models.NtfyNews) (*models.Telegraph, bool) {
+	return nil, false
 }
 
 func (s *closeoutMarketServiceStub) LoadGlobalIndexesReadable(crawlTimeout uint) string {
@@ -209,6 +221,14 @@ func (s *closeoutWatchlistServiceStub) GetFollowList(ctx context.Context, groupI
 	return []data.FollowedStock{}
 }
 
+func (s *closeoutWatchlistServiceStub) GetFollowedStock(ctx context.Context, stockCode string) data.FollowedStock {
+	return data.FollowedStock{}
+}
+
+func (s *closeoutWatchlistServiceStub) GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice {
+	return []marketservice.RealtimePrice{}
+}
+
 func (s *closeoutWatchlistServiceStub) SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string {
 	return ""
 }
@@ -222,6 +242,9 @@ func (s *closeoutWatchlistServiceStub) SetAlarmChangePercent(ctx context.Context
 }
 
 func (s *closeoutWatchlistServiceStub) SetStockSort(ctx context.Context, stockCode string, sort int64) {
+}
+
+func (s *closeoutWatchlistServiceStub) UpdateObservedPrice(ctx context.Context, stockCode string, price float64) {
 }
 
 func (s *closeoutWatchlistServiceStub) ListGroups(ctx context.Context) []data.Group {

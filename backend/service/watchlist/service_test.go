@@ -110,6 +110,8 @@ func (f *fakeStore) GetRealtimePrices(ctx context.Context, stockCodes ...string)
 	return append([]marketservice.RealtimePrice(nil), f.quotes...)
 }
 
+func (f *fakeStore) UpdateObservedPrice(ctx context.Context, stockCode string, price float64) {}
+
 func (f *fakeStore) SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string {
 	return "设置成功"
 }

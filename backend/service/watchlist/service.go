@@ -37,6 +37,7 @@ type Store interface {
 	SetAlarmChangePercent(ctx context.Context, stockCode string, val, alarmPrice float64) string
 	SetStockSort(ctx context.Context, stockCode string, sort int64)
 	GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice
+	UpdateObservedPrice(ctx context.Context, stockCode string, price float64)
 }
 
 type Analyzer interface {
@@ -176,6 +177,18 @@ func (s *Service) GetFollowList(ctx context.Context, groupID int) []data.Followe
 		return s.store.ListFollowedStocks(ctx)
 	}
 	return s.store.ListFollowedStocksByGroup(ctx, groupID)
+}
+
+func (s *Service) GetFollowedStock(ctx context.Context, stockCode string) data.FollowedStock {
+	return s.store.GetFollowedStock(ctx, NormalizeStockCode(stockCode))
+}
+
+func (s *Service) GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice {
+	return s.store.GetRealtimePrices(ctx, stockCodes...)
+}
+
+func (s *Service) UpdateObservedPrice(ctx context.Context, stockCode string, price float64) {
+	s.store.UpdateObservedPrice(ctx, NormalizeStockCode(stockCode), price)
 }
 
 func (s *Service) SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string {

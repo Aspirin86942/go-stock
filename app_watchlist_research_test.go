@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/models"
 	contractservice "go-stock/backend/service/contract"
+	marketservice "go-stock/backend/service/market"
 	notificationservice "go-stock/backend/service/notification"
 	researchservice "go-stock/backend/service/research"
 	watchlistservice "go-stock/backend/service/watchlist"
@@ -49,6 +50,19 @@ func (s *stubWatchlistService) GetFollowList(ctx context.Context, groupID int) [
 	return append([]data.FollowedStock(nil), s.follows...)
 }
 
+func (s *stubWatchlistService) GetFollowedStock(ctx context.Context, stockCode string) data.FollowedStock {
+	for _, follow := range s.follows {
+		if follow.StockCode == stockCode {
+			return follow
+		}
+	}
+	return data.FollowedStock{}
+}
+
+func (s *stubWatchlistService) GetRealtimePrices(ctx context.Context, stockCodes ...string) []marketservice.RealtimePrice {
+	return []marketservice.RealtimePrice{}
+}
+
 func (s *stubWatchlistService) SetCostPriceAndVolume(ctx context.Context, stockCode string, price float64, volume int64) string {
 	return "设置成功"
 }
@@ -63,6 +77,9 @@ func (s *stubWatchlistService) SetAlarmChangePercent(ctx context.Context, stockC
 }
 
 func (s *stubWatchlistService) SetStockSort(ctx context.Context, stockCode string, sort int64) {}
+
+func (s *stubWatchlistService) UpdateObservedPrice(ctx context.Context, stockCode string, price float64) {
+}
 
 func (s *stubWatchlistService) AddGroup(ctx context.Context, group data.Group) string {
 	return "添加成功"
@@ -97,12 +114,28 @@ func (s *stubWatchlistService) EvaluateCostAlerts(ctx context.Context, now time.
 }
 
 type stubResearchService struct {
-	markets            []string
-	page               *models.AiRecommendStocksPageData
-	recordID           uint
-	addedAllStockInfo  models.AllStockInfo
-	deletedAllStockID  uint
+	markets              []string
+	page                 *models.AiRecommendStocksPageData
+	recordID             uint
+	addedAllStockInfo    models.AllStockInfo
+	deletedAllStockID    uint
 	batchDeletedStockIDs []uint
+	allStocksResp        *models.AllStocksResp
+}
+
+func (s *stubResearchService) LoadAllStocks(ctx context.Context, page, pageSize int, name string, technicalIndicators models.TechnicalIndicators) *models.AllStocksResp {
+	if s.allStocksResp != nil {
+		return s.allStocksResp
+	}
+	return &models.AllStocksResp{}
+}
+
+func (s *stubResearchService) SyncAllStockInfo(ctx context.Context) error {
+	return nil
+}
+
+func (s *stubResearchService) RefreshStockBaseInfo(ctx context.Context) error {
+	return nil
 }
 
 func (s *stubResearchService) GetStockChanges(ctx context.Context, changeTypes []int, pageIndex, pageSize int) *data.StockChangesResponse {
@@ -213,8 +246,8 @@ func TestApp_ResearchAndWatchlistMethodsDelegateToServices(t *testing.T) {
 		follows: []data.FollowedStock{{StockCode: "sz000001"}},
 	}
 	researchStub := &stubResearchService{
-		markets: []string{"沪市"},
-		page:    &models.AiRecommendStocksPageData{List: []models.AiRecommendStocks{{StockCode: "000001.SZ"}}},
+		markets:  []string{"沪市"},
+		page:     &models.AiRecommendStocksPageData{List: []models.AiRecommendStocks{{StockCode: "000001.SZ"}}},
 		recordID: 9,
 	}
 	app := &App{

@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import {onBeforeMount, ref} from 'vue'
-import {GetStockList} from "../../wailsjs/go/main/App";
 import {RefreshCircleSharp} from "@vicons/ionicons5";
 import _ from "lodash";
 import KLineChart from "./KLineChart.vue";
 import MoneyTrend from "./moneyTrend.vue";
 import {useMessage} from "naive-ui";
 import {openBrowserUrl} from "../services/appShellService.mjs";
-import {loadStockNotices} from "../services/marketService.mjs";
+import {loadStockList as GetStockList, loadStockNotices} from "../services/marketService.mjs";
 
 const {stockCode}=defineProps(
     {
