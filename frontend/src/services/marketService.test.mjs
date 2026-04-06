@@ -273,9 +273,10 @@ test('loadRealtimePrice 走旧版 GetStockRealTimePrice 绑定', async () => {
       main: {
         App: {
           GetStockRealTimePrice: async (stockCode) => ({
-            stockCode,
-            stockName: '平安银行',
-            price: '12.34',
+            code: 0,
+            message: 'success',
+            price: 12.34,
+            name: `股票-${stockCode}`,
           }),
         },
       },
@@ -284,17 +285,10 @@ test('loadRealtimePrice 走旧版 GetStockRealTimePrice 绑定', async () => {
 
   try {
     assert.deepEqual(await loadRealtimePrice('sz000001'), {
-      stockCode: 'sz000001',
-      stockName: '平安银行',
-      price: '12.34',
-      bid: '',
-      ask: '',
-      open: '',
-      high: '',
-      low: '',
-      preClose: '',
-      date: '',
-      time: '',
+      code: 0,
+      message: 'success',
+      price: 12.34,
+      name: '股票-sz000001',
     });
   } finally {
     globalThis.window = originalWindow;

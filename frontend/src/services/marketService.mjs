@@ -263,5 +263,11 @@ export async function loadEastMoneyKLinePageResult(stockCode, stockName, klt, li
 }
 
 export async function loadRealtimePrice(stockCode) {
-  return normalizeRealtimePrice(await AppBindings.GetStockRealTimePrice(stockCode));
+  const data = toObject(await AppBindings.GetStockRealTimePrice(stockCode));
+  return {
+    code: toNumber(data.code, -1),
+    message: data.message ?? '',
+    price: toNumber(data.price, 0),
+    name: data.name ?? '',
+  };
 }

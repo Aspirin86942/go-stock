@@ -383,36 +383,48 @@ func TestService_GracefulFallbacks_AreStable(t *testing.T) {
 }
 
 func TestService_LoadRealtimePriceFallsBackThroughBidLevels(t *testing.T) {
-	svc := NewService(&fakeSource{
+	a1First := NewService(&fakeSource{
 		realtimePrice: &data.StockInfo{
-			Code: "sz000001",
-			Name: "平安银行",
-			Bid:  "",
-			Ask:  "",
-			B1P:  "",
-			B2P:  "12.34",
-			B3P:  "12.33",
+			Code:     "sz000001",
+			Name:     "平安银行",
+			A1P:      "12.35",
+			B1P:      "12.34",
+			PreClose: "12.33",
 		},
 	})
 
-	price := svc.LoadRealtimePrice("sz000001")
-	if price.StockCode != "sz000001" {
-		t.Fatalf("unexpected stock code: %+v", price)
+	a1Price := a1First.LoadRealtimePrice("sz000001")
+	if a1Price.StockCode != "sz000001" {
+		t.Fatalf("unexpected stock code: %+v", a1Price)
 	}
-	if price.Price != "12.34" {
-		t.Fatalf("expected fallback price from bid ladder, got %+v", price)
+	if a1Price.Price != "12.35" {
+		t.Fatalf("expected A1P to win before B1P, got %+v", a1Price)
 	}
 
-	preCloseSvc := NewService(&fakeSource{
+	b1BeforePreClose := NewService(&fakeSource{
 		realtimePrice: &data.StockInfo{
 			Code:     "sz000002",
 			Name:     "万科A",
+			B1P:      "21.09",
 			PreClose: "21.08",
 		},
 	})
 
-	preClosePrice := preCloseSvc.LoadRealtimePrice("sz000002")
-	if preClosePrice.Price != "21.08" {
+	b1Price := b1BeforePreClose.LoadRealtimePrice("sz000002")
+	if b1Price.Price != "21.09" {
+		t.Fatalf("expected B1P to win before pre-close, got %+v", b1Price)
+	}
+
+	preCloseSvc := NewService(&fakeSource{
+		realtimePrice: &data.StockInfo{
+			Code:     "sz000003",
+			Name:     "招商银行",
+			PreClose: "31.08",
+		},
+	})
+
+	preClosePrice := preCloseSvc.LoadRealtimePrice("sz000003")
+	if preClosePrice.Price != "31.08" {
 		t.Fatalf("expected fallback price from pre-close, got %+v", preClosePrice)
 	}
 }
