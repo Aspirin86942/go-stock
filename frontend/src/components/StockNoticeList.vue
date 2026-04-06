@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import {onBeforeMount, ref} from 'vue'
-import {GetStockList, StockNotice} from "../../wailsjs/go/main/App";
-import {BrowserOpenURL} from "../../wailsjs/runtime";
+import {GetStockList} from "../../wailsjs/go/main/App";
 import {RefreshCircleSharp} from "@vicons/ionicons5";
 import _ from "lodash";
 import KLineChart from "./KLineChart.vue";
 import MoneyTrend from "./moneyTrend.vue";
 import {useMessage} from "naive-ui";
+import {openBrowserUrl} from "../services/appShellService.mjs";
+import {loadStockNotices} from "../services/marketService.mjs";
 
 const {stockCode}=defineProps(
     {
@@ -21,7 +22,7 @@ const list  = ref([])
 const options =  ref([])
 const message=useMessage()
 function getNotice(stockCodes) {
-  StockNotice(stockCodes).then(result => {
+  loadStockNotices(stockCodes).then(result => {
     console.log(result)
     list.value = result
   })
@@ -50,7 +51,7 @@ function handleSearch(value) {
   getNotice(value)
 }
 function openWin(code) {
-  BrowserOpenURL("https://pdf.dfcfw.com/pdf/H2_"+code+"_1.pdf?1750092081000.pdf")
+  openBrowserUrl("https://pdf.dfcfw.com/pdf/H2_"+code+"_1.pdf?1750092081000.pdf")
 }
 function getTypeColor(name){
   if(name.includes("质押")||name.includes("冻结")||name.includes("解冻")||name.includes("解押")||name.includes("解禁")){

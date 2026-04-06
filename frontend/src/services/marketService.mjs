@@ -9,6 +9,15 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(normalized) ? normalized : fallback;
 }
 
+function toObject(value) {
+  return value && typeof value === 'object' ? value : {};
+}
+
+function getAppBinding(name) {
+  const binding = AppBindings?.[name] ?? globalThis?.window?.go?.main?.App?.[name];
+  return typeof binding === 'function' ? binding : null;
+}
+
 export function normalizeMarketFeeds(value) {
   const data = value ?? {};
   return {
@@ -90,6 +99,63 @@ export function normalizeStockMoneyTrend(value) {
   }));
 }
 
+export function normalizeHotTopics(value) {
+  return toArray(value);
+}
+
+export function normalizeMinutePriceLine(value) {
+  const data = toObject(value);
+  return {
+    stockCode: data.stockCode ?? '',
+    stockName: data.stockName ?? '',
+    date: data.date ?? '',
+    priceData: toArray(data.priceData).map((item) => ({
+      time: item?.time ?? '',
+      price: toNumber(item?.price, 0),
+      volume: toNumber(item?.volume, 0),
+      amount: toNumber(item?.amount, 0),
+    })),
+  };
+}
+
+export function normalizeRealtimePrice(value) {
+  const data = toObject(value);
+  return {
+    stockCode: data.stockCode ?? '',
+    stockName: data.stockName ?? '',
+    price: data.price ?? '',
+    bid: data.bid ?? '',
+    ask: data.ask ?? '',
+    open: data.open ?? '',
+    high: data.high ?? '',
+    low: data.low ?? '',
+    preClose: data.preClose ?? '',
+    date: data.date ?? '',
+    time: data.time ?? '',
+  };
+}
+
+export function normalizeHotStrategy(value) {
+  const data = toObject(value);
+  return {
+    ...data,
+    code: toNumber(data.code, 0),
+    data: toArray(data.data),
+    message: data.message ?? '',
+  };
+}
+
+export function normalizeEastMoneyKLinePageResult(value) {
+  const data = toObject(value);
+  return {
+    ok: !!data.ok,
+    data: toArray(data.data),
+    message: data.message ?? '',
+    errorCode: data.errorCode ?? '',
+    usedCookieRetry: !!data.usedCookieRetry,
+  };
+}
+
 export async function analyzeMarketSentiment(keyword = '') {
   return AppBindings.AnalyzeSentimentWithFreqWeight(keyword);
 }
@@ -127,4 +193,84 @@ export async function loadStockMoneyTrend(stockCode, days = 20) {
 export async function refreshMarketFeed(source) {
   const result = await AppBindings.RefreshMarketFeed(source);
   return normalizeMarketFeed(result);
+}
+
+export async function loadLongTigerRanks(date) {
+  return toArray(await AppBindings.LongTigerRank(date));
+}
+
+export async function loadStockResearchReports(stockCode) {
+  return toArray(await AppBindings.StockResearchReport(stockCode));
+}
+
+export async function loadStockNotices(stockCode) {
+  return toArray(await AppBindings.StockNotice(stockCode));
+}
+
+export async function loadIndustryResearchReports(industryCode) {
+  return toArray(await AppBindings.IndustryResearchReport(industryCode));
+}
+
+export async function loadEMDictCodes(code) {
+  return toArray(await AppBindings.EMDictCode(code));
+}
+
+export async function loadHotStocks(marketType = '10') {
+  return toArray(await AppBindings.HotStock(marketType));
+}
+
+export async function loadHotEvents(size = 10) {
+  return toArray(await AppBindings.HotEvent(size));
+}
+
+export async function loadHotTopics(size = 10) {
+  return normalizeHotTopics(await AppBindings.HotTopic(size));
+}
+
+export async function loadInvestCalendar(yearMonth) {
+  return toArray(await AppBindings.InvestCalendarTimeLine(yearMonth));
+}
+
+export async function loadClsCalendar() {
+  return toArray(await AppBindings.ClsCalendar());
+}
+
+export async function searchStocks(words) {
+  return toObject(await AppBindings.SearchStock(words));
+}
+
+export async function loadHotStrategy() {
+  return normalizeHotStrategy(await AppBindings.GetHotStrategy());
+}
+
+export async function loadStockKLine(stockCode, stockName, days = 365) {
+  return toArray(await AppBindings.GetStockKLine(stockCode, stockName, days));
+}
+
+export async function loadStockCommonKLine(stockCode, stockName, days = 365) {
+  return toArray(await AppBindings.GetStockCommonKLine(stockCode, stockName, days));
+}
+
+export async function loadMinutePriceLine(stockCode, stockName) {
+  return normalizeMinutePriceLine(await AppBindings.GetStockMinutePriceLineData(stockCode, stockName));
+}
+
+export async function loadEastMoneyKLineResult(stockCode, stockName, klt, limit) {
+  return normalizeEastMoneyKLinePageResult(
+    await AppBindings.GetStockEastMoneyKLineResult(stockCode, stockName, klt, limit),
+  );
+}
+
+export async function loadEastMoneyKLinePageResult(stockCode, stockName, klt, limit, end = '') {
+  return normalizeEastMoneyKLinePageResult(
+    await AppBindings.GetStockEastMoneyKLinePageResult(stockCode, stockName, klt, limit, end),
+  );
+}
+
+export async function loadRealtimePrice(stockCode) {
+  const binding = getAppBinding('GetStockRealtimePrice');
+  if (!binding) {
+    return normalizeRealtimePrice({ stockCode });
+  }
+  return normalizeRealtimePrice(await binding(stockCode));
 }

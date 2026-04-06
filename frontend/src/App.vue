@@ -28,7 +28,6 @@ import {
   StarOutline,
   Wallet, WarningOutline, TimeOutline,
 } from '@vicons/ionicons5'
-import {AnalyzeSentiment, GetConfig, GetGroupList,GetVersionInfo} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
 import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
@@ -36,6 +35,8 @@ import {Prompt, ReportAnalytics, ReportMoney, ReportSearch, TrendingUp} from "@v
 import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
+import {loadAppConfig} from "./services/configService.mjs";
+import {getGroupList, getVersionInfo} from "./services/appShellService.mjs";
 
 
 
@@ -772,14 +773,14 @@ onBeforeUnmount(() => {
 })
 
 onBeforeMount(() => {
-  GetVersionInfo().then(result => {
+  getVersionInfo().then(result => {
     if(result.officialStatement){
       content.value = result.officialStatement+"\n\n"+content.value
       officialStatement.value = result.officialStatement
     }
   })
 
-  GetGroupList().then(result => {
+  getGroupList().then(result => {
     groupList.value = result
     menuOptions.value.map((item) => {
       //console.log(item)
@@ -823,7 +824,7 @@ onBeforeMount(() => {
   })
 
 
-  GetConfig().then((res) => {
+  loadAppConfig().then((res) => {
     //console.log(res)
     enableFund.value = res.enableFund
     enableAgent.value = res.enableAgent
@@ -848,7 +849,7 @@ onBeforeMount(() => {
 onMounted(() => {
   WindowSetTitle("go-stock：AI赋能股票分析✨ "+officialStatement.value+"  未经授权,禁止商业目的！ [数据来源于网络,仅供参考;投资有风险,入市需谨慎]")
   contentStyle.value = "max-height: calc(92vh);overflow: hidden"
-  GetConfig().then((res) => {
+  loadAppConfig().then((res) => {
     if (res.enableNews) {
       enableNews.value = true
     }

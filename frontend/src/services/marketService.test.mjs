@@ -9,6 +9,9 @@ import {
   normalizeIndustryMoneyRanks,
   normalizeMoneyRanks,
   normalizeStockMoneyTrend,
+  normalizeHotTopics,
+  normalizeMinutePriceLine,
+  normalizeRealtimePrice,
 } from './marketService.mjs';
 
 test('normalizeMarketFeeds 缺失字段时补空数组', () => {
@@ -208,5 +211,56 @@ test('normalizeStockMoneyTrend 仅保留指定字段并做 number normalize', ()
         r0_net: 0,
       },
     ],
+  );
+});
+
+test('normalizeHotTopics 对空输入回退为空数组', () => {
+  assert.deepEqual(normalizeHotTopics(undefined), []);
+  assert.deepEqual(normalizeHotTopics(null), []);
+});
+
+test('normalizeMinutePriceLine 保持包裹结构稳定并规范分时数值字段', () => {
+  assert.deepEqual(
+    normalizeMinutePriceLine({
+      stockCode: 'sz000001',
+      priceData: [
+        { time: '09:30', price: '12.34', volume: '1200', amount: '15000.5' },
+        { time: '09:31' },
+      ],
+    }),
+    {
+      stockCode: 'sz000001',
+      stockName: '',
+      date: '',
+      priceData: [
+        { time: '09:30', price: 12.34, volume: 1200, amount: 15000.5 },
+        { time: '09:31', price: 0, volume: 0, amount: 0 },
+      ],
+    },
+  );
+});
+
+test('normalizeRealtimePrice 缺失价格时保留稳定字段', () => {
+  assert.deepEqual(
+    normalizeRealtimePrice({
+      stockCode: 'sz000001',
+      stockName: '平安银行',
+      price: '12.34',
+      bid: '12.33',
+      ask: '12.35',
+    }),
+    {
+      stockCode: 'sz000001',
+      stockName: '平安银行',
+      price: '12.34',
+      bid: '12.33',
+      ask: '12.35',
+      open: '',
+      high: '',
+      low: '',
+      preClose: '',
+      date: '',
+      time: '',
+    },
   );
 });

@@ -1,6 +1,8 @@
 package market
 
 import (
+	"encoding/json"
+	"go-stock/backend/data"
 	"go-stock/backend/models"
 	"strings"
 
@@ -9,6 +11,27 @@ import (
 
 type Service struct {
 	source Source
+}
+
+type legacyMarketSource interface {
+	LongTiger(date string) *[]models.LongTigerRankData
+	StockResearchReport(stockCode string, days int) []any
+	StockNotice(stockCode string) []any
+	IndustryResearchReport(industryCode string, days int) []any
+	EMDictCode(code string) []any
+	XueQiuHotStock(size int, marketType string) *[]models.HotItem
+	HotEvent(size int) *[]models.HotEvent
+	HotTopic(size int) []any
+	InvestCalendar(yearMonth string) []any
+	ClsCalendar() []any
+	SearchStock(words string, pageSize int) map[string]any
+	HotStrategy() map[string]any
+	GetStockKLine(stockCode string, days int64) *[]data.KLineData
+	GetStockCommonKLine(stockCode string, days int64) *[]data.KLineData
+	GetStockMinutePriceData(stockCode string) (*[]data.MinuteData, string)
+	GetStockEastMoneyKLinePage(stockCode, klt string, limit int, end string) *[]data.KLineData
+	GetStockEastMoneyKLinePageResult(stockCode, klt string, limit int, end string) map[string]any
+	GetStockRealtimePrice(stockCode string) *data.StockInfo
 }
 
 func NewService(source Source) *Service {
@@ -152,6 +175,244 @@ func (s *Service) LoadStockMoneyTrend(stockCode string, days int) []StockMoneyTr
 	return result
 }
 
+func (s *Service) LoadLongTiger(date string) []models.LongTigerRankData {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []models.LongTigerRankData{}
+	}
+	items := source.LongTiger(date)
+	if items == nil {
+		return []models.LongTigerRankData{}
+	}
+	copied := append([]models.LongTigerRankData(nil), (*items)...)
+	return copied
+}
+
+func (s *Service) LoadStockResearchReports(stockCode string) []StockResearchReportEntry {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []StockResearchReportEntry{}
+	}
+	return decodeSlice[StockResearchReportEntry](source.StockResearchReport(stockCode, 7))
+}
+
+func (s *Service) LoadStockNotices(stockCode string) []StockNoticeEntry {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []StockNoticeEntry{}
+	}
+	return decodeSlice[StockNoticeEntry](source.StockNotice(stockCode))
+}
+
+func (s *Service) LoadIndustryResearchReports(industryCode string) []IndustryResearchReportEntry {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []IndustryResearchReportEntry{}
+	}
+	return decodeSlice[IndustryResearchReportEntry](source.IndustryResearchReport(industryCode, 7))
+}
+
+func (s *Service) LoadEMDictCodes(code string) []EMDictCodeEntry {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []EMDictCodeEntry{}
+	}
+	return decodeSlice[EMDictCodeEntry](source.EMDictCode(code))
+}
+
+func (s *Service) LoadHotStocks(marketType string) []models.HotItem {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []models.HotItem{}
+	}
+	items := source.XueQiuHotStock(100, marketType)
+	if items == nil {
+		return []models.HotItem{}
+	}
+	return append([]models.HotItem(nil), (*items)...)
+}
+
+func (s *Service) LoadHotEvents(size int) []models.HotEvent {
+	if size <= 0 {
+		size = 10
+	}
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []models.HotEvent{}
+	}
+	items := source.HotEvent(size)
+	if items == nil {
+		return []models.HotEvent{}
+	}
+	return append([]models.HotEvent(nil), (*items)...)
+}
+
+func (s *Service) LoadHotTopics(size int) []HotTopicEntry {
+	if size <= 0 {
+		size = 10
+	}
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []HotTopicEntry{}
+	}
+	return decodeSlice[HotTopicEntry](source.HotTopic(size))
+}
+
+func (s *Service) LoadInvestCalendar(yearMonth string) []InvestCalendarDay {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []InvestCalendarDay{}
+	}
+	return decodeSlice[InvestCalendarDay](source.InvestCalendar(yearMonth))
+}
+
+func (s *Service) LoadClsCalendar() []ClsCalendarDay {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []ClsCalendarDay{}
+	}
+	return decodeSlice[ClsCalendarDay](source.ClsCalendar())
+}
+
+func (s *Service) SearchStocks(words string) SearchStockResponse {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return SearchStockResponse{Data: SearchStockData{Result: SearchStockResultSet{Columns: []SearchStockColumn{}, DataList: []map[string]any{}}}}
+	}
+	resp := decodeStruct[SearchStockResponse](source.SearchStock(words, 5000))
+	resp.Data.Result.Columns = normalizeSearchColumns(resp.Data.Result.Columns)
+	if resp.Data.Result.Columns == nil {
+		resp.Data.Result.Columns = []SearchStockColumn{}
+	}
+	if resp.Data.Result.DataList == nil {
+		resp.Data.Result.DataList = []map[string]any{}
+	}
+	return resp
+}
+
+func (s *Service) LoadHotStrategies() models.HotStrategy {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return models.HotStrategy{Data: []*models.HotStrategyData{}}
+	}
+	resp := decodeStruct[models.HotStrategy](source.HotStrategy())
+	if resp.Data == nil {
+		resp.Data = []*models.HotStrategyData{}
+	}
+	return resp
+}
+
+func (s *Service) LoadStockKLine(stockCode string, days int64) []data.KLineData {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []data.KLineData{}
+	}
+	return cloneKLineData(source.GetStockKLine(stockCode, days))
+}
+
+func (s *Service) LoadStockCommonKLine(stockCode string, days int64) []data.KLineData {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []data.KLineData{}
+	}
+	return cloneKLineData(source.GetStockCommonKLine(stockCode, days))
+}
+
+func (s *Service) LoadStockMinutePriceLine(stockCode, stockName string) MinutePriceLine {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return MinutePriceLine{
+			StockCode: stockCode,
+			StockName: stockName,
+			PriceData: []data.MinuteData{},
+		}
+	}
+	priceData, date := source.GetStockMinutePriceData(stockCode)
+	line := MinutePriceLine{
+		StockCode: stockCode,
+		StockName: stockName,
+		Date:      strings.TrimSpace(date),
+		PriceData: []data.MinuteData{},
+	}
+	if priceData == nil {
+		return line
+	}
+	line.PriceData = append([]data.MinuteData(nil), (*priceData)...)
+	return line
+}
+
+func (s *Service) LoadStockEastMoneyKLine(stockCode, klt string, limit int) []data.KLineData {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []data.KLineData{}
+	}
+	return cloneKLineData(source.GetStockEastMoneyKLinePage(stockCode, normalizeKlt(klt), normalizeLimit(limit), ""))
+}
+
+func (s *Service) LoadStockEastMoneyKLineResult(stockCode, klt string, limit int) EastMoneyKLinePageResult {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return EastMoneyKLinePageResult{Data: []data.KLineData{}}
+	}
+	return normalizeEastMoneyResult(source.GetStockEastMoneyKLinePageResult(stockCode, normalizeKlt(klt), normalizeLimit(limit), ""))
+}
+
+func (s *Service) LoadStockEastMoneyKLinePage(stockCode, klt string, limit int, end string) []data.KLineData {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return []data.KLineData{}
+	}
+	return cloneKLineData(source.GetStockEastMoneyKLinePage(stockCode, normalizeKlt(klt), normalizeLimit(limit), strings.TrimSpace(end)))
+}
+
+func (s *Service) LoadStockEastMoneyKLinePageResult(stockCode, klt string, limit int, end string) EastMoneyKLinePageResult {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return EastMoneyKLinePageResult{Data: []data.KLineData{}}
+	}
+	return normalizeEastMoneyResult(source.GetStockEastMoneyKLinePageResult(stockCode, normalizeKlt(klt), normalizeLimit(limit), strings.TrimSpace(end)))
+}
+
+func (s *Service) LoadRealtimePrice(stockCode string) RealtimePrice {
+	source, ok := s.source.(legacyMarketSource)
+	if !ok {
+		return RealtimePrice{StockCode: stockCode}
+	}
+	raw := source.GetStockRealtimePrice(stockCode)
+	if raw == nil {
+		return RealtimePrice{
+			StockCode: stockCode,
+		}
+	}
+	return RealtimePrice{
+		StockCode: firstNonEmpty(raw.Code, stockCode),
+		StockName: raw.Name,
+		Price: firstNonEmpty(
+			raw.Price,
+			raw.Bid,
+			raw.Ask,
+			raw.B1P,
+			raw.B2P,
+			raw.B3P,
+			raw.B4P,
+			raw.B5P,
+			raw.A1P,
+			raw.A2P,
+			raw.A3P,
+			raw.A4P,
+			raw.A5P,
+		),
+		Bid:      raw.Bid,
+		Ask:      raw.Ask,
+		Open:     raw.Open,
+		High:     raw.High,
+		Low:      raw.Low,
+		PreClose: raw.PreClose,
+		Date:     raw.Date,
+		Time:     raw.Time,
+	}
+}
+
 func (s *Service) loadFeed(source string) Feed {
 	items := s.source.GetTelegraphList(source)
 	if items == nil {
@@ -195,4 +456,90 @@ func toFloat(value any) float64 {
 		return 0
 	}
 	return v
+}
+
+func decodeSlice[T any](raw any) []T {
+	if raw == nil {
+		return []T{}
+	}
+	result := []T{}
+	payload, err := json.Marshal(raw)
+	if err != nil {
+		return []T{}
+	}
+	if err := json.Unmarshal(payload, &result); err != nil {
+		return []T{}
+	}
+	if result == nil {
+		return []T{}
+	}
+	return result
+}
+
+func decodeStruct[T any](raw any) T {
+	var result T
+	if raw == nil {
+		return result
+	}
+	payload, err := json.Marshal(raw)
+	if err != nil {
+		return result
+	}
+	_ = json.Unmarshal(payload, &result)
+	return result
+}
+
+func cloneKLineData(items *[]data.KLineData) []data.KLineData {
+	if items == nil {
+		return []data.KLineData{}
+	}
+	return append([]data.KLineData(nil), (*items)...)
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 500
+	}
+	if limit > 5000 {
+		return 5000
+	}
+	return limit
+}
+
+func normalizeKlt(klt string) string {
+	klt = strings.TrimSpace(klt)
+	if klt == "" {
+		return "1"
+	}
+	return klt
+}
+
+func normalizeEastMoneyResult(raw map[string]any) EastMoneyKLinePageResult {
+	result := decodeStruct[EastMoneyKLinePageResult](raw)
+	if result.Data == nil {
+		result.Data = []data.KLineData{}
+	}
+	return result
+}
+
+func normalizeSearchColumns(columns []SearchStockColumn) []SearchStockColumn {
+	if columns == nil {
+		return []SearchStockColumn{}
+	}
+	result := make([]SearchStockColumn, 0, len(columns))
+	for _, column := range columns {
+		column.Children = normalizeSearchColumns(column.Children)
+		result = append(result, column)
+	}
+	return result
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

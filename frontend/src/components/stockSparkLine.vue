@@ -1,7 +1,7 @@
 <script setup>
 import {onMounted, onBeforeMount, ref, watchEffect} from "vue";
 import * as echarts from 'echarts';
-import {GetStockMinutePriceLineData} from "../../wailsjs/go/main/App"; // 如果您使用多个组件，请将此样式导入放在您的主文件中
+import {loadMinutePriceLine} from "../services/marketService.mjs"; // 如果您使用多个组件，请将此样式导入放在您的主文件中
 const {idSuffix,stockCode,stockName,lastPrice,openPrice,darkTheme} = defineProps({
   idSuffix: {
     type: String,
@@ -33,7 +33,7 @@ const chartRef=ref();
 
 function setChartData(chart) {
   //console.log("setChartData")
-  GetStockMinutePriceLineData(stockCode, stockName).then(result => {
+  loadMinutePriceLine(stockCode, stockName).then(result => {
     //console.log("GetStockMinutePriceLineData",result)
     const priceData = result.priceData
     let category = []

@@ -1,6 +1,9 @@
 package market
 
-import "go-stock/backend/models"
+import (
+	"go-stock/backend/data"
+	"go-stock/backend/models"
+)
 
 type FeedSet struct {
 	Telegraph []*models.Telegraph `json:"telegraph"`
@@ -86,6 +89,166 @@ type StockMoneyTrendRow struct {
 	Trade     float64 `json:"trade"`
 	NetAmount float64 `json:"netamount"`
 	R0Net     float64 `json:"r0_net"`
+}
+
+type StockResearchReportEntry struct {
+	InfoCode     string `json:"infoCode"`
+	StockCode    string `json:"stockCode"`
+	StockName    string `json:"stockName"`
+	Market       string `json:"market"`
+	IndvInduName string `json:"indvInduName"`
+	Title        string `json:"title"`
+	EmRatingName string `json:"emRatingName"`
+	RatingChange int    `json:"ratingChange"`
+	SRatingName  string `json:"sRatingName"`
+	Researcher   string `json:"researcher"`
+	OrgSName     string `json:"orgSName"`
+	PublishDate  string `json:"publishDate"`
+}
+
+type IndustryResearchReportEntry struct {
+	InfoCode     string `json:"infoCode"`
+	IndustryName string `json:"industryName"`
+	Title        string `json:"title"`
+	EmRatingName string `json:"emRatingName"`
+	RatingChange int    `json:"ratingChange"`
+	SRatingName  string `json:"sRatingName"`
+	Researcher   string `json:"researcher"`
+	OrgSName     string `json:"orgSName"`
+	PublishDate  string `json:"publishDate"`
+}
+
+type StockNoticeEntry struct {
+	ArtCode     string              `json:"art_code"`
+	Title       string              `json:"title"`
+	NoticeDate  string              `json:"notice_date"`
+	DisplayTime string              `json:"display_time"`
+	Codes       []StockNoticeCode   `json:"codes"`
+	Columns     []StockNoticeColumn `json:"columns"`
+}
+
+type StockNoticeCode struct {
+	StockCode  string `json:"stock_code"`
+	ShortName  string `json:"short_name"`
+	MarketCode string `json:"market_code"`
+}
+
+type StockNoticeColumn struct {
+	ColumnName string `json:"column_name"`
+}
+
+type EMDictCodeEntry struct {
+	BKCode      string `json:"bkCode"`
+	BKName      string `json:"bkName"`
+	FirstLetter string `json:"firstLetter"`
+}
+
+type HotTopicEntry struct {
+	Nickname    string          `json:"nickname"`
+	Desc        string          `json:"desc"`
+	SquareImg   string          `json:"squareImg"`
+	StockList   []HotTopicStock `json:"stock_list"`
+	ClickNumber int             `json:"clickNumber"`
+	PostNumber  int             `json:"postNumber"`
+	HTID        string          `json:"htid"`
+}
+
+type HotTopicStock struct {
+	Name string `json:"name"`
+}
+
+type InvestCalendarDay struct {
+	Date string               `json:"date"`
+	List []InvestCalendarItem `json:"list"`
+}
+
+type InvestCalendarItem struct {
+	ArticleID string `json:"article_id"`
+	Title     string `json:"title"`
+	LikeCount int    `json:"like_count"`
+}
+
+type ClsCalendarDay struct {
+	CalendarDay string            `json:"calendar_day"`
+	Week        string            `json:"week"`
+	Items       []ClsCalendarItem `json:"items"`
+}
+
+type ClsCalendarItem struct {
+	ID       string               `json:"id"`
+	Title    string               `json:"title"`
+	Event    *ClsCalendarEvent    `json:"event"`
+	Economic *ClsCalendarEconomic `json:"economic"`
+}
+
+type ClsCalendarEvent struct {
+	Star int `json:"star"`
+}
+
+type ClsCalendarEconomic struct {
+	Star      int    `json:"star"`
+	Actual    string `json:"actual"`
+	Consensus string `json:"consensus"`
+	Front     string `json:"front"`
+}
+
+type SearchStockResponse struct {
+	Code    int             `json:"code"`
+	Msg     string          `json:"msg"`
+	Message string          `json:"message"`
+	Data    SearchStockData `json:"data"`
+}
+
+type SearchStockData struct {
+	TraceInfo SearchStockTraceInfo `json:"traceInfo"`
+	Result    SearchStockResultSet `json:"result"`
+}
+
+type SearchStockTraceInfo struct {
+	ShowText string `json:"showText"`
+}
+
+type SearchStockResultSet struct {
+	Columns  []SearchStockColumn `json:"columns"`
+	DataList []map[string]any    `json:"dataList"`
+}
+
+type SearchStockColumn struct {
+	Title      string              `json:"title"`
+	Key        string              `json:"key"`
+	Unit       string              `json:"unit"`
+	HiddenNeed bool                `json:"hiddenNeed"`
+	DateMsg    string              `json:"dateMsg"`
+	Children   []SearchStockColumn `json:"children"`
+}
+
+type MinutePriceLine struct {
+	StockCode string            `json:"stockCode"`
+	StockName string            `json:"stockName"`
+	Date      string            `json:"date"`
+	PriceData []data.MinuteData `json:"priceData"`
+}
+
+type EastMoneyKLinePageResult struct {
+	OK              bool             `json:"ok"`
+	Data            []data.KLineData `json:"data"`
+	Message         string           `json:"message"`
+	ErrorCode       string           `json:"errorCode"`
+	UsedCookieRetry bool             `json:"usedCookieRetry"`
+}
+
+type RealtimePrice struct {
+	StockCode string `json:"stockCode"`
+	StockName string `json:"stockName"`
+	Price     string `json:"price"`
+	Bid       string `json:"bid"`
+	Ask       string `json:"ask"`
+	Open      string `json:"open"`
+	High      string `json:"high"`
+	Low       string `json:"low"`
+	PreClose  string `json:"preClose"`
+	Date      string `json:"date"`
+	Time      string `json:"time"`
 }
 
 type Source interface {

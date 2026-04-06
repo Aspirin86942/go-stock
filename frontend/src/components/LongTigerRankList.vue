@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {onBeforeMount, ref} from 'vue'
-import {LongTigerRank} from "../../wailsjs/go/main/App";
 import {BrowserOpenURL} from "../../wailsjs/runtime";
 import {ArrowDownOutline} from "@vicons/ionicons5";
 import _ from "lodash";
 import KLineChart from "./KLineChart.vue";
 import MoneyTrend from "./moneyTrend.vue";
 import {NButton, NText, useMessage} from "naive-ui";
+import {loadLongTigerRanks} from "../services/marketService.mjs";
 const message = useMessage()
 
 const lhbList=  ref([])
@@ -35,7 +35,7 @@ function longTiger_old(date) {
   let loading1=message.loading("正在获取龙虎榜数据...",{
     duration: 0,
   })
-  LongTigerRank(date).then(res => {
+  loadLongTigerRanks(date).then(res => {
     lhbList.value = res
     loading1.destroy()
     if (res.length === 0) {
@@ -68,7 +68,7 @@ function longTiger(date) {
       return;
     }
 
-    LongTigerRank(currentDate).then(res => {
+    loadLongTigerRanks(currentDate).then(res => {
       if (res.length === 0) {
         const previousDate = new Date(currentDate);
         previousDate.setDate(previousDate.getDate() - 1);
@@ -105,7 +105,7 @@ function longTiger(date) {
 function handleEXPLANATION(value, option){
   SearchForm.value.EXPLANATION = value
   if(value){
-    LongTigerRank(SearchForm.value.dateValue).then(res => {
+    loadLongTigerRanks(SearchForm.value.dateValue).then(res => {
       lhbList.value=_.filter(res, function(o) { return o['EXPLANATION']===value; });
       if (res.length === 0) {
         message.info("暂无数据,请切换日期")

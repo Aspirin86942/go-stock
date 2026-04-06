@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"go-stock/backend/data"
 	"go-stock/backend/models"
 )
 
@@ -11,6 +12,9 @@ type fakeSource struct {
 	telegraphsBySource map[string]*[]*models.Telegraph
 	globalIndexes      map[string]any
 	industryRanks      map[string]any
+	longTigerRanks     *[]models.LongTigerRankData
+	hotTopics          []any
+	realtimePrice      *data.StockInfo
 	events             []string
 }
 
@@ -47,6 +51,84 @@ func (f *fakeSource) GetMoneyRankSina(sort string) []map[string]any {
 
 func (f *fakeSource) GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any {
 	return []map[string]any{}
+}
+
+func (f *fakeSource) LongTiger(date string) *[]models.LongTigerRankData {
+	return f.longTigerRanks
+}
+
+func (f *fakeSource) StockResearchReport(stockCode string, days int) []any {
+	return []any{}
+}
+
+func (f *fakeSource) StockNotice(stockCode string) []any {
+	return []any{}
+}
+
+func (f *fakeSource) IndustryResearchReport(industryCode string, days int) []any {
+	return []any{}
+}
+
+func (f *fakeSource) EMDictCode(code string) []any {
+	return []any{}
+}
+
+func (f *fakeSource) XueQiuHotStock(size int, marketType string) *[]models.HotItem {
+	items := []models.HotItem{}
+	return &items
+}
+
+func (f *fakeSource) HotEvent(size int) *[]models.HotEvent {
+	items := []models.HotEvent{}
+	return &items
+}
+
+func (f *fakeSource) HotTopic(size int) []any {
+	return f.hotTopics
+}
+
+func (f *fakeSource) InvestCalendar(yearMonth string) []any {
+	return []any{}
+}
+
+func (f *fakeSource) ClsCalendar() []any {
+	return []any{}
+}
+
+func (f *fakeSource) SearchStock(words string, pageSize int) map[string]any {
+	return map[string]any{}
+}
+
+func (f *fakeSource) HotStrategy() map[string]any {
+	return map[string]any{}
+}
+
+func (f *fakeSource) GetStockKLine(stockCode string, days int64) *[]data.KLineData {
+	rows := []data.KLineData{}
+	return &rows
+}
+
+func (f *fakeSource) GetStockCommonKLine(stockCode string, days int64) *[]data.KLineData {
+	rows := []data.KLineData{}
+	return &rows
+}
+
+func (f *fakeSource) GetStockMinutePriceData(stockCode string) (*[]data.MinuteData, string) {
+	rows := []data.MinuteData{}
+	return &rows, ""
+}
+
+func (f *fakeSource) GetStockEastMoneyKLinePage(stockCode, klt string, limit int, end string) *[]data.KLineData {
+	rows := []data.KLineData{}
+	return &rows
+}
+
+func (f *fakeSource) GetStockEastMoneyKLinePageResult(stockCode, klt string, limit int, end string) map[string]any {
+	return map[string]any{}
+}
+
+func (f *fakeSource) GetStockRealtimePrice(stockCode string) *data.StockInfo {
+	return f.realtimePrice
 }
 
 func TestService_LoadReadModel_NormalizesTypedContracts(t *testing.T) {
@@ -297,5 +379,39 @@ func TestService_GracefulFallbacks_AreStable(t *testing.T) {
 	missingIndustry := NewService(&fakeSource{industryRanks: map[string]any{}}).LoadIndustryRanks("0", 10)
 	if missingIndustry == nil || len(missingIndustry) != 0 {
 		t.Fatalf("missing industry data should degrade to empty slice: %+v", missingIndustry)
+	}
+}
+
+func TestService_LoadRealtimePriceFallsBackThroughBidLevels(t *testing.T) {
+	svc := NewService(&fakeSource{
+		realtimePrice: &data.StockInfo{
+			Code: "sz000001",
+			Name: "平安银行",
+			Bid:  "",
+			Ask:  "",
+			B1P:  "",
+			B2P:  "12.34",
+			B3P:  "12.33",
+		},
+	})
+
+	price := svc.LoadRealtimePrice("sz000001")
+	if price.StockCode != "sz000001" {
+		t.Fatalf("unexpected stock code: %+v", price)
+	}
+	if price.Price != "12.34" {
+		t.Fatalf("expected fallback price from bid ladder, got %+v", price)
+	}
+}
+
+func TestService_LoadHotTopicsReturnsEmptySliceWhenSourceReturnsNil(t *testing.T) {
+	svc := NewService(&fakeSource{hotTopics: nil})
+
+	topics := svc.LoadHotTopics(10)
+	if topics == nil {
+		t.Fatal("expected empty slice instead of nil")
+	}
+	if len(topics) != 0 {
+		t.Fatalf("expected no topics, got %+v", topics)
 	}
 }

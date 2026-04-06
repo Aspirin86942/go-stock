@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {onBeforeMount, onUnmounted, ref} from 'vue'
-import {HotStock} from "../../wailsjs/go/main/App";
 import KLineChart from "./KLineChart.vue";
 import {ArrowBack, ArrowDown, ArrowUp} from "@vicons/ionicons5";
+import {loadHotStocks} from "../services/marketService.mjs";
 
 const {marketType}=defineProps(
     {
@@ -17,9 +17,9 @@ const task =ref()
 const list  = ref([])
 
 onBeforeMount(async () => {
-  list.value = await HotStock(marketType)
+  list.value = await loadHotStocks(marketType)
   task.value = setInterval(async () => {
-    list.value = await HotStock(marketType)
+    list.value = await loadHotStocks(marketType)
   }, 5000)
 })
 onUnmounted(()=>{

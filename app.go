@@ -126,6 +126,29 @@ type marketResidualReadService interface {
 	LoadStockMoneyTrend(stockCode string, days int) []marketservice.StockMoneyTrendRow
 }
 
+type marketLegacyReadService interface {
+	LoadLongTiger(date string) []models.LongTigerRankData
+	LoadStockResearchReports(stockCode string) []marketservice.StockResearchReportEntry
+	LoadStockNotices(stockCode string) []marketservice.StockNoticeEntry
+	LoadIndustryResearchReports(industryCode string) []marketservice.IndustryResearchReportEntry
+	LoadEMDictCodes(code string) []marketservice.EMDictCodeEntry
+	LoadHotStocks(marketType string) []models.HotItem
+	LoadHotEvents(size int) []models.HotEvent
+	LoadHotTopics(size int) []marketservice.HotTopicEntry
+	LoadInvestCalendar(yearMonth string) []marketservice.InvestCalendarDay
+	LoadClsCalendar() []marketservice.ClsCalendarDay
+	SearchStocks(words string) marketservice.SearchStockResponse
+	LoadHotStrategies() models.HotStrategy
+	LoadStockKLine(stockCode string, days int64) []data.KLineData
+	LoadStockCommonKLine(stockCode string, days int64) []data.KLineData
+	LoadStockMinutePriceLine(stockCode, stockName string) marketservice.MinutePriceLine
+	LoadStockEastMoneyKLine(stockCode, klt string, limit int) []data.KLineData
+	LoadStockEastMoneyKLineResult(stockCode, klt string, limit int) marketservice.EastMoneyKLinePageResult
+	LoadStockEastMoneyKLinePage(stockCode, klt string, limit int, end string) []data.KLineData
+	LoadStockEastMoneyKLinePageResult(stockCode, klt string, limit int, end string) marketservice.EastMoneyKLinePageResult
+	LoadRealtimePrice(stockCode string) marketservice.RealtimePrice
+}
+
 type analysisArtifactService interface {
 	GetResultArtifact(ctx context.Context, stockCode, stockName string) (analysisservice.ResultArtifact, *contractservice.UserVisibleError)
 }
@@ -150,6 +173,14 @@ func (a *App) residualMarketReads() marketResidualReadService {
 		return nil
 	}
 	service, _ := a.marketReadService.(marketResidualReadService)
+	return service
+}
+
+func (a *App) legacyMarketReads() marketLegacyReadService {
+	if a.marketReadService == nil {
+		return nil
+	}
+	service, _ := a.marketReadService.(marketLegacyReadService)
 	return service
 }
 
@@ -1888,80 +1919,74 @@ func (a *App) RemoveGroup(groupId int) string {
 }
 
 func (a *App) GetStockKLine(stockCode, stockName string, days int64) *[]data.KLineData {
-	return data.NewStockDataApi().GetHK_KLineData(stockCode, "day", days)
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadStockKLine(stockCode, days)
+		return &items
+	}
+	items := []data.KLineData{}
+	return &items
 }
 
-func (a *App) GetStockMinutePriceLineData(stockCode, stockName string) map[string]any {
-	res := make(map[string]any, 4)
-	priceData, date := data.NewStockDataApi().GetStockMinutePriceData(stockCode)
-	res["priceData"] = priceData
-	res["date"] = date
-	res["stockName"] = stockName
-	res["stockCode"] = stockCode
-	return res
+func (a *App) GetStockMinutePriceLineData(stockCode, stockName string) marketservice.MinutePriceLine {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadStockMinutePriceLine(stockCode, stockName)
+	}
+	return marketservice.MinutePriceLine{
+		StockCode: stockCode,
+		StockName: stockName,
+		PriceData: []data.MinuteData{},
+	}
 }
 
 func (a *App) GetStockCommonKLine(stockCode, stockName string, days int64) *[]data.KLineData {
-	return data.NewStockDataApi().GetCommonKLineData(stockCode, "day", days)
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadStockCommonKLine(stockCode, days)
+		return &items
+	}
+	items := []data.KLineData{}
+	return &items
 }
 
 // GetStockEastMoneyKLine 东方财富多周期 K 线（分钟：1/5/10/60/120；日 101、周 102、半年 105、年 106）。
 // klt 与东方财富接口一致；10 分钟由 1 分钟数据聚合。limit 为根数上限（最大 5000）。
 func (a *App) GetStockEastMoneyKLine(stockCode, stockName string, klt string, limit int) *[]data.KLineData {
-	return a.GetStockEastMoneyKLinePage(stockCode, stockName, klt, limit, "")
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadStockEastMoneyKLine(stockCode, klt, limit)
+		return &items
+	}
+	items := []data.KLineData{}
+	return &items
 }
 
-func (a *App) GetStockEastMoneyKLineResult(stockCode, stockName string, klt string, limit int) map[string]any {
-	return a.GetStockEastMoneyKLinePageResult(stockCode, stockName, klt, limit, "")
+func (a *App) GetStockEastMoneyKLineResult(stockCode, stockName string, klt string, limit int) marketservice.EastMoneyKLinePageResult {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadStockEastMoneyKLineResult(stockCode, klt, limit)
+	}
+	return marketservice.EastMoneyKLinePageResult{Data: []data.KLineData{}}
 }
 
 // GetStockEastMoneyKLinePage 分页拉取 K 线：end 为东财 end 参数（YYYYMMDD 或 YYYYMMDDHHmmss），空字符串表示取最新一段（同 GetStockEastMoneyKLine）。
 func (a *App) GetStockEastMoneyKLinePage(stockCode, stockName string, klt string, limit int, end string) *[]data.KLineData {
-	if limit <= 0 {
-		limit = 500
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadStockEastMoneyKLinePage(stockCode, klt, limit, end)
+		return &items
 	}
-	if limit > 5000 {
-		limit = 5000
-	}
-	klt = strings.TrimSpace(klt)
-	if klt == "" {
-		klt = "1"
-	}
-	api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
-	end = strings.TrimSpace(end)
-	//if klt == "10" {
-	//	fetchN := limit * 10
-	//	if fetchN > 5000 {
-	//		fetchN = 5000
-	//	}
-	//	raw := api.GetKLineDataBefore(stockCode, "1", "", fetchN, end)
-	//	return data.AggregateKLineEveryN(raw, 10)
-	//}
-	return api.GetKLineDataBefore(stockCode, klt, "", limit, end)
+	items := []data.KLineData{}
+	return &items
 }
 
-func (a *App) GetStockEastMoneyKLinePageResult(stockCode, stockName string, klt string, limit int, end string) map[string]any {
-	if limit <= 0 {
-		limit = 500
+func (a *App) GetStockEastMoneyKLinePageResult(stockCode, stockName string, klt string, limit int, end string) marketservice.EastMoneyKLinePageResult {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadStockEastMoneyKLinePageResult(stockCode, klt, limit, end)
 	}
-	if limit > 5000 {
-		limit = 5000
-	}
-	klt = strings.TrimSpace(klt)
-	if klt == "" {
-		klt = "1"
-	}
-	end = strings.TrimSpace(end)
+	return marketservice.EastMoneyKLinePageResult{Data: []data.KLineData{}}
+}
 
-	api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
-	result := api.GetKLineDataBeforeResult(stockCode, klt, "", limit, end)
-	return map[string]any{
-		"ok":              len(result.Data) > 0 && result.ErrorCode == "",
-		"data":            result.Data,
-		"message":         result.Message,
-		"errorCode":       result.ErrorCode,
-		"usedCookieRetry": result.UsedCookieRetry,
+func (a *App) GetStockRealtimePrice(stockCode string) marketservice.RealtimePrice {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadRealtimePrice(stockCode)
 	}
+	return marketservice.RealtimePrice{StockCode: stockCode}
 }
 
 func (a *App) GetMarketFeeds() marketservice.FeedSet {

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {nextTick, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {ClsCalendar} from "../../wailsjs/go/main/App";
 import { addMonths, format ,parse} from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 import {useMessage} from 'naive-ui'
 import {Star48Filled} from "@vicons/fluent";
+import {loadClsCalendar} from "../services/marketService.mjs";
 const today = new Date();
 const year = today.getFullYear();
 const month = String(today.getMonth() + 1).padStart(2, '0'); // 月份从0开始，需要+1
@@ -34,7 +34,7 @@ function goBackToday() {
 }
 
 onBeforeMount(() => {
-  ClsCalendar().then(res => {
+  loadClsCalendar().then(res => {
     list.value = res
     goBackToday();
   })

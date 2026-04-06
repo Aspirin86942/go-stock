@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	marketservice "go-stock/backend/service/market"
 	"strings"
 	"time"
 
@@ -103,21 +104,38 @@ func (a *App) GetTimezone() map[string]any {
 }
 
 func (a *App) LongTigerRank(date string) *[]models.LongTigerRankData {
-	return data.NewMarketNewsApi().LongTiger(date)
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadLongTiger(date)
+		return &items
+	}
+	items := []models.LongTigerRankData{}
+	return &items
 }
 
-func (a *App) StockResearchReport(stockCode string) []any {
-	return data.NewMarketNewsApi().StockResearchReport(stockCode, 7)
+func (a *App) StockResearchReport(stockCode string) []marketservice.StockResearchReportEntry {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadStockResearchReports(stockCode)
+	}
+	return []marketservice.StockResearchReportEntry{}
 }
-func (a *App) StockNotice(stockCode string) []any {
-	return data.NewMarketNewsApi().StockNotice(stockCode)
+func (a *App) StockNotice(stockCode string) []marketservice.StockNoticeEntry {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadStockNotices(stockCode)
+	}
+	return []marketservice.StockNoticeEntry{}
 }
 
-func (a *App) IndustryResearchReport(industryCode string) []any {
-	return data.NewMarketNewsApi().IndustryResearchReport(industryCode, 7)
+func (a *App) IndustryResearchReport(industryCode string) []marketservice.IndustryResearchReportEntry {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadIndustryResearchReports(industryCode)
+	}
+	return []marketservice.IndustryResearchReportEntry{}
 }
-func (a *App) EMDictCode(code string) []any {
-	return data.NewMarketNewsApi().EMDictCode(code, a.cache)
+func (a *App) EMDictCode(code string) []marketservice.EMDictCodeEntry {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadEMDictCodes(code)
+	}
+	return []marketservice.EMDictCodeEntry{}
 }
 
 func (a *App) AnalyzeSentiment(text string) models.SentimentResult {
@@ -125,34 +143,53 @@ func (a *App) AnalyzeSentiment(text string) models.SentimentResult {
 }
 
 func (a *App) HotStock(marketType string) *[]models.HotItem {
-	return data.NewMarketNewsApi().XUEQIUHotStock(100, marketType)
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadHotStocks(marketType)
+		return &items
+	}
+	items := []models.HotItem{}
+	return &items
 }
 
 func (a *App) HotEvent(size int) *[]models.HotEvent {
-	if size <= 0 {
-		size = 10
+	if service := a.legacyMarketReads(); service != nil {
+		items := service.LoadHotEvents(size)
+		return &items
 	}
-	return data.NewMarketNewsApi().HotEvent(size)
+	items := []models.HotEvent{}
+	return &items
 }
-func (a *App) HotTopic(size int) []any {
-	if size <= 0 {
-		size = 10
+func (a *App) HotTopic(size int) []marketservice.HotTopicEntry {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadHotTopics(size)
 	}
-	return data.NewMarketNewsApi().HotTopic(size)
+	return []marketservice.HotTopicEntry{}
 }
 
-func (a *App) InvestCalendarTimeLine(yearMonth string) []any {
-	return data.NewMarketNewsApi().InvestCalendar(yearMonth)
+func (a *App) InvestCalendarTimeLine(yearMonth string) []marketservice.InvestCalendarDay {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadInvestCalendar(yearMonth)
+	}
+	return []marketservice.InvestCalendarDay{}
 }
-func (a *App) ClsCalendar() []any {
-	return data.NewMarketNewsApi().ClsCalendar()
+func (a *App) ClsCalendar() []marketservice.ClsCalendarDay {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadClsCalendar()
+	}
+	return []marketservice.ClsCalendarDay{}
 }
 
-func (a *App) SearchStock(words string) map[string]any {
-	return data.NewSearchStockApi(words).SearchStock(5000)
+func (a *App) SearchStock(words string) marketservice.SearchStockResponse {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.SearchStocks(words)
+	}
+	return marketservice.SearchStockResponse{}
 }
-func (a *App) GetHotStrategy() map[string]any {
-	return data.NewSearchStockApi("").HotStrategy()
+func (a *App) GetHotStrategy() models.HotStrategy {
+	if service := a.legacyMarketReads(); service != nil {
+		return service.LoadHotStrategies()
+	}
+	return models.HotStrategy{Data: []*models.HotStrategyData{}}
 }
 
 func (a *App) GetAllStocks(page int, pageSize int, name string, technicalIndicators models.TechnicalIndicators) *models.AllStocksResp {

@@ -1,10 +1,10 @@
 <script setup>
 import {onBeforeMount, ref} from 'vue'
-import {GetStockList, IndustryResearchReport,EMDictCode} from "../../wailsjs/go/main/App";
 import {ArrowDownOutline, CaretDown, CaretUp, PulseOutline, Refresh, RefreshCircleSharp,} from "@vicons/ionicons5";
 
 import {useMessage} from "naive-ui";
-import {BrowserOpenURL} from "../../wailsjs/runtime";
+import {openBrowserUrl} from "../services/appShellService.mjs";
+import {loadEMDictCodes, loadIndustryResearchReports} from "../services/marketService.mjs";
 
 const message=useMessage()
 const list  = ref([])
@@ -13,7 +13,7 @@ const options =  ref([])
 
 function getIndustryResearchReport(value) {
   message.loading("正在刷新数据...")
-  IndustryResearchReport(value).then(result => {
+  loadIndustryResearchReports(value).then(result => {
     console.log(result)
     list.value = result
   })
@@ -39,12 +39,12 @@ function ratingChangeName(ratingChange){
   }
 }
 function openWin(code) {
-  BrowserOpenURL("https://pdf.dfcfw.com/pdf/H3_"+code+"_1.pdf?1749744888000.pdf")
+  openBrowserUrl("https://pdf.dfcfw.com/pdf/H3_"+code+"_1.pdf?1749744888000.pdf")
 }
 
 function EMDictCodeList(keyVal){
   if (keyVal){
-    EMDictCode('016').then(result => {
+    loadEMDictCodes('016').then(result => {
       console.log(result)
         options.value=result.filter((value,index,array) => value.bkName.includes(keyVal)||value.firstLetter.includes(keyVal)||value.bkCode.includes(keyVal)).map(item => {
           return {

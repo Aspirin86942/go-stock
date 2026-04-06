@@ -1,5 +1,4 @@
 <script setup>
-import { GetStockEastMoneyKLinePageResult, GetStockEastMoneyKLineResult } from '../../wailsjs/go/main/App'
 import {
   CrosshairMode,
   CandlestickSeries,
@@ -18,6 +17,10 @@ import {
 } from './stock-lightweight-kline/hoverTooltip.mjs'
 import { NButton, NFlex, NInput, NSpin, NText } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  loadEastMoneyKLinePageResult,
+  loadEastMoneyKLineResult,
+} from '../services/marketService.mjs'
 
 /** A 股配色：涨红跌绿 */
 const CLR_RISE = '#ef5350'
@@ -1638,7 +1641,7 @@ async function loadOlderHistory() {
   const beforeCount = mergedRawRows.length
   try {
     const envelope = normalizeKlineEnvelope(
-      await GetStockEastMoneyKLinePageResult(
+      await loadEastMoneyKLinePageResult(
         codeSnap,
         props.stockName || '',
         kltSnap,
@@ -1702,7 +1705,7 @@ async function refreshLatestPoll() {
   try {
     const meta = INTERVALS.find((x) => x.klt === kltSnap) || INTERVALS[0]
     const envelope = normalizeKlineEnvelope(
-      await GetStockEastMoneyKLineResult(
+      await loadEastMoneyKLineResult(
         codeSnap,
         props.stockName || '',
         meta.klt,
@@ -1850,7 +1853,7 @@ async function loadData() {
   try {
     const meta = INTERVALS.find((x) => x.klt === activeKlt.value) || INTERVALS[0]
     const envelope = normalizeKlineEnvelope(
-      await GetStockEastMoneyKLineResult(
+      await loadEastMoneyKLineResult(
         props.code,
         props.stockName || '',
         meta.klt,

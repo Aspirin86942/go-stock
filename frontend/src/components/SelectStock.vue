@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList} from "../../wailsjs/go/main/App";
+import {Follow, GetFollowList} from "../../wailsjs/go/main/App";
 import {useMessage, NText, NTag, NButton} from 'naive-ui'
-import {Environment} from "../../wailsjs/runtime"
 import {RefreshCircleSharp} from "@vicons/ionicons5";
 import {EventsEmit} from "../../wailsjs/runtime";
+import {loadHotStrategy, searchStocks} from "../services/marketService.mjs";
+import {openExternalUrl} from "../services/appShellService.mjs";
 
 const message = useMessage()
 const search = ref('')
@@ -46,7 +47,7 @@ function Search() {
   }
 
   const loading = message.loading("正在获取选股数据...", {duration: 0});
-  SearchStock(search.value).then(res => {
+  searchStocks(search.value).then(res => {
     loading.destroy()
     // console.log(res)
     if (res.code == 100) {
@@ -154,7 +155,7 @@ function isNumeric(value) {
 }
 
 onBeforeMount(() => {
-  GetHotStrategy().then(res => {
+  loadHotStrategy().then(res => {
     console.log(res)
     if (res.code == 1) {
       hotStrategy.value = res.data
@@ -173,22 +174,7 @@ function DoSearch(question) {
 }
 
 function openCenteredWindow(url, width, height) {
-  const left = (window.screen.width - width) / 2;
-  const top = (window.screen.height - height) / 2;
-
-  Environment().then(env => {
-    switch (env.platform) {
-      case 'windows':
-        window.open(
-            url,
-            'centeredWindow',
-            `width=${width},height=${height},left=${left},top=${top},location=no,menubar=no,toolbar=no,display=standalone`
-        )
-        break
-      default:
-        OpenURL(url)
-    }
-  })
+  openExternalUrl(url, {width, height})
 }
 </script>
 

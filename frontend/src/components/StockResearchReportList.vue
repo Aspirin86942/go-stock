@@ -1,12 +1,13 @@
 <script setup>
 import {onBeforeMount, ref} from 'vue'
-import {GetStockList, StockResearchReport} from "../../wailsjs/go/main/App";
+import {GetStockList} from "../../wailsjs/go/main/App";
 import {ArrowDownOutline, CaretDown, CaretUp, PulseOutline, Refresh, RefreshCircleSharp,} from "@vicons/ionicons5";
 
 import KLineChart from "./KLineChart.vue";
 import MoneyTrend from "./moneyTrend.vue";
 import {useMessage} from "naive-ui";
-import {BrowserOpenURL} from "../../wailsjs/runtime";
+import {loadStockResearchReports} from "../services/marketService.mjs";
+import {openBrowserUrl} from "../services/appShellService.mjs";
 
 const {stockCode}=defineProps(
     {
@@ -23,7 +24,7 @@ const list  = ref([])
 const options =  ref([])
 
 function getStockResearchReport(value) {
-  StockResearchReport(value).then(result => {
+  loadStockResearchReports(value).then(result => {
     //console.log(result)
     list.value = result
   })
@@ -62,7 +63,7 @@ function getmMarketCode(market,code) {
   }
 }
 function openWin(code) {
-  BrowserOpenURL("https://pdf.dfcfw.com/pdf/H3_"+code+"_1.pdf?1749744888000.pdf")
+  openBrowserUrl("https://pdf.dfcfw.com/pdf/H3_"+code+"_1.pdf?1749744888000.pdf")
 }
 
 function findStockList(query){
