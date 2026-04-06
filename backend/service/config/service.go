@@ -1,17 +1,19 @@
 package config
 
 import (
+	"context"
+
 	"go-stock/backend/data"
 	"go-stock/backend/models"
 )
 
 type Store interface {
-	GetConfig() *data.SettingConfig
-	UpdateConfig(cfg *data.SettingConfig) string
-	GetPromptTemplates(name, promptType string) *[]models.PromptTemplate
-	GetPromptTemplatePage(query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
-	SavePromptTemplate(template models.PromptTemplate) string
-	DeletePromptTemplate(id uint) string
+	GetConfig(ctx context.Context) *data.SettingConfig
+	UpdateConfig(ctx context.Context, cfg *data.SettingConfig) string
+	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
+	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
+	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
+	DeletePromptTemplate(ctx context.Context, id uint) string
 }
 
 type Service struct {
@@ -25,8 +27,8 @@ func NewService(store Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) GetConfig() *data.SettingConfig {
-	cfg := s.store.GetConfig()
+func (s *Service) GetConfig(ctx context.Context) *data.SettingConfig {
+	cfg := s.store.GetConfig(ctx)
 	if cfg == nil {
 		cfg = &data.SettingConfig{}
 	}
@@ -36,16 +38,16 @@ func (s *Service) GetConfig() *data.SettingConfig {
 	return cfg
 }
 
-func (s *Service) UpdateConfig(cfg *data.SettingConfig) string {
-	return s.store.UpdateConfig(cfg)
+func (s *Service) UpdateConfig(ctx context.Context, cfg *data.SettingConfig) string {
+	return s.store.UpdateConfig(ctx, cfg)
 }
 
-func (s *Service) GetAiConfigs() []*data.AIConfig {
-	return s.GetConfig().AiConfigs
+func (s *Service) GetAiConfigs(ctx context.Context) []*data.AIConfig {
+	return s.GetConfig(ctx).AiConfigs
 }
 
-func (s *Service) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	templates := s.store.GetPromptTemplates(name, promptType)
+func (s *Service) GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate {
+	templates := s.store.GetPromptTemplates(ctx, name, promptType)
 	if templates == nil {
 		empty := []models.PromptTemplate{}
 		return &empty
@@ -53,8 +55,8 @@ func (s *Service) GetPromptTemplates(name, promptType string) *[]models.PromptTe
 	return templates
 }
 
-func (s *Service) GetPromptTemplatePage(query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error) {
-	page, err := s.store.GetPromptTemplatePage(query)
+func (s *Service) GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error) {
+	page, err := s.store.GetPromptTemplatePage(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -64,16 +66,16 @@ func (s *Service) GetPromptTemplatePage(query models.PromptTemplateQuery) (*mode
 	return page, nil
 }
 
-func (s *Service) SavePromptTemplate(template models.PromptTemplate) string {
-	return s.store.SavePromptTemplate(template)
+func (s *Service) SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string {
+	return s.store.SavePromptTemplate(ctx, template)
 }
 
-func (s *Service) DeletePromptTemplate(id uint) string {
-	return s.store.DeletePromptTemplate(id)
+func (s *Service) DeletePromptTemplate(ctx context.Context, id uint) string {
+	return s.store.DeletePromptTemplate(ctx, id)
 }
 
-func (s *Service) SaveLegacyPrompt(prompt models.Prompt) string {
-	return s.SavePromptTemplate(models.PromptTemplate{
+func (s *Service) SaveLegacyPrompt(ctx context.Context, prompt models.Prompt) string {
+	return s.SavePromptTemplate(ctx, models.PromptTemplate{
 		ID:      prompt.ID,
 		Name:    prompt.Name,
 		Content: prompt.Content,
@@ -81,6 +83,6 @@ func (s *Service) SaveLegacyPrompt(prompt models.Prompt) string {
 	})
 }
 
-func (s *Service) DeleteLegacyPrompt(id uint) string {
-	return s.DeletePromptTemplate(id)
+func (s *Service) DeleteLegacyPrompt(ctx context.Context, id uint) string {
+	return s.DeletePromptTemplate(ctx, id)
 }
