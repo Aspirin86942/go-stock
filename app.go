@@ -13,7 +13,9 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	analysisservice "go-stock/backend/service/analysis"
 	marketservice "go-stock/backend/service/market"
+	analysissource "go-stock/backend/source/analysis"
 	marketsource "go-stock/backend/source/marketnews"
 	"os"
 	"path/filepath"
@@ -55,6 +57,7 @@ type App struct {
 	stockAlertLastSent map[string]time.Time
 	priceAtAlertReset  map[string]float64
 	marketReadService  marketReadService
+	analysisService    analysisService
 }
 
 type marketReadService interface {
@@ -62,6 +65,20 @@ type marketReadService interface {
 	RefreshFeed(source string) marketservice.Feed
 	LoadGlobalIndexes(crawlTimeout uint) marketservice.IndexSet
 	LoadIndustryRanks(sort string, cnt int) []marketservice.IndustryRankEntry
+}
+
+type analysisService interface {
+	StartStockAnalysis(ctx context.Context, request analysisservice.StockRequest) <-chan analysisservice.StreamChunk
+	StartMarketSummary(ctx context.Context, request analysisservice.MarketSummaryRequest) <-chan analysisservice.StreamChunk
+	SaveResult(ctx context.Context, stockCode, stockName, result, chatID, question string, aiConfigID int)
+	GetLatestResult(ctx context.Context, stockCode string) *models.AIResponseResult
+	GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error)
+	DeleteResult(ctx context.Context, id uint) error
+	BatchDeleteResults(ctx context.Context, ids []uint) error
+	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
+	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
+	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
+	DeletePromptTemplate(ctx context.Context, id uint) string
 }
 
 const (
@@ -81,6 +98,8 @@ func NewApp() *App {
 	c.Start()
 	var tools []data.Tool
 	tools = data.Tools(tools)
+	analysisProvider := analysissource.NewProvider(tools)
+	analysisStore := analysissource.NewStore()
 	return &App{
 		cache:              cache,
 		cron:               c,
@@ -89,6 +108,7 @@ func NewApp() *App {
 		stockAlertLastSent: make(map[string]time.Time),
 		priceAtAlertReset:  make(map[string]float64),
 		marketReadService:  marketservice.NewService(marketsource.NewSource()),
+		analysisService:    analysisservice.NewService(analysisProvider, analysisStore, analysisStore),
 	}
 }
 
@@ -1386,23 +1406,35 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 }
 
 func (a *App) NewChatStream(stock, stockCode, question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool) {
-	var msgs <-chan map[string]any
-	if enableTools {
-		msgs = data.NewDeepSeekOpenAi(a.ctx, aiConfigId).NewChatStream(stock, stockCode, question, sysPromptId, a.AiTools, think)
-	} else {
-		msgs = data.NewDeepSeekOpenAi(a.ctx, aiConfigId).NewChatStream(stock, stockCode, question, sysPromptId, []data.Tool{}, think)
-	}
+	msgs := a.analysisService.StartStockAnalysis(a.ctx, analysisservice.StockRequest{
+		StockName:   stock,
+		StockCode:   stockCode,
+		Question:    question,
+		AIConfigID:  aiConfigId,
+		SysPromptID: sysPromptId,
+		EnableTools: enableTools,
+		Think:       think,
+	})
 	for msg := range msgs {
-		runtime.EventsEmit(a.ctx, "newChatStream", msg)
+		runtime.EventsEmit(a.ctx, "newChatStream", map[string]any{
+			"chatId":            msg.ChatID,
+			"question":          msg.Question,
+			"content":           msg.Content,
+			"extraContent":      msg.ExtraContent,
+			"model":             msg.Model,
+			"time":              msg.Time,
+			"reasoning_content": msg.ReasoningContent,
+			"tool_calls":        msg.ToolCalls,
+		})
 	}
 	runtime.EventsEmit(a.ctx, "newChatStream", "DONE")
 }
 
 func (a *App) SaveAIResponseResult(stockCode, stockName, result, chatId, question string, aiConfigId int) {
-	data.NewDeepSeekOpenAi(a.ctx, aiConfigId).SaveAIResponseResult(stockCode, stockName, result, chatId, question)
+	a.analysisService.SaveResult(a.ctx, stockCode, stockName, result, chatId, question, aiConfigId)
 }
 func (a *App) GetAIResponseResult(stock string) *models.AIResponseResult {
-	return data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stock)
+	return a.analysisService.GetLatestResult(a.ctx, stock)
 }
 
 func (a *App) GetVersionInfo() *models.VersionInfo {
@@ -1634,19 +1666,18 @@ func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 }
 
 func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	return data.NewPromptTemplateApi().GetPromptTemplates(name, promptType)
+	return a.analysisService.GetPromptTemplates(a.ctx, name, promptType)
 }
 func (a *App) AddPrompt(prompt models.Prompt) string {
-	promptTemplate := models.PromptTemplate{
+	return a.analysisService.SavePromptTemplate(a.ctx, models.PromptTemplate{
 		ID:      prompt.ID,
 		Content: prompt.Content,
 		Name:    prompt.Name,
 		Type:    prompt.Type,
-	}
-	return data.NewPromptTemplateApi().AddPrompt(promptTemplate)
+	})
 }
 func (a *App) DelPrompt(id uint) string {
-	return data.NewPromptTemplateApi().DelPrompt(id)
+	return a.analysisService.DeletePromptTemplate(a.ctx, id)
 }
 func (a *App) SetStockAICron(cronText, stockCode string) {
 	data.NewStockDataApi().SetStockAICron(cronText, stockCode)
@@ -1846,31 +1877,26 @@ func (a *App) SummaryStockNews(question string, aiConfigId int, sysPromptId *int
 		eventName = "summaryStockNews"
 	}
 
-	// 解析对话历史（AI 助手记忆）：空字符串或解析失败则无历史
-	var history []map[string]interface{}
-	if strings.TrimSpace(historyJSON) != "" {
-		var list []models.AiAssistantMessage
-		if err := json.Unmarshal([]byte(historyJSON), &list); err == nil && len(list) > 0 {
-			history = make([]map[string]interface{}, 0, len(list))
-			for _, m := range list {
-				item := map[string]interface{}{"role": m.Role, "content": m.Content}
-				if m.Role == "assistant" && m.Reasoning != "" {
-					item["reasoning_content"] = m.Reasoning
-				}
-				history = append(history, item)
-			}
-		}
-	}
-
-	var msgs <-chan map[string]any
-	if enableTools {
-		msgs = data.NewDeepSeekOpenAi(ctx, aiConfigId).NewSummaryStockNewsStreamWithTools(question, sysPromptId, a.AiTools, think, history)
-	} else {
-		msgs = data.NewDeepSeekOpenAi(ctx, aiConfigId).NewSummaryStockNewsStream(question, sysPromptId, think, history)
-	}
+	msgs := a.analysisService.StartMarketSummary(ctx, analysisservice.MarketSummaryRequest{
+		Question:    question,
+		AIConfigID:  aiConfigId,
+		SysPromptID: sysPromptId,
+		EnableTools: enableTools,
+		Think:       think,
+		HistoryJSON: historyJSON,
+	})
 
 	for msg := range msgs {
-		runtime.EventsEmit(a.ctx, eventName, msg)
+		runtime.EventsEmit(a.ctx, eventName, map[string]any{
+			"chatId":            msg.ChatID,
+			"question":          msg.Question,
+			"content":           msg.Content,
+			"extraContent":      msg.ExtraContent,
+			"model":             msg.Model,
+			"time":              msg.Time,
+			"reasoning_content": msg.ReasoningContent,
+			"tool_calls":        msg.ToolCalls,
+		})
 	}
 
 	a.summaryMu.Lock()

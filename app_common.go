@@ -239,22 +239,20 @@ func (a *App) AnalyzeSentimentWithFreqWeight(text string) map[string]any {
 }
 
 func (a *App) GetAIResponseResultList(query models.AIResponseResultQuery) *models.AIResponseResultPageData {
-	page, err := data.NewAIResponseResultService().GetAIResponseResultList(query)
+	page, err := a.analysisService.GetResultPage(a.ctx, query)
 	if err != nil {
 		return &models.AIResponseResultPageData{}
 	}
 	return page
 }
 func (a *App) DeleteAIResponseResult(id uint) string {
-	err := data.NewAIResponseResultService().DeleteAIResponseResult(id)
-	if err != nil {
+	if err := a.analysisService.DeleteResult(a.ctx, id); err != nil {
 		return "删除失败"
 	}
 	return "删除成功"
 }
 func (a *App) BatchDeleteAIResponseResult(ids []uint) string {
-	err := data.NewAIResponseResultService().BatchDeleteAIResponseResult(ids)
-	if err != nil {
+	if err := a.analysisService.BatchDeleteResults(a.ctx, ids); err != nil {
 		return "删除失败"
 	}
 	return "删除成功"
@@ -325,7 +323,7 @@ func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
 }
 
 func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.PromptTemplatePageData {
-	page, err := data.NewPromptTemplateApi().GetPromptTemplateList(&query)
+	page, err := a.analysisService.GetPromptTemplatePage(a.ctx, query)
 	if err != nil {
 		return &models.PromptTemplatePageData{}
 	}
@@ -333,15 +331,15 @@ func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.Pr
 }
 
 func (a *App) AddPromptTemplate(template models.PromptTemplate) string {
-	return data.NewPromptTemplateApi().AddPrompt(template)
+	return a.analysisService.SavePromptTemplate(a.ctx, template)
 }
 
 func (a *App) UpdatePromptTemplate(template models.PromptTemplate) string {
-	return data.NewPromptTemplateApi().AddPrompt(template)
+	return a.analysisService.SavePromptTemplate(a.ctx, template)
 }
 
 func (a *App) DeletePromptTemplate(id uint) string {
-	return data.NewPromptTemplateApi().DelPrompt(id)
+	return a.analysisService.DeletePromptTemplate(a.ctx, id)
 }
 
 func (a *App) GetAllStockInfoList(query data.AllStockInfoQuery) *data.AllStockInfoPageData {
