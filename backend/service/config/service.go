@@ -32,6 +32,9 @@ func (s *Service) GetConfig(ctx context.Context) *data.SettingConfig {
 	if cfg == nil {
 		cfg = &data.SettingConfig{}
 	}
+	if cfg.Settings == nil {
+		cfg.Settings = &data.Settings{}
+	}
 	if cfg.AiConfigs == nil {
 		cfg.AiConfigs = []*data.AIConfig{}
 	}
@@ -61,7 +64,9 @@ func (s *Service) GetPromptTemplatePage(ctx context.Context, query models.Prompt
 		return nil, err
 	}
 	if page == nil {
-		return &models.PromptTemplatePageData{}, nil
+		return &models.PromptTemplatePageData{
+			List: []models.PromptTemplate{},
+		}, nil
 	}
 	return page, nil
 }

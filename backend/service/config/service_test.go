@@ -76,6 +76,10 @@ func TestService_GetAiConfigsAndPromptsReturnStableDefaults(t *testing.T) {
 	if cfg == nil {
 		t.Fatalf("expected non-nil config")
 	}
+	if cfg.Settings == nil {
+		t.Fatalf("expected non-nil settings")
+	}
+	_ = cfg.Settings.RefreshInterval
 	if cfg.AiConfigs == nil {
 		t.Fatalf("expected non-nil ai configs")
 	}
@@ -185,5 +189,53 @@ func TestService_UpdateConfigDelegates(t *testing.T) {
 	}
 	if store.updateCtx != bg {
 		t.Fatalf("expected background context passed to update")
+	}
+}
+
+func TestService_GetConfigEnsuresSettingsWhenStoreReturnsEmptyStruct(t *testing.T) {
+	store := &fakeStore{
+		cfg: &data.SettingConfig{},
+	}
+	svc := NewService(store)
+	bg := context.Background()
+
+	cfg := svc.GetConfig(bg)
+	if cfg == nil {
+		t.Fatalf("expected non-nil config")
+	}
+	if cfg.Settings == nil {
+		t.Fatalf("expected settings initialized for empty config")
+	}
+	_ = cfg.Settings.RefreshInterval
+	if cfg.AiConfigs == nil {
+		t.Fatalf("expected ai configs initialized for empty config")
+	}
+	if len(cfg.AiConfigs) != 0 {
+		t.Fatalf("expected empty ai configs, got %d", len(cfg.AiConfigs))
+	}
+}
+
+func TestService_GetPromptTemplatePageReturnsEmptyPageWhenStoreReturnsNil(t *testing.T) {
+	store := &fakeStore{
+		page: nil,
+	}
+	svc := NewService(store)
+	bg := context.Background()
+
+	page, err := svc.GetPromptTemplatePage(bg, models.PromptTemplateQuery{})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if page == nil {
+		t.Fatalf("expected non-nil page")
+	}
+	if page.List == nil {
+		t.Fatalf("expected list initialized for empty page")
+	}
+	if len(page.List) != 0 {
+		t.Fatalf("expected empty list, got %d", len(page.List))
+	}
+	if page.Total != 0 || page.Page != 0 || page.PageSize != 0 || page.TotalPages != 0 {
+		t.Fatalf("expected zero-value page data, got %#v", page)
 	}
 }
