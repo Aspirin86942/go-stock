@@ -1,19 +1,19 @@
 <script setup>
-import {h, onBeforeUnmount, onMounted, ref} from "vue";
+import { h, onBeforeUnmount, onMounted, ref } from "vue";
+import { SendDingDingMessageByType } from "../../wailsjs/go/main/App";
+import { NTag, NTooltip, NIcon, useMessage } from "naive-ui";
+import { data } from "../../wailsjs/go/models";
+import { EventsEmit } from "../../wailsjs/runtime";
+import { HelpCircleFilledIcon } from "tdesign-icons-vue-next";
 import {
-  AddPrompt,
-  DelPrompt,
-  ExportConfig,
-  GetConfig,
-  GetPromptTemplates,
-  SendDingDingMessageByType,
-  UpdateConfig,
-  FetchAiModels
-} from "../../wailsjs/go/main/App";
-import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
-import {data, models} from "../../wailsjs/go/models";
-import {EventsEmit} from "../../wailsjs/runtime";
-import {HelpCircleFilledIcon, HelpIcon} from "tdesign-icons-vue-next";
+  deleteLegacyPrompt,
+  exportAppConfig,
+  fetchAiModels as fetchAvailableModels,
+  loadAppConfig,
+  loadPromptTemplates,
+  saveAppConfig,
+  saveLegacyPrompt,
+} from "../services/configService.mjs";
 
 const message = useMessage()
 
@@ -87,7 +87,7 @@ async function fetchAiModels(aiConfig) {
   }
   aiConfig._loadingModels = true
   try {
-    const list = await FetchAiModels(aiConfig.baseUrl, aiConfig.apiKey)
+    const list = await fetchAvailableModels(aiConfig.baseUrl, aiConfig.apiKey)
     const options = (list || []).map(id => ({ label: id, value: id }))
     aiConfig._modelOptions = options
     if (!aiConfig.modelName && options.length > 0) {
@@ -166,7 +166,7 @@ function onModelNameChange(aiConfig, newModelName) {
 }
 
 onMounted(() => {
-  GetConfig().then(res => {
+  loadAppConfig().then(res => {
     formValue.value.ID = res.ID
     formValue.value.tushareToken = res.tushareToken
     formValue.value.dingPush = {
@@ -206,7 +206,7 @@ onMounted(() => {
 
   })
 
-  // GetPromptTemplates("", "").then(res => {
+  // loadPromptTemplates("", "").then(res => {
   //   promptTemplates.value = res
   // })
 })
@@ -246,7 +246,7 @@ function saveConfig() {
     qgqpBId: formValue.value.qgqpBId
   })
 
-  UpdateConfig(config).then(res => {
+  saveAppConfig(config).then(res => {
     message.success(res)
     EventsEmit("updateSettings", config);
   })
@@ -276,7 +276,7 @@ function sendTestNotice() {
 }
 
 function exportConfig() {
-  ExportConfig().then(res => {
+  exportAppConfig().then(res => {
     message.info(res)
   })
 }
@@ -347,9 +347,9 @@ function managePrompts() {
 }
 
 function savePrompt() {
-  AddPrompt(formPrompt.value).then(res => {
+  saveLegacyPrompt(formPrompt.value).then(res => {
     message.success(res)
-    GetPromptTemplates("", "").then(res => {
+    loadPromptTemplates("", "").then(res => {
       promptTemplates.value = res
     })
     showManagePromptsModal.value = false
@@ -365,9 +365,9 @@ function editPrompt(prompt) {
 }
 
 function deletePrompt(ID) {
-  DelPrompt(ID).then(res => {
+  deleteLegacyPrompt(ID).then(res => {
     message.success(res)
-    GetPromptTemplates("", "").then(res => {
+    loadPromptTemplates("", "").then(res => {
       promptTemplates.value = res
     })
   })

@@ -497,12 +497,12 @@ import {
   ExecuteCronTaskNow,
   GetCronTaskTypes,
   ValidateCronExpr,
-  SearchCronTasks,
-  GetAiConfigs,
-  CalculateNextRunTime,
   CalculateNextRunTimes,
-  GetPromptTemplates
 } from '../../wailsjs/go/main/App'
+import {
+  loadAiConfigs,
+  loadPromptTemplates,
+} from '../services/configService.mjs'
 
 const message = useMessage()
 
@@ -1075,9 +1075,9 @@ const loadTaskTypes = async () => {
 
 // 加载 AI 配置
 const aiConfigOptions=ref([])
-const loadAiConfigs = async () => {
+const loadAiConfigsForTask = async () => {
   try {
-    const configs = await GetAiConfigs()
+    const configs = await loadAiConfigs()
     console.log('aiConfigOptions', configs)
     aiConfigOptions.value = configs.map(c => ({
       label: c.name+"["+c.modelName+"]",
@@ -1090,17 +1090,17 @@ const loadAiConfigs = async () => {
 const promptTemplateOptions=ref([])
 const sysPromptOptions=ref([])
 // 加载提示词模板
-const loadPromptTemplates = async () => {
+const loadPromptOptions = async () => {
   try {
     // 加载用户提示词模板
-    const userTemplates = await GetPromptTemplates('', '模型用户Prompt')
+    const userTemplates = await loadPromptTemplates('', '模型用户Prompt')
     promptTemplateOptions.value = userTemplates.map(t => ({
       label: t.name,
       value: t.ID
     }))
     
     // 加载系统提示词模板（假设类型为 system）
-    const sysTemplates = await GetPromptTemplates('', '模型系统Prompt')
+    const sysTemplates = await loadPromptTemplates('', '模型系统Prompt')
     sysPromptOptions.value = sysTemplates.map(t => ({
       label: t.name,
       value: t.ID
@@ -1423,10 +1423,12 @@ watch(() => formData.taskType, (newType) => {
 
 // 初始化
 onMounted(async () => {
-  await loadTaskTypes()
-  await loadAiConfigs()
-  await loadPromptTemplates()
-  await loadTaskList()
+  await Promise.all([
+    loadTaskTypes(),
+    loadAiConfigsForTask(),
+    loadPromptOptions(),
+    loadTaskList(),
+  ])
 })
 </script>
 
