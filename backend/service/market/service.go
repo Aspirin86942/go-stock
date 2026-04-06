@@ -2,12 +2,29 @@ package market
 
 import (
 	"go-stock/backend/models"
+	"strings"
 
 	"github.com/duke-git/lancet/v2/convertor"
 )
 
 type Service struct {
 	source Source
+}
+
+type residualReadableSource interface {
+	GlobalStockIndexesReadable(crawlTimeout uint) string
+}
+
+type residualIndustryMoneySource interface {
+	GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any
+}
+
+type residualMoneyRankSource interface {
+	GetMoneyRankSina(sort string) []map[string]any
+}
+
+type residualStockTrendSource interface {
+	GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any
 }
 
 func NewService(source Source) *Service {
@@ -70,6 +87,106 @@ func (s *Service) LoadIndustryRanks(sort string, cnt int) []IndustryRankEntry {
 	return result
 }
 
+func (s *Service) LoadGlobalIndexesReadable(crawlTimeout uint) string {
+	src, ok := s.source.(residualReadableSource)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(src.GlobalStockIndexesReadable(crawlTimeout))
+}
+
+func (s *Service) LoadIndustryMoneyRanks(fenlei, sort string) []IndustryMoneyRankRow {
+	src, ok := s.source.(residualIndustryMoneySource)
+	if !ok {
+		return []IndustryMoneyRankRow{}
+	}
+
+	raw := src.GetIndustryMoneyRankSina(fenlei, sort)
+	if len(raw) == 0 {
+		return []IndustryMoneyRankRow{}
+	}
+
+	result := make([]IndustryMoneyRankRow, 0, len(raw))
+	for _, row := range raw {
+		result = append(result, IndustryMoneyRankRow{
+			Category:       convertor.ToString(row["category"]),
+			Name:           convertor.ToString(row["name"]),
+			AvgChangeRatio: toFloat(row["avg_changeratio"]),
+			InAmount:       toFloat(row["inamount"]),
+			OutAmount:      toFloat(row["outamount"]),
+			NetAmount:      toFloat(row["netamount"]),
+			RatioAmount:    toFloat(row["ratioamount"]),
+			TSName:         convertor.ToString(row["ts_name"]),
+			TSSymbol:       convertor.ToString(row["ts_symbol"]),
+			TSChangeRatio:  toFloat(row["ts_changeratio"]),
+			TSTrade:        toFloat(row["ts_trade"]),
+			TSRatioAmount:  toFloat(row["ts_ratioamount"]),
+		})
+	}
+	return result
+}
+
+func (s *Service) LoadMoneyRanks(sort string) []MoneyRankRow {
+	src, ok := s.source.(residualMoneyRankSource)
+	if !ok {
+		return []MoneyRankRow{}
+	}
+
+	raw := src.GetMoneyRankSina(sort)
+	if len(raw) == 0 {
+		return []MoneyRankRow{}
+	}
+
+	result := make([]MoneyRankRow, 0, len(raw))
+	for _, row := range raw {
+		result = append(result, MoneyRankRow{
+			Symbol:      convertor.ToString(row["symbol"]),
+			Name:        convertor.ToString(row["name"]),
+			Trade:       toFloat(row["trade"]),
+			ChangeRatio: toFloat(row["changeratio"]),
+			Turnover:    toFloat(row["turnover"]),
+			Amount:      toFloat(row["amount"]),
+			OutAmount:   toFloat(row["outamount"]),
+			InAmount:    toFloat(row["inamount"]),
+			NetAmount:   toFloat(row["netamount"]),
+			RatioAmount: toFloat(row["ratioamount"]),
+			R0Out:       toFloat(row["r0_out"]),
+			R0In:        toFloat(row["r0_in"]),
+			R0Net:       toFloat(row["r0_net"]),
+			R0Ratio:     toFloat(row["r0_ratio"]),
+			R3Out:       toFloat(row["r3_out"]),
+			R3In:        toFloat(row["r3_in"]),
+			R3Net:       toFloat(row["r3_net"]),
+			R3Ratio:     toFloat(row["r3_ratio"]),
+		})
+	}
+	return result
+}
+
+func (s *Service) LoadStockMoneyTrend(stockCode string, days int) []StockMoneyTrendRow {
+	src, ok := s.source.(residualStockTrendSource)
+	if !ok {
+		return []StockMoneyTrendRow{}
+	}
+
+	raw := src.GetStockMoneyTrendByDay(stockCode, days)
+	if len(raw) == 0 {
+		return []StockMoneyTrendRow{}
+	}
+
+	result := make([]StockMoneyTrendRow, 0, len(raw))
+	for i := len(raw) - 1; i >= 0; i-- {
+		row := raw[i]
+		result = append(result, StockMoneyTrendRow{
+			OpenDate:  convertor.ToString(row["opendate"]),
+			Trade:     toFloat(row["trade"]),
+			NetAmount: toFloat(row["netamount"]),
+			R0Net:     toFloat(row["r0_net"]),
+		})
+	}
+	return result
+}
+
 func (s *Service) loadFeed(source string) Feed {
 	items := s.source.GetTelegraphList(source)
 	if items == nil {
@@ -105,4 +222,12 @@ func mapGlobalIndexesByRegion(raw map[string]any, region string) []GlobalIndexEn
 		})
 	}
 	return result
+}
+
+func toFloat(value any) float64 {
+	v, err := convertor.ToFloat(value)
+	if err != nil {
+		return 0
+	}
+	return v
 }
