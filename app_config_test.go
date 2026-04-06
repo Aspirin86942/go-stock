@@ -297,7 +297,7 @@ func (s *legacyPromptAwareAnalysisServiceStub) DeleteLegacyPrompt(ctx context.Co
 	return "legacy-prompt-deleted"
 }
 
-func TestApp_PromptMethodsFallbackToLegacyAnalysisServiceWhenConfigServiceNil(t *testing.T) {
+func TestApp_PromptMethodsReturnFallbackDefaultsWhenConfigServiceNil(t *testing.T) {
 	templates := []models.PromptTemplate{{ID: 8, Name: "legacy", Type: "模型系统Prompt"}}
 	legacyPage := &models.PromptTemplatePageData{List: templates, Total: 1, Page: 1, PageSize: 10, TotalPages: 1}
 	legacy := &legacyPromptAwareAnalysisServiceStub{
@@ -310,61 +310,44 @@ func TestApp_PromptMethodsFallbackToLegacyAnalysisServiceWhenConfigServiceNil(t 
 		configService:   nil,
 	}
 
-	if got := app.GetPromptTemplates("legacy", "模型系统Prompt"); got != legacy.legacyTemplates {
-		t.Fatalf("GetPromptTemplates() should fallback to legacy analysis prompt method")
+	gotTemplates := app.GetPromptTemplates("legacy", "模型系统Prompt")
+	if gotTemplates == nil {
+		t.Fatalf("GetPromptTemplates() should return non-nil defaults when configService is nil")
 	}
-	if legacy.getPromptCalled != 1 {
-		t.Fatalf("legacy GetPromptTemplates should be called once, got=%d", legacy.getPromptCalled)
+	if len(*gotTemplates) != 0 {
+		t.Fatalf("GetPromptTemplates() should return empty defaults, got=%#v", gotTemplates)
 	}
 
 	prompt := models.Prompt{ID: 9, Name: "legacy prompt", Type: "模型用户Prompt", Content: "A"}
-	if msg := app.AddPrompt(prompt); msg != "legacy-template-saved" {
-		t.Fatalf("AddPrompt() should fallback to SavePromptTemplate mapping, got=%q", msg)
+	if msg := app.AddPrompt(prompt); msg != "保存失败" {
+		t.Fatalf("AddPrompt() should return nil-safe fallback, got=%q", msg)
 	}
-	if legacy.saveTemplateCalled != 1 {
-		t.Fatalf("AddPrompt() should call legacy SavePromptTemplate once, got=%d", legacy.saveTemplateCalled)
-	}
-	lastTemplate := legacy.legacySavedTemplate
-	if lastTemplate.ID != prompt.ID || lastTemplate.Name != prompt.Name || lastTemplate.Content != prompt.Content || lastTemplate.Type != prompt.Type {
-		t.Fatalf("AddPrompt() should map Prompt -> PromptTemplate, got=%#v prompt=%#v", lastTemplate, prompt)
-	}
-	if legacy.saveLegacyCalled != 0 {
-		t.Fatalf("AddPrompt() should not call SaveLegacyPrompt in legacy fallback, got=%d", legacy.saveLegacyCalled)
-	}
-
-	if msg := app.DelPrompt(77); msg != "legacy-template-deleted" {
-		t.Fatalf("DelPrompt() should fallback to DeletePromptTemplate, got=%q", msg)
-	}
-	if legacy.deleteTemplateCalled != 1 || legacy.legacyDeletedTmplID != 77 {
-		t.Fatalf("DelPrompt() should call legacy DeletePromptTemplate with id, called=%d id=%d", legacy.deleteTemplateCalled, legacy.legacyDeletedTmplID)
-	}
-	if legacy.deleteLegacyCalled != 0 {
-		t.Fatalf("DelPrompt() should not call DeleteLegacyPrompt in legacy fallback, got=%d", legacy.deleteLegacyCalled)
+	if msg := app.DelPrompt(77); msg != "删除失败" {
+		t.Fatalf("DelPrompt() should return nil-safe fallback, got=%q", msg)
 	}
 
 	query := models.PromptTemplateQuery{Page: 1, PageSize: 10}
-	if got := app.GetPromptTemplateList(query); got != legacyPage {
-		t.Fatalf("GetPromptTemplateList() should fallback to legacy prompt page method")
+	page := app.GetPromptTemplateList(query)
+	if page == nil {
+		t.Fatalf("GetPromptTemplateList() should return empty page instead of nil")
 	}
-	if legacy.getPromptPageCalled != 1 {
-		t.Fatalf("legacy GetPromptTemplatePage should be called once, got=%d", legacy.getPromptPageCalled)
+	if len(page.List) != 0 || page.Total != 0 || page.Page != 0 || page.PageSize != 0 || page.TotalPages != 0 {
+		t.Fatalf("GetPromptTemplateList() should return zero-value empty page, got=%#v", page)
 	}
 
 	template := models.PromptTemplate{ID: 11, Name: "legacy-template", Type: "模型系统Prompt", Content: "B"}
-	if msg := app.AddPromptTemplate(template); msg != "legacy-template-saved" {
-		t.Fatalf("AddPromptTemplate() should fallback to legacy SavePromptTemplate, got=%q", msg)
+	if msg := app.AddPromptTemplate(template); msg != "保存失败" {
+		t.Fatalf("AddPromptTemplate() should return nil-safe fallback, got=%q", msg)
 	}
-	if msg := app.UpdatePromptTemplate(template); msg != "legacy-template-saved" {
-		t.Fatalf("UpdatePromptTemplate() should fallback to legacy SavePromptTemplate, got=%q", msg)
+	if msg := app.UpdatePromptTemplate(template); msg != "保存失败" {
+		t.Fatalf("UpdatePromptTemplate() should return nil-safe fallback, got=%q", msg)
 	}
-	if legacy.saveTemplateCalled != 3 {
-		t.Fatalf("legacy SavePromptTemplate should be called three times (AddPrompt/AddPromptTemplate/UpdatePromptTemplate), got=%d", legacy.saveTemplateCalled)
+	if msg := app.DeletePromptTemplate(11); msg != "删除失败" {
+		t.Fatalf("DeletePromptTemplate() should return nil-safe fallback, got=%q", msg)
 	}
-	if msg := app.DeletePromptTemplate(11); msg != "legacy-template-deleted" {
-		t.Fatalf("DeletePromptTemplate() should fallback to legacy DeletePromptTemplate, got=%q", msg)
-	}
-	if legacy.deleteTemplateCalled != 2 || legacy.legacyDeletedTmplID != 11 {
-		t.Fatalf("DeletePromptTemplate() legacy call mismatch: called=%d id=%d", legacy.deleteTemplateCalled, legacy.legacyDeletedTmplID)
+
+	if legacy.getPromptCalled != 0 || legacy.getPromptPageCalled != 0 || legacy.saveTemplateCalled != 0 || legacy.deleteTemplateCalled != 0 || legacy.saveLegacyCalled != 0 || legacy.deleteLegacyCalled != 0 {
+		t.Fatalf("legacy analysis prompt methods should not be called after closeout, got=%#v", legacy)
 	}
 }
 

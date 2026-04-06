@@ -14,10 +14,15 @@ import (
 	"go-stock/backend/models"
 	analysisservice "go-stock/backend/service/analysis"
 	configservice "go-stock/backend/service/config"
+	contractservice "go-stock/backend/service/contract"
 	marketservice "go-stock/backend/service/market"
+	notificationservice "go-stock/backend/service/notification"
 	taskservice "go-stock/backend/service/task"
+	watchlistservice "go-stock/backend/service/watchlist"
 	analysissource "go-stock/backend/source/analysis"
 	marketsource "go-stock/backend/source/marketnews"
+	notificationsource "go-stock/backend/source/notification"
+	watchlistsource "go-stock/backend/source/watchlist"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,25 +47,31 @@ import (
 
 // App struct
 type App struct {
-	ctx                context.Context
-	cache              *freecache.Cache
-	cron               *cron.Cron
-	cronEntrys         map[string]cron.EntryID
-	cronEntrysMu       sync.Mutex
-	AiTools            []data.Tool
-	SponsorInfo        map[string]any
-	VipLevel           int64
-	summaryMu          sync.Mutex
-	summaryCancel      context.CancelFunc
-	agentMu            sync.Mutex
-	agentCancel        context.CancelFunc
-	stockAlertMu       sync.Mutex
-	stockAlertLastSent map[string]time.Time
-	priceAtAlertReset  map[string]float64
-	marketReadService  marketReadService
-	analysisService    analysisService
-	configService      configService
-	taskService        taskService
+	ctx                   context.Context
+	cache                 *freecache.Cache
+	cron                  *cron.Cron
+	cronEntrys            map[string]cron.EntryID
+	cronEntrysMu          sync.Mutex
+	AiTools               []data.Tool
+	SponsorInfo           map[string]any
+	VipLevel              int64
+	summaryMu             sync.Mutex
+	summaryCancel         context.CancelFunc
+	agentMu               sync.Mutex
+	agentCancel           context.CancelFunc
+	stockAlertMu          sync.Mutex
+	stockAlertLastSent    map[string]time.Time
+	priceAtAlertReset     map[string]float64
+	marketReadService     marketReadService
+	analysisService       analysisService
+	configService         configService
+	taskService           taskService
+	notificationService   notificationService
+	watchlistService      watchlistService
+	saveFileDialog        func(ctx context.Context, options runtime.SaveDialogOptions) (string, error)
+	writeFile             func(name string, data []byte, perm os.FileMode) error
+	shareAnalysisUploader func(artifact analysisservice.ResultArtifact) (string, error)
+	emitEvent             func(ctx context.Context, name string, data ...interface{})
 }
 
 type marketReadService interface {
@@ -108,35 +119,54 @@ type taskService interface {
 	RestoreSchedules(ctx context.Context) error
 }
 
-type legacyPromptBridge interface {
-	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
-	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
-	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
-	DeletePromptTemplate(ctx context.Context, id uint) string
+type marketResidualReadService interface {
+	LoadGlobalIndexesReadable(crawlTimeout uint) string
+	LoadIndustryMoneyRanks(fenlei, sort string) []marketservice.IndustryMoneyRankRow
+	LoadMoneyRanks(sort string) []marketservice.MoneyRankRow
+	LoadStockMoneyTrend(stockCode string, days int) []marketservice.StockMoneyTrendRow
 }
 
-func (a *App) legacyPromptBridge() legacyPromptBridge {
+type analysisArtifactService interface {
+	GetResultArtifact(ctx context.Context, stockCode, stockName string) (analysisservice.ResultArtifact, *contractservice.UserVisibleError)
+}
+
+type configExportService interface {
+	ExportConfig(ctx context.Context) string
+}
+
+type notificationService interface {
+	SendDingTalk(message, stockCode string) string
+	SendTyped(message, stockCode string, msgType int) notificationservice.Delivery
+}
+
+type watchlistService interface {
+	SaveStockAICron(ctx context.Context, cronText, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError)
+	ListScheduledStocks(ctx context.Context) []watchlistservice.ScheduledStock
+	RunScheduledAnalysis(ctx context.Context, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError)
+}
+
+func (a *App) residualMarketReads() marketResidualReadService {
+	if a.marketReadService == nil {
+		return nil
+	}
+	service, _ := a.marketReadService.(marketResidualReadService)
+	return service
+}
+
+func (a *App) artifactService() analysisArtifactService {
 	if a.analysisService == nil {
 		return nil
 	}
-	bridge, ok := any(a.analysisService).(legacyPromptBridge)
-	if !ok {
-		return nil
-	}
-	return bridge
+	service, _ := a.analysisService.(analysisArtifactService)
+	return service
 }
 
-func (a *App) shouldFallbackToLegacyPromptBridge() bool {
+func (a *App) exportConfigSource() configExportService {
 	if a.configService == nil {
-		return true
+		return nil
 	}
-	if _, isDefaultConfigService := a.configService.(*configservice.Service); !isDefaultConfigService {
-		return false
-	}
-	if db.Dao != nil {
-		return false
-	}
-	return a.legacyPromptBridge() != nil
+	service, _ := a.configService.(configExportService)
+	return service
 }
 
 const (
@@ -158,16 +188,24 @@ func NewApp() *App {
 	tools = data.Tools(tools)
 	analysisProvider := analysissource.NewProvider(tools)
 	analysisStore := analysissource.NewStore()
+	analysisSvc := analysisservice.NewService(analysisProvider, analysisStore, analysisStore)
+	configSvc := configservice.NewService(configservice.NewStore())
 	app := &App{
-		cache:              cache,
-		cron:               c,
-		cronEntrys:         make(map[string]cron.EntryID),
-		AiTools:            tools,
-		stockAlertLastSent: make(map[string]time.Time),
-		priceAtAlertReset:  make(map[string]float64),
-		marketReadService:  marketservice.NewService(marketsource.NewSource()),
-		analysisService:    analysisservice.NewService(analysisProvider, analysisStore, analysisStore),
-		configService:      configservice.NewService(configservice.NewStore()),
+		cache:                 cache,
+		cron:                  c,
+		cronEntrys:            make(map[string]cron.EntryID),
+		AiTools:               tools,
+		stockAlertLastSent:    make(map[string]time.Time),
+		priceAtAlertReset:     make(map[string]float64),
+		marketReadService:     marketservice.NewService(marketsource.NewSource()),
+		analysisService:       analysisSvc,
+		configService:         configSvc,
+		notificationService:   notificationservice.NewService(cache, notificationsource.NewAdapter()),
+		watchlistService:      watchlistservice.NewService(watchlistsource.NewStore(), analysisSvc),
+		saveFileDialog:        runtime.SaveFileDialog,
+		writeFile:             os.WriteFile,
+		shareAnalysisUploader: uploadSharedAnalysis,
+		emitEvent:             runtime.EventsEmit,
 	}
 	app.taskService = taskservice.NewService(taskservice.NewStore(), &appTaskScheduler{app: app}, func() context.Context {
 		return app.ctx
@@ -643,18 +681,7 @@ func (a *App) domReady(ctx context.Context) {
 	//		logger.SugaredLogger.Infof("Edge浏览器已安装，路径为: %s", path)
 	//	}
 	//}()
-	followList := data.NewStockDataApi().GetFollowList(0)
-	for _, follow := range *followList {
-		if follow.Cron == nil || *follow.Cron == "" {
-			continue
-		}
-		entryID, err := a.cron.AddFunc(*follow.Cron, a.AddCronTask(follow))
-		if err != nil {
-			appError("dom-ready", "cron.auto_task_add_failed", "add auto analysis cron task failed", logger.String("task_name", follow.Name), logger.String("cron_expr", *follow.Cron))
-			continue
-		}
-		a.setCronEntry(follow.StockCode, entryID)
-	}
+	a.restoreStockAICronSchedules()
 	//logger.SugaredLogger.Infof("domReady-cronEntrys:%+v", a.cronEntrys)
 
 }
@@ -788,33 +815,50 @@ func (a *App) NewsPush(news *[]models.Telegraph) {
 	}
 }
 
-func (a *App) AddCronTask(follow data.FollowedStock) func() {
+func (a *App) restoreStockAICronSchedules() {
+	if a.watchlistService == nil {
+		return
+	}
+	for _, follow := range a.watchlistService.ListScheduledStocks(a.ctx) {
+		a.registerStockAICron(follow.StockCode, follow.Cron)
+	}
+}
+
+func (a *App) registerStockAICron(stockCode, cronText string) {
+	if a.cron == nil {
+		return
+	}
+	if entryID, exists := a.getCronEntry(stockCode); exists {
+		a.cron.Remove(entryID)
+	}
+	if strings.TrimSpace(cronText) == "" {
+		a.removeCronEntry(stockCode)
+		return
+	}
+	id, err := a.cron.AddFunc(cronText, a.buildStockAICronJob(stockCode))
+	if err != nil {
+		appError("watchlist-cron", "watchlist.cron_add.failed", "add stock ai cron failed", logger.String("stock_code", stockCode), logger.String("cron_expr", cronText), logger.Err(err))
+		return
+	}
+	a.setCronEntry(stockCode, id)
+}
+
+func (a *App) buildStockAICronJob(stockCode string) func() {
 	return func() {
-		go runtime.EventsEmit(a.ctx, "warnMsg", "开始自动分析"+follow.Name+"_"+follow.StockCode)
-		ai := data.NewDeepSeekOpenAi(a.ctx, follow.AiConfigId)
-		msgs := ai.NewChatStream(follow.Name, follow.StockCode, "", nil, a.AiTools, true)
-		var res strings.Builder
-
-		chatId := ""
-		question := ""
-		for msg := range msgs {
-			if msg["extraContent"] != nil {
-				res.WriteString(msg["extraContent"].(string) + "\n")
-			}
-			if msg["content"] != nil {
-				res.WriteString(msg["content"].(string))
-			}
-			if msg["chatId"] != nil {
-				chatId = msg["chatId"].(string)
-			}
-			if msg["question"] != nil {
-				question = msg["question"].(string)
-			}
+		if a.watchlistService == nil {
+			return
 		}
-
-		data.NewDeepSeekOpenAi(a.ctx, follow.AiConfigId).SaveAIResponseResult(follow.StockCode, follow.Name, res.String(), chatId, question)
-		go runtime.EventsEmit(a.ctx, "warnMsg", "AI分析完成："+follow.Name+"_"+follow.StockCode)
-
+		result, userErr := a.watchlistService.RunScheduledAnalysis(a.ctx, stockCode)
+		if userErr != nil {
+			if a.emitEvent != nil {
+				a.emitEvent(a.ctx, "warnMsg", "AI分析失败："+userErr.Message)
+			}
+			return
+		}
+		if a.emitEvent != nil {
+			a.emitEvent(a.ctx, "warnMsg", "开始自动分析"+result.Name+"_"+result.StockCode)
+			a.emitEvent(a.ctx, "warnMsg", "AI分析完成："+result.Name+"_"+result.StockCode)
+		}
 	}
 }
 
@@ -1419,17 +1463,10 @@ func (a *App) SetStockSort(sort int64, stockCode string) {
 	data.NewStockDataApi().SetStockSort(sort, stockCode)
 }
 func (a *App) SendDingDingMessage(message string, stockCode string) string {
-	ttl, _ := a.cache.TTL([]byte(stockCode))
-	//logger.SugaredLogger.Infof("stockCode %s ttl:%d", stockCode, ttl)
-	if ttl > 0 {
+	if a.notificationService == nil {
 		return ""
 	}
-	err := a.cache.Set([]byte(stockCode), []byte("1"), 60*5)
-	if err != nil {
-		appError("send-dingding", "notify.dingding_cache_set_failed", "set dingding cache failed", logger.String("stock_code", stockCode), logger.Err(err))
-		return ""
-	}
-	return data.NewDingDingAPI().SendDingDingMessage(message)
+	return a.notificationService.SendDingTalk(message, stockCode)
 }
 
 // SendDingDingMessageByType msgType 报警类型: 1 涨跌报警;2 股价报警 3 成本价报警
@@ -1444,28 +1481,20 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 	if strutil.HasPrefixAny(stockCode, []string{"us", "US", "gb_"}) && (!IsUSTradingTime(time.Now())) {
 		return "非美股交易时间"
 	}
-
-	ttl, _ := a.cache.TTL([]byte(stockCode))
-	if ttl > 0 {
+	if a.notificationService == nil {
 		return ""
 	}
-	err := a.cache.Set([]byte(stockCode), []byte("1"), getMsgTypeTTL(msgType))
-	if err != nil {
-		appError("send-dingding-by-type", "notify.dingding_cache_set_failed", "set dingding cache by type failed", logger.String("stock_code", stockCode), logger.Int("message_type", msgType), logger.Err(err))
-		return ""
+
+	result := a.notificationService.SendTyped(message, stockCode, msgType)
+	if a.emitEvent != nil && strings.TrimSpace(result.EventContent) != "" {
+		a.emitEvent(a.ctx, "newsPush", map[string]any{
+			"time":    "📈 " + result.EventTitle,
+			"isRed":   true,
+			"source":  "go-stock",
+			"content": result.EventContent,
+		})
 	}
-	stockInfo := &data.StockInfo{}
-	db.Dao.Model(stockInfo).Where("code = ?", stockCode).First(stockInfo)
-	go data.NewAlertWindowsApi("go-stock消息通知", getMsgTypeName(msgType), GenNotificationMsg(stockInfo), "").SendNotification()
-
-	go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
-		"time":    "📈 " + getMsgTypeName(msgType),
-		"isRed":   true,
-		"source":  "go-stock",
-		"content": GenNotificationMsg(stockInfo),
-	})
-
-	return data.NewDingDingAPI().SendDingDingMessage(message)
+	return result.DingResult
 }
 
 func (a *App) NewChatStream(stock, stockCode, question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool) {
@@ -1630,9 +1659,36 @@ func (a *App) GetConfig() *data.SettingConfig {
 	return a.configService.GetConfig(a.ctx)
 }
 
+func uploadSharedAnalysis(artifact analysisservice.ResultArtifact) (string, error) {
+	response, err := resty.New().SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
+		"text":         artifact.Content,
+		"stockCode":    artifact.StockCode,
+		"stockName":    artifact.StockName,
+		"analysisTime": artifact.AnalysisDate,
+	}).Post("http://go-stock.sparkmemory.top:16688/upload")
+	if err != nil {
+		return "", err
+	}
+	return response.String(), nil
+}
+
 func (a *App) ExportConfig() string {
-	config := data.NewSettingsApi().Export()
-	file, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	exporter := a.exportConfigSource()
+	if exporter == nil {
+		return "导出失败"
+	}
+
+	saveFileDialog := a.saveFileDialog
+	if saveFileDialog == nil {
+		saveFileDialog = runtime.SaveFileDialog
+	}
+	writeFile := a.writeFile
+	if writeFile == nil {
+		writeFile = os.WriteFile
+	}
+
+	config := exporter.ExportConfig(a.ctx)
+	file, err := saveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:                "导出配置文件",
 		CanCreateDirectories: true,
 		DefaultFilename:      "config.json",
@@ -1641,8 +1697,7 @@ func (a *App) ExportConfig() string {
 		appError("export-config", "config.export_dialog_failed", "export config dialog failed", logger.Err(err))
 		return err.Error()
 	}
-	err = os.WriteFile(file, []byte(config), os.ModePerm)
-	if err != nil {
+	if err := writeFile(file, []byte(config), os.ModePerm); err != nil {
 		appError("export-config", "config.export_write_failed", "write exported config failed", logger.String("file", file), logger.Err(err))
 		return err.Error()
 	}
@@ -1650,24 +1705,23 @@ func (a *App) ExportConfig() string {
 }
 
 func (a *App) ShareAnalysis(stockCode, stockName string) string {
-	//http://go-stock.sparkmemory.top:16688/upload
-	res := data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stockCode)
-	if res != nil && len(res.Content) > 100 {
-		analysisTime := res.CreatedAt.Format("2006/01/02")
-		//logger.SugaredLogger.Infof("%s analysisTime:%s", res.CreatedAt, analysisTime)
-		response, err := resty.New().SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
-			"text":         res.Content,
-			"stockCode":    stockCode,
-			"stockName":    stockName,
-			"analysisTime": analysisTime,
-		}).Post("http://go-stock.sparkmemory.top:16688/upload")
-		if err != nil {
-			return err.Error()
-		}
-		return response.String()
-	} else {
+	artifacts := a.artifactService()
+	if artifacts == nil {
 		return "分析结果异常"
 	}
+	uploader := a.shareAnalysisUploader
+	if uploader == nil {
+		uploader = uploadSharedAnalysis
+	}
+	artifact, userErr := artifacts.GetResultArtifact(a.ctx, stockCode, stockName)
+	if userErr != nil {
+		return userErr.Message
+	}
+	msg, err := uploader(artifact)
+	if err != nil {
+		return err.Error()
+	}
+	return msg
 }
 
 // ShareText 直接把文本分享到社区（用于 AI 助手等非 AIResponseResult 场景）
@@ -1706,75 +1760,72 @@ func (a *App) UnFollowFund(fundCode string) string {
 	return data.NewFundApi().UnFollowFund(fundCode)
 }
 func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
-	res := data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stockCode)
-	if res != nil && len(res.Content) > 100 {
-		analysisTime := res.CreatedAt.Format("2006-01-02_15_04_05")
-		file, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-			Title:           "保存为Markdown",
-			DefaultFilename: fmt.Sprintf("%s[%s]AI分析结果_%s.md", stockName, stockCode, analysisTime),
-			Filters: []runtime.FileFilter{
-				{
-					DisplayName: "Markdown",
-					Pattern:     "*.md;*.markdown",
-				},
-			},
-		})
-		if err != nil {
-			return err.Error()
-		}
-		err = os.WriteFile(file, []byte(res.Content), 0644)
-		return "已保存至：" + file
+	artifacts := a.artifactService()
+	if artifacts == nil {
+		return "分析结果异常,无法保存。"
 	}
-	return "分析结果异常,无法保存。"
+	saveFileDialog := a.saveFileDialog
+	if saveFileDialog == nil {
+		saveFileDialog = runtime.SaveFileDialog
+	}
+	writeFile := a.writeFile
+	if writeFile == nil {
+		writeFile = os.WriteFile
+	}
+	artifact, userErr := artifacts.GetResultArtifact(a.ctx, stockCode, stockName)
+	if userErr != nil {
+		return userErr.Message + ",无法保存。"
+	}
+	file, err := saveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "保存为Markdown",
+		DefaultFilename: artifact.MarkdownFilename,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Markdown",
+				Pattern:     "*.md;*.markdown",
+			},
+		},
+	})
+	if err != nil {
+		return err.Error()
+	}
+	if err := writeFile(file, []byte(artifact.Content), 0644); err != nil {
+		return err.Error()
+	}
+	return "已保存至：" + file
 }
 
 func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
-		return a.configService.GetPromptTemplates(a.ctx, name, promptType)
+	if a.configService == nil {
+		empty := []models.PromptTemplate{}
+		return &empty
 	}
-	if legacy := a.legacyPromptBridge(); legacy != nil {
-		return legacy.GetPromptTemplates(a.ctx, name, promptType)
-	}
-	empty := []models.PromptTemplate{}
-	return &empty
+	return a.configService.GetPromptTemplates(a.ctx, name, promptType)
 }
 func (a *App) AddPrompt(prompt models.Prompt) string {
-	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
-		return a.configService.SaveLegacyPrompt(a.ctx, prompt)
+	if a.configService == nil {
+		return "保存失败"
 	}
-	if legacy := a.legacyPromptBridge(); legacy != nil {
-		return legacy.SavePromptTemplate(a.ctx, models.PromptTemplate{
-			ID:      prompt.ID,
-			Content: prompt.Content,
-			Name:    prompt.Name,
-			Type:    prompt.Type,
-		})
-	}
-	return "保存失败"
+	return a.configService.SaveLegacyPrompt(a.ctx, prompt)
 }
 func (a *App) DelPrompt(id uint) string {
-	if a.configService != nil && !a.shouldFallbackToLegacyPromptBridge() {
-		return a.configService.DeleteLegacyPrompt(a.ctx, id)
+	if a.configService == nil {
+		return "删除失败"
 	}
-	if legacy := a.legacyPromptBridge(); legacy != nil {
-		return legacy.DeletePromptTemplate(a.ctx, id)
-	}
-	return "删除失败"
+	return a.configService.DeleteLegacyPrompt(a.ctx, id)
 }
 func (a *App) SetStockAICron(cronText, stockCode string) {
-	data.NewStockDataApi().SetStockAICron(cronText, stockCode)
-	if strutil.HasPrefixAny(stockCode, []string{"gb_"}) {
-		stockCode = strings.ToUpper(stockCode)
-		stockCode = strings.Replace(stockCode, "gb_", "us", 1)
-		stockCode = strings.Replace(stockCode, "GB_", "us", 1)
+	if a.watchlistService == nil {
+		return
 	}
-	if entryID, exists := a.getCronEntry(stockCode); exists {
-		a.cron.Remove(entryID)
+	result, userErr := a.watchlistService.SaveStockAICron(a.ctx, cronText, stockCode)
+	if userErr != nil {
+		if a.emitEvent != nil {
+			a.emitEvent(a.ctx, "warnMsg", "AI分析任务保存失败："+userErr.Message)
+		}
+		return
 	}
-	follow := data.NewStockDataApi().GetFollowedStockByStockCode(stockCode)
-	id, _ := a.cron.AddFunc(cronText, a.AddCronTask(follow))
-	a.setCronEntry(stockCode, id)
-
+	a.registerStockAICron(result.StockCode, result.Cron)
 }
 func (a *App) AddGroup(group data.Group) string {
 	ok := data.NewStockGroupApi(db.Dao).AddGroup(group)
@@ -1920,27 +1971,51 @@ func (a *App) GetMarketIndustryRanks(sort string, cnt int) []marketservice.Indus
 	return a.marketReadService.LoadIndustryRanks(sort, cnt)
 }
 
+func feedItemsForSource(feeds marketservice.FeedSet, source string) []*models.Telegraph {
+	switch source {
+	case "财联社电报":
+		return append([]*models.Telegraph(nil), feeds.Telegraph...)
+	case "新浪财经":
+		return append([]*models.Telegraph(nil), feeds.Sina...)
+	case "外媒":
+		return append([]*models.Telegraph(nil), feeds.Foreign...)
+	default:
+		return []*models.Telegraph{}
+	}
+}
+
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {
-	telegraphs := data.NewMarketNewsApi().GetTelegraphList(source)
-	return telegraphs
+	if a.marketReadService == nil {
+		empty := []*models.Telegraph{}
+		return &empty
+	}
+	items := feedItemsForSource(a.marketReadService.LoadFeeds(), source)
+	return &items
 }
 
 func (a *App) ReFleshTelegraphList(source string) *[]*models.Telegraph {
-	//data.NewMarketNewsApi().GetNewTelegraph(30)
-	go data.NewMarketNewsApi().TelegraphList(30)
-	go data.NewMarketNewsApi().GetSinaNews(30)
-	go data.NewMarketNewsApi().TradingViewNews()
-	telegraphs := data.NewMarketNewsApi().GetTelegraphList(source)
-	return telegraphs
+	if a.marketReadService == nil {
+		empty := []*models.Telegraph{}
+		return &empty
+	}
+	feed := a.marketReadService.RefreshFeed(source)
+	items := append([]*models.Telegraph(nil), feed.Items...)
+	return &items
 }
 
-func (a *App) GlobalStockIndexes() map[string]any {
-	return data.NewMarketNewsApi().GlobalStockIndexes(30)
+func (a *App) GlobalStockIndexes() marketservice.IndexSet {
+	if a.marketReadService == nil {
+		return marketservice.IndexSet{}
+	}
+	return a.marketReadService.LoadGlobalIndexes(30)
 }
 
 // GlobalStockIndexesReadable 将全球指数 JSON 转为 AI 易读 Markdown 文本。
 func (a *App) GlobalStockIndexesReadable() string {
-	return data.NewMarketNewsApi().GlobalStockIndexesReadable(30)
+	if service := a.residualMarketReads(); service != nil {
+		return service.LoadGlobalIndexesReadable(30)
+	}
+	return ""
 }
 
 func (a *App) SummaryStockNews(question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool, eventName string, historyJSON string) {
@@ -1987,23 +2062,30 @@ func (a *App) SummaryStockNews(question string, aiConfigId int, sysPromptId *int
 
 	runtime.EventsEmit(a.ctx, eventName, "DONE")
 }
-func (a *App) GetIndustryRank(sort string, cnt int) []any {
-	res := data.NewMarketNewsApi().GetIndustryRank(sort, cnt)
-	return res["data"].([]any)
+func (a *App) GetIndustryRank(sort string, cnt int) []marketservice.IndustryRankEntry {
+	if a.marketReadService == nil {
+		return []marketservice.IndustryRankEntry{}
+	}
+	return a.marketReadService.LoadIndustryRanks(sort, cnt)
 }
-func (a *App) GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any {
-	res := data.NewMarketNewsApi().GetIndustryMoneyRankSina(fenlei, sort)
-	return res
+func (a *App) GetIndustryMoneyRankSina(fenlei, sort string) []marketservice.IndustryMoneyRankRow {
+	if service := a.residualMarketReads(); service != nil {
+		return service.LoadIndustryMoneyRanks(fenlei, sort)
+	}
+	return []marketservice.IndustryMoneyRankRow{}
 }
-func (a *App) GetMoneyRankSina(sort string) []map[string]any {
-	res := data.NewMarketNewsApi().GetMoneyRankSina(sort)
-	return res
+func (a *App) GetMoneyRankSina(sort string) []marketservice.MoneyRankRow {
+	if service := a.residualMarketReads(); service != nil {
+		return service.LoadMoneyRanks(sort)
+	}
+	return []marketservice.MoneyRankRow{}
 }
 
-func (a *App) GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any {
-	res := data.NewMarketNewsApi().GetStockMoneyTrendByDay(stockCode, days)
-	slice.Reverse(res)
-	return res
+func (a *App) GetStockMoneyTrendByDay(stockCode string, days int) []marketservice.StockMoneyTrendRow {
+	if service := a.residualMarketReads(); service != nil {
+		return service.LoadStockMoneyTrend(stockCode, days)
+	}
+	return []marketservice.StockMoneyTrendRow{}
 }
 
 // OpenURL

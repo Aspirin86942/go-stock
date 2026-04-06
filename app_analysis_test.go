@@ -100,7 +100,9 @@ func TestApp_AnalysisReadMethodsDelegateToService(t *testing.T) {
 			PageSize:   10,
 			TotalPages: 1,
 		},
-		prompts: &prompts,
+	}
+	config := &fakeConfigService{
+		promptsResult: &prompts,
 		promptPage: &models.PromptTemplatePageData{
 			List:       prompts,
 			Total:      1,
@@ -110,6 +112,7 @@ func TestApp_AnalysisReadMethodsDelegateToService(t *testing.T) {
 		},
 	}
 	app.analysisService = fake
+	app.configService = config
 
 	app.SaveAIResponseResult("000001.SZ", "平安银行", "新的分析", "chat-1", "怎么看", 12)
 	if fake.savedStockCode != "000001.SZ" || fake.savedAIConfig != 12 {
@@ -148,15 +151,15 @@ func TestApp_AnalysisReadMethodsDelegateToService(t *testing.T) {
 		t.Fatalf("unexpected update prompt template message: %q", msg)
 	}
 
-	if msg := app.DeletePromptTemplate(3); msg != "删除成功" || fake.deletedPromptID != 3 {
-		t.Fatalf("unexpected delete prompt template state: msg=%q id=%d", msg, fake.deletedPromptID)
+	if msg := app.DeletePromptTemplate(3); msg != "模板已删除" || config.lastDeletedTemplateID != 3 {
+		t.Fatalf("unexpected delete prompt template state: msg=%q id=%d", msg, config.lastDeletedTemplateID)
 	}
 
-	if msg := app.AddPrompt(models.Prompt{Name: "用户模板", Type: "模型用户Prompt", Content: "请总结"}); msg != "模板已保存" {
+	if msg := app.AddPrompt(models.Prompt{Name: "用户模板", Type: "模型用户Prompt", Content: "请总结"}); msg != "旧版Prompt已保存" {
 		t.Fatalf("unexpected add prompt message: %q", msg)
 	}
 
-	if msg := app.DelPrompt(11); msg != "删除成功" || fake.deletedPromptID != 11 {
-		t.Fatalf("unexpected del prompt state: msg=%q id=%d", msg, fake.deletedPromptID)
+	if msg := app.DelPrompt(11); msg != "旧版Prompt已删除" || config.lastDeletedLegacyPrompt != 11 {
+		t.Fatalf("unexpected del prompt state: msg=%q id=%d", msg, config.lastDeletedLegacyPrompt)
 	}
 }
