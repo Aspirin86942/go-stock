@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   buildCenteredWindowFeatures,
+  checkUpdate,
   getGroupList,
+  getSponsorInfo,
   openExternalUrl,
   saveImageFile,
   saveWordFile,
@@ -121,6 +123,46 @@ test('saveImageFile 与 saveWordFile 透传给 Wails 绑定', async () => {
       { type: 'image', name: 'chart.png', base64: 'base64-image' },
       { type: 'word', name: 'report.docx', base64: 'base64-docx' },
     ]);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('checkUpdate 透传给 Wails 绑定', async () => {
+  const originalWindow = globalThis.window;
+
+  try {
+    globalThis.window = {
+      go: {
+        main: {
+          App: {
+            CheckUpdate: async (force) => `checked:${force}`,
+          },
+        },
+      },
+    };
+
+    assert.equal(await checkUpdate(1), 'checked:1');
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test('getSponsorInfo 在空返回时回退为对象', async () => {
+  const originalWindow = globalThis.window;
+
+  try {
+    globalThis.window = {
+      go: {
+        main: {
+          App: {
+            GetSponsorInfo: async () => null,
+          },
+        },
+      },
+    };
+
+    assert.deepEqual(await getSponsorInfo(), {});
   } finally {
     globalThis.window = originalWindow;
   }

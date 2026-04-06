@@ -195,6 +195,7 @@ func (a *App) GetAllStocks(page int, pageSize int, name string, technicalIndicat
 	return data.NewStockDataApi().GetAllStocks(page, pageSize, name, technicalIndicators)
 }
 
+// Phase-5 compatibility allowlist: multi-turn assistant orchestration remains bridge-owned until a dedicated assistant refactor.
 func (a *App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -257,6 +258,7 @@ func agentMessageToFrontendMap(msg *schema.Message) map[string]any {
 	return m
 }
 
+// Phase-5 compatibility allowlist: multi-turn assistant orchestration remains bridge-owned until a dedicated assistant refactor.
 func (a *App) AbortChatWithAgent() {
 	a.agentMu.Lock()
 	defer a.agentMu.Unlock()

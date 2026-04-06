@@ -260,21 +260,23 @@ import {
   ChevronForwardOutline,
   ChevronUpOutline
 } from '@vicons/ionicons5'
-import {
-  ChatWithAgent,
-  GetAiConfigs,
-  GetConfig,
-  GetPromptTemplates,
-  SaveAiAssistantSession,
-  GetAiAssistantSession,
-  ShareText,
-  AbortChatWithAgent,
-  SaveAIResponseResult
-} from '../../wailsjs/go/main/App'
 import { EventsOff, EventsOn } from '../../wailsjs/runtime'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import html2canvas from 'html2canvas'
+import {
+  loadAiConfigs as GetAiConfigs,
+  loadAppConfig as GetConfig,
+  loadPromptTemplates as GetPromptTemplates,
+} from '../services/configService.mjs'
+import {
+  abortAgentChat as AbortChatWithAgent,
+  loadAssistantSession as GetAiAssistantSession,
+  saveAssistantSession as SaveAiAssistantSession,
+  shareAssistantText as ShareText,
+  startAgentChat as ChatWithAgent,
+} from '../services/assistantService.mjs'
+import { saveAnalysisResult } from '../services/analysisService.mjs'
 
 const STORAGE_KEY_MODEL_ID = 'go-stock-agent-last-model-id'
 
@@ -338,6 +340,17 @@ const shareTipVisible = ref(false)
 const shareTipText = ref('')
 const isAborted = ref(false)
 const expandedGroups = ref(new Set())
+
+function SaveAIResponseResult(stockCode, stockName, content, chatId, question, aiConfigId) {
+  return saveAnalysisResult({
+    stockCode,
+    stockName,
+    content,
+    chatId,
+    question,
+    aiConfigId,
+  })
+}
 
 const hasBackgroundTask = computed(() => isStreamLoad.value && sentFromFloating.value && !panelVisible.value)
 const AGENT_EVENT = 'agent-message'

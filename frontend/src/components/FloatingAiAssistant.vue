@@ -310,11 +310,23 @@ import {
   ShareSocialOutline,
   ImageOutline
 } from '@vicons/ionicons5'
-import { AbortSummaryStockNews, GetAiAssistantSession, GetAiConfigs, GetConfig, GetPromptTemplates, GetVersionInfo, SaveAiAssistantSession, ShareText, SummaryStockNews } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import html2canvas from 'html2canvas'
+import {
+  loadAiConfigs as GetAiConfigs,
+  loadAppConfig as GetConfig,
+  loadPromptTemplates as GetPromptTemplates,
+} from '../services/configService.mjs'
+import {
+  abortAssistantSummary as AbortSummaryStockNews,
+  loadAssistantSession as GetAiAssistantSession,
+  saveAssistantSession as SaveAiAssistantSession,
+  shareAssistantText as ShareText,
+  startAssistantSummary as SummaryStockNews,
+} from '../services/assistantService.mjs'
+import { getVersionInfo as GetVersionInfo } from '../services/appShellService.mjs'
 
 const DEFAULT_VISIBLE_COUNT = 20
 const COLLAPSE_CHAR_LIMIT = 200
@@ -574,7 +586,8 @@ function showMoreHistory() {
 const theme = computed(() => (darkTheme.value ? 'dark' : 'light'))
 async function loadHistory() {
   try {
-    const list = await GetAiAssistantSession()
+    const session = await GetAiAssistantSession('')
+    const list = session.messages
     if (Array.isArray(list) && list.length > 0) {
       messages.value = list.map(m => ({
         role: m.role ?? '',

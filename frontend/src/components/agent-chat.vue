@@ -80,10 +80,15 @@ const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo} from "../../wailsjs/go/main/App";
 import {EventsOff, EventsOn} from '../../wailsjs/runtime'
 import 'tdesign-vue-next/es/style/index.css';
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
+import {
+  loadAiConfigs as GetAiConfigs,
+  loadAppConfig as GetConfig,
+} from "../services/configService.mjs";
+import { startAgentChat as ChatWithAgent } from "../services/assistantService.mjs";
+import { getVersionInfo as GetVersionInfo } from "../services/appShellService.mjs";
 
 
 const allowToolTip = ref(true);
@@ -226,7 +231,7 @@ const inputEnter = function () {
   chatList.value.unshift(params2);
   loading.value = true;
   isStreamLoad.value = true;
-  ChatWithAgent(inputValue.value,selectValue.value,0)
+  ChatWithAgent(inputValue.value,selectValue.value,0,false,0,false)
 };
 </script>
 <style lang="less">

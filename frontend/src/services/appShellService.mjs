@@ -16,6 +16,11 @@ export async function getVersionInfo() {
   return AppBindings.GetVersionInfo();
 }
 
+export async function getSponsorInfo() {
+  const result = await AppBindings.GetSponsorInfo();
+  return result && typeof result === 'object' ? result : {};
+}
+
 export async function getGroupList() {
   const result = await AppBindings.GetGroupList();
   return Array.isArray(result) ? result : [];
@@ -27,6 +32,10 @@ export async function saveImageFile(name, base64) {
 
 export async function saveWordFile(name, base64) {
   return AppBindings.SaveWordFile(name, base64);
+}
+
+export async function checkUpdate(mode = 0) {
+  return AppBindings.CheckUpdate(mode);
 }
 
 export async function openBrowserUrl(url, { browserOpener = BrowserOpenURL } = {}) {

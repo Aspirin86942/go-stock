@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
@@ -14,12 +15,14 @@ import (
 	analysisservice "go-stock/backend/service/analysis"
 	configservice "go-stock/backend/service/config"
 	contractservice "go-stock/backend/service/contract"
+	fundservice "go-stock/backend/service/fund"
 	marketservice "go-stock/backend/service/market"
 	notificationservice "go-stock/backend/service/notification"
 	researchservice "go-stock/backend/service/research"
 	taskservice "go-stock/backend/service/task"
 	watchlistservice "go-stock/backend/service/watchlist"
 	analysissource "go-stock/backend/source/analysis"
+	fundsource "go-stock/backend/source/fund"
 	marketsource "go-stock/backend/source/marketnews"
 	notificationsource "go-stock/backend/source/notification"
 	researchsource "go-stock/backend/source/research"
@@ -70,6 +73,7 @@ type App struct {
 	notificationService   notificationService
 	watchlistService      watchlistService
 	researchService       researchService
+	fundService           fundService
 	saveFileDialog        func(ctx context.Context, options runtime.SaveDialogOptions) (string, error)
 	writeFile             func(name string, data []byte, perm os.FileMode) error
 	shareAnalysisUploader func(artifact analysisservice.ResultArtifact) (string, error)
@@ -213,6 +217,15 @@ type researchService interface {
 	EvaluateAiRecommendAlerts(ctx context.Context, now time.Time) []notificationservice.Delivery
 }
 
+type fundService interface {
+	LoadFundList(ctx context.Context, key string) []data.FundBasic
+	LoadFollowedFunds(ctx context.Context) []data.FollowedFund
+	FollowFund(ctx context.Context, fundCode string) string
+	UnfollowFund(ctx context.Context, fundCode string) string
+	RefreshFollowedFunds(ctx context.Context) error
+	SyncAllFunds(ctx context.Context)
+}
+
 func (a *App) residualMarketReads() marketResidualReadService {
 	if a.marketReadService == nil {
 		return nil
@@ -267,6 +280,7 @@ func NewApp() *App {
 	analysisSvc := analysisservice.NewService(analysisProvider, analysisStore, analysisStore)
 	configSvc := configservice.NewService(configservice.NewStore())
 	researchSvc := researchservice.NewService(researchsource.NewStore())
+	fundSvc := fundservice.NewService(fundsource.NewAdapter())
 	app := &App{
 		cache:                 cache,
 		cron:                  c,
@@ -280,6 +294,7 @@ func NewApp() *App {
 		notificationService:   notificationservice.NewService(cache, notificationsource.NewAdapter()),
 		watchlistService:      watchlistservice.NewService(watchlistsource.NewStore(), analysisSvc),
 		researchService:       researchSvc,
+		fundService:           fundSvc,
 		saveFileDialog:        runtime.SaveFileDialog,
 		writeFile:             os.WriteFile,
 		shareAnalysisUploader: uploadSharedAnalysis,
@@ -715,9 +730,9 @@ func (a *App) domReady(ctx context.Context) {
 		go runtime.EventsEmit(a.ctx, "telegraph", refreshTelegraphList())
 	}
 	go MonitorStockPrices(a)
-	if config.EnableFund {
+	if config.EnableFund && a.fundService != nil {
 		go MonitorFundPrices(a)
-		go data.NewFundApi().AllFund()
+		go a.fundService.SyncAllFunds(a.ctx)
 	}
 	// AI 推荐股票价格监控
 	go MonitorAiRecommendStockPrices(a)
@@ -1069,6 +1084,10 @@ func IsUSTradingTime(date time.Time) bool {
 	return false
 }
 func MonitorFundPrices(a *App) {
+	if a == nil || a.fundService == nil {
+		return
+	}
+
 	// 检查 A 股是否开市（基金交易时间与 A 股一致）
 	if !isTradingTime(time.Now()) {
 		appInfo("monitor-fund-prices", "fund.monitor_skipped", "skip fund price monitor because A-share market is closed")
@@ -1077,17 +1096,17 @@ func MonitorFundPrices(a *App) {
 
 	appInfo("monitor-fund-prices", "fund.monitor_started", "start fund price monitor because A-share market is open")
 
-	dest := &[]data.FollowedFund{}
-	db.Dao.Model(&data.FollowedFund{}).Find(dest)
-	for _, follow := range *dest {
-		_, err := data.NewFundApi().CrawlFundBasic(follow.Code)
-		if err != nil {
-			appError("monitor-fund-prices", "fund.basic_info_fetch_failed", "crawl fund basic info failed", logger.String("fund_code", follow.Code), logger.Err(err))
-			continue
-		}
-		data.NewFundApi().CrawlFundNetEstimatedUnit(follow.Code)
-		data.NewFundApi().CrawlFundNetUnitValue(follow.Code)
+	err := a.fundService.RefreshFollowedFunds(a.ctx)
+	if err == nil {
+		return
 	}
+
+	var refreshErr fundservice.RefreshError
+	if errors.As(err, &refreshErr) && refreshErr.FundCode != "" {
+		appError("monitor-fund-prices", "fund.basic_info_fetch_failed", "crawl fund basic info failed", logger.String("fund_code", refreshErr.FundCode), logger.Err(refreshErr.Err))
+		return
+	}
+	appError("monitor-fund-prices", "fund.basic_info_fetch_failed", "crawl fund basic info failed", logger.Err(err))
 }
 
 // MonitorAiRecommendStockPrices 监控 AI 推荐股票的价格，当股价达到预警线时发送通知
@@ -1630,16 +1649,28 @@ func (a *App) ShareText(text, title string) string {
 }
 
 func (a *App) GetfundList(key string) []data.FundBasic {
-	return data.NewFundApi().GetFundList(key)
+	if a.fundService == nil {
+		return []data.FundBasic{}
+	}
+	return a.fundService.LoadFundList(a.ctx, key)
 }
 func (a *App) GetFollowedFund() []data.FollowedFund {
-	return data.NewFundApi().GetFollowedFund()
+	if a.fundService == nil {
+		return []data.FollowedFund{}
+	}
+	return a.fundService.LoadFollowedFunds(a.ctx)
 }
 func (a *App) FollowFund(fundCode string) string {
-	return data.NewFundApi().FollowFund(fundCode)
+	if a.fundService == nil {
+		return "关注失败"
+	}
+	return a.fundService.FollowFund(a.ctx, fundCode)
 }
 func (a *App) UnFollowFund(fundCode string) string {
-	return data.NewFundApi().UnFollowFund(fundCode)
+	if a.fundService == nil {
+		return "取消关注失败"
+	}
+	return a.fundService.UnfollowFund(a.ctx, fundCode)
 }
 func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 	artifacts := a.artifactService()
@@ -2049,11 +2080,13 @@ func (a *App) GetAiConfigs() []*data.AIConfig {
 }
 
 // GetAiAssistantSession 获取 AI 助手会话消息列表，sessionId 为空时获取最新的
+// Phase-5 compatibility allowlist: multi-turn assistant orchestration remains bridge-owned until a dedicated assistant refactor.
 func (a *App) GetAiAssistantSession(sessionId string) (*models.AiAssistantSessionResp, error) {
 	return data.GetAiAssistantSession(sessionId)
 }
 
 // SaveAiAssistantSession 保存 AI 助手会话消息到数据库
+// Phase-5 compatibility allowlist: multi-turn assistant orchestration remains bridge-owned until a dedicated assistant refactor.
 func (a *App) SaveAiAssistantSession(sessionId string, messages []models.AiAssistantMessage) error {
 	return data.SaveAiAssistantSession(sessionId, messages)
 }

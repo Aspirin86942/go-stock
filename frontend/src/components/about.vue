@@ -3,8 +3,12 @@
 // preview.css相比style.css少了编辑器那部分样式
 import 'md-editor-v3/lib/preview.css';
 import {h, onBeforeUnmount, onMounted, ref} from 'vue';
-import {CheckUpdate, GetVersionInfo, OpenURL} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn,Environment} from "../../wailsjs/runtime";
+import {EventsOff, EventsOn} from "../../wailsjs/runtime";
+import {
+  checkUpdate as CheckUpdate,
+  getVersionInfo as GetVersionInfo,
+  openExternalUrl as OpenURL,
+} from "../services/appShellService.mjs";
 import {NAvatar, NButton, useNotification} from "naive-ui";
 const updateLog = ref('');
 const versionInfo = ref('');
@@ -68,16 +72,7 @@ EventsOn("updateVersion",async (msg) => {
         type: 'primary',
         size: 'small',
         onClick: () => {
-          Environment().then(env => {
-            switch (env.platform) {
-              case 'windows':
-                window.open(msg.html_url)
-                break
-              default :
-                OpenURL(msg.html_url)
-                break
-            }
-          })
+          OpenURL(msg.html_url)
         }
       }, { default: () => '查看' })
     }
