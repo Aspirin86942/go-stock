@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildCenteredWindowFeatures,
+  getGroupList,
   openExternalUrl,
 } from './appShellService.mjs';
 
@@ -58,4 +59,34 @@ test('openExternalUrl 在非 windows 回退到 Wails OpenURL', async () => {
 
   assert.equal(result, 'wails');
   assert.deepEqual(calls, ['https://example.com']);
+});
+
+test('getGroupList 在后端返回 null 或 undefined 时回退到空数组', async () => {
+  const originalWindow = globalThis.window;
+
+  try {
+    globalThis.window = {
+      go: {
+        main: {
+          App: {
+            GetGroupList: async () => null,
+          },
+        },
+      },
+    };
+    assert.deepEqual(await getGroupList(), []);
+
+    globalThis.window = {
+      go: {
+        main: {
+          App: {
+            GetGroupList: async () => undefined,
+          },
+        },
+      },
+    };
+    assert.deepEqual(await getGroupList(), []);
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

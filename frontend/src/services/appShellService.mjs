@@ -17,7 +17,8 @@ export async function getVersionInfo() {
 }
 
 export async function getGroupList() {
-  return AppBindings.GetGroupList();
+  const result = await AppBindings.GetGroupList();
+  return Array.isArray(result) ? result : [];
 }
 
 export async function openBrowserUrl(url, { browserOpener = BrowserOpenURL } = {}) {
