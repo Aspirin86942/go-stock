@@ -33,6 +33,22 @@ func (f *fakeSource) GetIndustryRank(sort string, cnt int) map[string]any {
 	return f.industryRanks
 }
 
+func (f *fakeSource) GlobalStockIndexesReadable(crawlTimeout uint) string {
+	return ""
+}
+
+func (f *fakeSource) GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any {
+	return []map[string]any{}
+}
+
+func (f *fakeSource) GetMoneyRankSina(sort string) []map[string]any {
+	return []map[string]any{}
+}
+
+func (f *fakeSource) GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any {
+	return []map[string]any{}
+}
+
 func TestService_LoadReadModel_NormalizesTypedContracts(t *testing.T) {
 	now := time.Now()
 	telegraphItems := []*models.Telegraph{

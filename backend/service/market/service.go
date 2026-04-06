@@ -11,22 +11,6 @@ type Service struct {
 	source Source
 }
 
-type residualReadableSource interface {
-	GlobalStockIndexesReadable(crawlTimeout uint) string
-}
-
-type residualIndustryMoneySource interface {
-	GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any
-}
-
-type residualMoneyRankSource interface {
-	GetMoneyRankSina(sort string) []map[string]any
-}
-
-type residualStockTrendSource interface {
-	GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any
-}
-
 func NewService(source Source) *Service {
 	return &Service{source: source}
 }
@@ -88,20 +72,11 @@ func (s *Service) LoadIndustryRanks(sort string, cnt int) []IndustryRankEntry {
 }
 
 func (s *Service) LoadGlobalIndexesReadable(crawlTimeout uint) string {
-	src, ok := s.source.(residualReadableSource)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(src.GlobalStockIndexesReadable(crawlTimeout))
+	return strings.TrimSpace(s.source.GlobalStockIndexesReadable(crawlTimeout))
 }
 
 func (s *Service) LoadIndustryMoneyRanks(fenlei, sort string) []IndustryMoneyRankRow {
-	src, ok := s.source.(residualIndustryMoneySource)
-	if !ok {
-		return []IndustryMoneyRankRow{}
-	}
-
-	raw := src.GetIndustryMoneyRankSina(fenlei, sort)
+	raw := s.source.GetIndustryMoneyRankSina(fenlei, sort)
 	if len(raw) == 0 {
 		return []IndustryMoneyRankRow{}
 	}
@@ -127,12 +102,7 @@ func (s *Service) LoadIndustryMoneyRanks(fenlei, sort string) []IndustryMoneyRan
 }
 
 func (s *Service) LoadMoneyRanks(sort string) []MoneyRankRow {
-	src, ok := s.source.(residualMoneyRankSource)
-	if !ok {
-		return []MoneyRankRow{}
-	}
-
-	raw := src.GetMoneyRankSina(sort)
+	raw := s.source.GetMoneyRankSina(sort)
 	if len(raw) == 0 {
 		return []MoneyRankRow{}
 	}
@@ -164,12 +134,7 @@ func (s *Service) LoadMoneyRanks(sort string) []MoneyRankRow {
 }
 
 func (s *Service) LoadStockMoneyTrend(stockCode string, days int) []StockMoneyTrendRow {
-	src, ok := s.source.(residualStockTrendSource)
-	if !ok {
-		return []StockMoneyTrendRow{}
-	}
-
-	raw := src.GetStockMoneyTrendByDay(stockCode, days)
+	raw := s.source.GetStockMoneyTrendByDay(stockCode, days)
 	if len(raw) == 0 {
 		return []StockMoneyTrendRow{}
 	}

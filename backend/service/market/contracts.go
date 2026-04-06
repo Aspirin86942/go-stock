@@ -48,44 +48,44 @@ type IndustryRankEntry struct {
 type IndustryMoneyRankRow struct {
 	Category       string  `json:"category"`
 	Name           string  `json:"name"`
-	AvgChangeRatio float64 `json:"avgChangeRatio"`
-	InAmount       float64 `json:"inAmount"`
-	OutAmount      float64 `json:"outAmount"`
-	NetAmount      float64 `json:"netAmount"`
-	RatioAmount    float64 `json:"ratioAmount"`
-	TSName         string  `json:"tsName"`
-	TSSymbol       string  `json:"tsSymbol"`
-	TSChangeRatio  float64 `json:"tsChangeRatio"`
-	TSTrade        float64 `json:"tsTrade"`
-	TSRatioAmount  float64 `json:"tsRatioAmount"`
+	AvgChangeRatio float64 `json:"avg_changeratio"`
+	InAmount       float64 `json:"inamount"`
+	OutAmount      float64 `json:"outamount"`
+	NetAmount      float64 `json:"netamount"`
+	RatioAmount    float64 `json:"ratioamount"`
+	TSName         string  `json:"ts_name"`
+	TSSymbol       string  `json:"ts_symbol"`
+	TSChangeRatio  float64 `json:"ts_changeratio"`
+	TSTrade        float64 `json:"ts_trade"`
+	TSRatioAmount  float64 `json:"ts_ratioamount"`
 }
 
 type MoneyRankRow struct {
 	Symbol      string  `json:"symbol"`
 	Name        string  `json:"name"`
 	Trade       float64 `json:"trade"`
-	ChangeRatio float64 `json:"changeRatio"`
+	ChangeRatio float64 `json:"changeratio"`
 	Turnover    float64 `json:"turnover"`
 	Amount      float64 `json:"amount"`
-	OutAmount   float64 `json:"outAmount"`
-	InAmount    float64 `json:"inAmount"`
-	NetAmount   float64 `json:"netAmount"`
-	RatioAmount float64 `json:"ratioAmount"`
-	R0Out       float64 `json:"r0Out"`
-	R0In        float64 `json:"r0In"`
-	R0Net       float64 `json:"r0Net"`
-	R0Ratio     float64 `json:"r0Ratio"`
-	R3Out       float64 `json:"r3Out"`
-	R3In        float64 `json:"r3In"`
-	R3Net       float64 `json:"r3Net"`
-	R3Ratio     float64 `json:"r3Ratio"`
+	OutAmount   float64 `json:"outamount"`
+	InAmount    float64 `json:"inamount"`
+	NetAmount   float64 `json:"netamount"`
+	RatioAmount float64 `json:"ratioamount"`
+	R0Out       float64 `json:"r0_out"`
+	R0In        float64 `json:"r0_in"`
+	R0Net       float64 `json:"r0_net"`
+	R0Ratio     float64 `json:"r0_ratio"`
+	R3Out       float64 `json:"r3_out"`
+	R3In        float64 `json:"r3_in"`
+	R3Net       float64 `json:"r3_net"`
+	R3Ratio     float64 `json:"r3_ratio"`
 }
 
 type StockMoneyTrendRow struct {
-	OpenDate  string  `json:"openDate"`
+	OpenDate  string  `json:"opendate"`
 	Trade     float64 `json:"trade"`
-	NetAmount float64 `json:"netAmount"`
-	R0Net     float64 `json:"r0Net"`
+	NetAmount float64 `json:"netamount"`
+	R0Net     float64 `json:"r0_net"`
 }
 
 type Source interface {
@@ -93,4 +93,8 @@ type Source interface {
 	RefreshFeeds()
 	GlobalStockIndexes(crawlTimeOut uint) map[string]any
 	GetIndustryRank(sort string, cnt int) map[string]any
+	GlobalStockIndexesReadable(crawlTimeout uint) string
+	GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any
+	GetMoneyRankSina(sort string) []map[string]any
+	GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any
 }
