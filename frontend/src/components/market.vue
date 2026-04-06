@@ -1,10 +1,6 @@
 ﻿<script setup>
 import * as echarts from "echarts";
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref} from 'vue'
-import {
-  GetConfig,
-  GetAiConfigs,
-} from "../../wailsjs/go/main/App";
 import {EventsOff, EventsOn} from "../../wailsjs/runtime";
 import NewsList from "./newsList.vue";
 import KLineChart from "./KLineChart.vue";
@@ -29,12 +25,12 @@ import Stockhotmap from "./stockhotmap.vue";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 import {
   loadLatestAnalysisResult,
-  loadPromptTemplates,
   saveAnalysisMarkdown,
   saveAnalysisResult,
   shareAnalysis,
   startMarketSummary,
 } from "../services/analysisService.mjs";
+import { loadAiConfigs, loadAppConfig, loadPromptTemplates } from "../services/configService.mjs";
 import {
   loadMarketFeeds,
   loadMarketGlobalIndexes,
@@ -114,7 +110,7 @@ function getIndex() {
 onBeforeMount(() => {
   nowTab.value = route.query.name
   stockCode.value = route.query.stockCode
-  GetConfig().then(result => {
+  loadAppConfig().then(result => {
     summaryBTN.value = result.openAiEnable
     darkTheme.value = result.darkTheme
     httpProxyEnabled.value = result.httpProxyEnabled
@@ -125,7 +121,7 @@ onBeforeMount(() => {
     userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
   })
 
-  GetAiConfigs().then(res=>{
+  loadAiConfigs().then(res=>{
     aiConfigs.value = res
     aiConfigId.value = resolveFirstAiConfigId(res)
   })

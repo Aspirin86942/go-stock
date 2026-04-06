@@ -1,6 +1,5 @@
 <script setup>
 import { h, onBeforeUnmount, onMounted, ref } from "vue";
-import { SendDingDingMessageByType } from "../../wailsjs/go/main/App";
 import { NTag, NTooltip, NIcon, useMessage } from "naive-ui";
 import { data } from "../../wailsjs/go/models";
 import { EventsEmit } from "../../wailsjs/runtime";
@@ -13,6 +12,7 @@ import {
   loadPromptTemplates,
   saveAppConfig,
   saveLegacyPrompt,
+  sendTypedNotification,
 } from "../services/configService.mjs";
 
 const message = useMessage()
@@ -270,7 +270,7 @@ function sendTestNotice() {
       '      }' +
       ' }'
 
-  SendDingDingMessageByType(msg, "test-" + new Date().getTime(), 1).then(res => {
+  sendTypedNotification(msg, "test-" + new Date().getTime(), 1).then(res => {
     message.info(res)
   })
 }

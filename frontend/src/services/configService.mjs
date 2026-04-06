@@ -65,3 +65,7 @@ export async function saveLegacyPrompt(prompt) {
 export async function deleteLegacyPrompt(id) {
   return AppBindings.DelPrompt(id);
 }
+
+export async function sendTypedNotification(message, stockCode, msgType) {
+  return AppBindings.SendDingDingMessageByType(message, stockCode, msgType);
+}

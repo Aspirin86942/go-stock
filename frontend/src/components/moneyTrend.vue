@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {onMounted, ref} from "vue";
-import {GetStockMoneyTrendByDay} from "../../wailsjs/go/main/App";
 import * as echarts from "echarts";
+import { loadStockMoneyTrend } from "../services/marketService.mjs";
 
 const {code, name, darkTheme, days, chartHeight} = defineProps({
   code: {
@@ -33,7 +33,7 @@ onMounted(
     }
 )
 const handleLine = (code, days) => {
-  GetStockMoneyTrendByDay(code, days).then(result => {
+  loadStockMoneyTrend(code, days).then(result => {
     //console.log("GetStockMoneyTrendByDay", result)
     const chart = echarts.init(LineChartRef.value);
     const categoryData = [];

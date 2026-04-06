@@ -3,8 +3,8 @@
 import {CaretDown, CaretUp, RefreshCircleOutline} from "@vicons/ionicons5";
 import {NText,useMessage} from "naive-ui";
 import {onBeforeUnmount, onMounted, onUnmounted, ref} from "vue";
-import {GetMoneyRankSina} from "../../wailsjs/go/main/App";
 import KLineChart from "./KLineChart.vue";
+import { loadMoneyRanks } from "../services/marketService.mjs";
 
 const props = defineProps({
   headerTitle: {
@@ -32,7 +32,7 @@ onBeforeUnmount(()=>{
 })
 function GetMoneyRankSinaData(){
   message.loading("正在刷新数据...")
-  GetMoneyRankSina(sort.value).then(result => {
+  loadMoneyRanks(sort.value).then(result => {
     if(result.length>0){
       dataList.value = result
     }

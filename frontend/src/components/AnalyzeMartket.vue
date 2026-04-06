@@ -1,9 +1,8 @@
 <script setup>
 
-import {AnalyzeSentimentWithFreqWeight,GlobalStockIndexes} from "../../wailsjs/go/main/App";
 import * as echarts from "echarts";
 import {onMounted,onUnmounted, ref} from "vue";
-import _ from "lodash";
+import { analyzeMarketSentiment, loadMarketGlobalIndexes } from "../services/marketService.mjs";
 const { name,darkTheme,kDays ,chartHeight} = defineProps({
   name: {
     type: String,
@@ -53,13 +52,13 @@ onUnmounted(()=>{
 })
 
 function getIndex() {
-  GlobalStockIndexes().then((res) => {
+  loadMarketGlobalIndexes().then((res) => {
     globalStockIndexes.value = res
-    common.value = res["common"]
-    america.value = res["america"]
-    europe.value = res["europe"]
-    asia.value = res["asia"]
-    other.value = res["other"]
+    common.value = res.common
+    america.value = res.america
+    europe.value = res.europe
+    asia.value = res.asia
+    other.value = res.other
     mainIndex.value=asia.value.filter(function (item) {
       return ['上海',"深圳","香港","台湾","北京","东京","首尔","纽约","纳斯达克"].includes(item.location)
     }).concat(america.value.filter(function (item) {
@@ -74,7 +73,7 @@ function getIndex() {
 }
 function  handleChart(){
   const formatUtil = echarts.format;
-  AnalyzeSentimentWithFreqWeight("").then((res) => {
+  analyzeMarketSentiment("").then((res) => {
     const treemapchart = echarts.init(chartRef.value);
     const gaugeChart=echarts.init(gaugeChartRef.value);
     let data = res['frequencies'].map(item => ({
