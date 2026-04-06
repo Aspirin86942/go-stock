@@ -232,3 +232,60 @@ func collectChunks(ch <-chan StreamChunk) []StreamChunk {
 	}
 	return chunks
 }
+
+func TestNewService_requiresDependencies(t *testing.T) {
+	validStreams := &fakeStreams{}
+	validResults := &fakeResults{}
+	validPrompts := &fakePrompts{}
+
+	cases := []struct {
+		name    string
+		streams StreamSource
+		results ResultSource
+		prompts PromptSource
+	}{
+		{name: "missingStreams", streams: nil, results: validResults, prompts: validPrompts},
+		{name: "missingResults", streams: validStreams, results: nil, prompts: validPrompts},
+		{name: "missingPrompts", streams: validStreams, results: validResults, prompts: nil},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Fatalf("expected panic for %s", tc.name)
+				}
+			}()
+			NewService(tc.streams, tc.results, tc.prompts)
+		})
+	}
+}
+
+func TestService_GetResultPageHandlesNilPage(t *testing.T) {
+	svc := NewService(&fakeStreams{}, &fakeResults{page: nil}, &fakePrompts{})
+	page, err := svc.GetResultPage(context.Background(), models.AIResponseResultQuery{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page == nil {
+		t.Fatalf("expected non-nil page result")
+	}
+	if page.Total != 0 || len(page.List) != 0 {
+		t.Fatalf("expected empty page when source returns nil, got %#v", page)
+	}
+}
+
+func TestService_GetPromptTemplatePageHandlesNilPage(t *testing.T) {
+	svc := NewService(&fakeStreams{}, &fakeResults{}, &fakePrompts{page: nil})
+	page, err := svc.GetPromptTemplatePage(context.Background(), models.PromptTemplateQuery{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if page == nil {
+		t.Fatalf("expected non-nil prompt page result")
+	}
+	if page.Total != 0 || len(page.List) != 0 {
+		t.Fatalf("expected empty prompt page when source returns nil, got %#v", page)
+	}
+}

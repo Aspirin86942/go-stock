@@ -34,7 +34,17 @@ type Service struct {
 	prompts PromptSource
 }
 
+// NewService enforces that all dependencies are wired to avoid silent failures.
 func NewService(streams StreamSource, results ResultSource, prompts PromptSource) *Service {
+	if streams == nil {
+		panic("analysis: streams dependency is required")
+	}
+	if results == nil {
+		panic("analysis: results dependency is required")
+	}
+	if prompts == nil {
+		panic("analysis: prompts dependency is required")
+	}
 	return &Service{
 		streams: streams,
 		results: results,
@@ -44,31 +54,19 @@ func NewService(streams StreamSource, results ResultSource, prompts PromptSource
 
 // StartStockAnalysis 委托 StreamSource 开始股票分析流并归一化事件。
 func (s *Service) StartStockAnalysis(ctx context.Context, request StockRequest) <-chan StreamChunk {
-	if s.streams == nil {
-		return closedChunks()
-	}
 	return mapChunks(s.streams.StockStream(ctx, request))
 }
 
 // StartMarketSummary 解析历史后委托 StreamSource 推送市场总结流。
 func (s *Service) StartMarketSummary(ctx context.Context, request MarketSummaryRequest) <-chan StreamChunk {
-	if s.streams == nil {
-		return closedChunks()
-	}
 	return mapChunks(s.streams.MarketSummaryStream(ctx, request, parseHistory(request.HistoryJSON)))
 }
 
 func (s *Service) SaveResult(ctx context.Context, stockCode, stockName, result, chatID, question string, aiConfigID int) {
-	if s.results == nil {
-		return
-	}
 	s.results.SaveResult(ctx, stockCode, stockName, result, chatID, question, aiConfigID)
 }
 
 func (s *Service) GetLatestResult(ctx context.Context, stockCode string) *models.AIResponseResult {
-	if s.results == nil {
-		return &models.AIResponseResult{}
-	}
 	result := s.results.GetLatestResult(ctx, stockCode)
 	if result == nil {
 		return &models.AIResponseResult{}
@@ -77,9 +75,6 @@ func (s *Service) GetLatestResult(ctx context.Context, stockCode string) *models
 }
 
 func (s *Service) GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error) {
-	if s.results == nil {
-		return &models.AIResponseResultPageData{}, nil
-	}
 	page, err := s.results.GetResultPage(ctx, query)
 	if err != nil {
 		return nil, err
@@ -91,24 +86,15 @@ func (s *Service) GetResultPage(ctx context.Context, query models.AIResponseResu
 }
 
 func (s *Service) DeleteResult(ctx context.Context, id uint) error {
-	if s.results == nil {
-		return nil
-	}
 	return s.results.DeleteResult(ctx, id)
 }
 
 func (s *Service) BatchDeleteResults(ctx context.Context, ids []uint) error {
-	if s.results == nil {
-		return nil
-	}
 	return s.results.BatchDeleteResults(ctx, ids)
 }
 
 func (s *Service) GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate {
 	empty := []models.PromptTemplate{}
-	if s.prompts == nil {
-		return &empty
-	}
 	result := s.prompts.GetPromptTemplates(ctx, name, promptType)
 	if result == nil {
 		return &empty
@@ -117,9 +103,6 @@ func (s *Service) GetPromptTemplates(ctx context.Context, name, promptType strin
 }
 
 func (s *Service) GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error) {
-	if s.prompts == nil {
-		return &models.PromptTemplatePageData{}, nil
-	}
 	page, err := s.prompts.GetPromptTemplatePage(ctx, query)
 	if err != nil {
 		return nil, err
@@ -131,16 +114,10 @@ func (s *Service) GetPromptTemplatePage(ctx context.Context, query models.Prompt
 }
 
 func (s *Service) SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string {
-	if s.prompts == nil {
-		return ""
-	}
 	return s.prompts.SavePromptTemplate(ctx, template)
 }
 
 func (s *Service) DeletePromptTemplate(ctx context.Context, id uint) string {
-	if s.prompts == nil {
-		return ""
-	}
 	return s.prompts.DeletePromptTemplate(ctx, id)
 }
 
@@ -184,13 +161,6 @@ func mapChunks(raw <-chan map[string]any) <-chan StreamChunk {
 		}
 	}()
 	return out
-}
-
-// closedChunks 生成一个立即关闭的空事件流。
-func closedChunks() <-chan StreamChunk {
-	ch := make(chan StreamChunk)
-	close(ch)
-	return ch
 }
 
 func asString(value any) string {
