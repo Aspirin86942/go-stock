@@ -45,24 +45,20 @@ func NewService(cache Cache, adapter Adapter) *Service {
 }
 
 func (s *Service) SendDingTalk(message, stockCode string) string {
-	ttl, _ := s.cache.TTL([]byte(stockCode))
-	if ttl > 0 {
+	ttl, err := s.cache.TTL([]byte(stockCode))
+	if err == nil && ttl > 0 {
 		return ""
 	}
-	if err := s.cache.Set([]byte(stockCode), []byte("1"), 60*5); err != nil {
-		return ""
-	}
+	_ = s.cache.Set([]byte(stockCode), []byte("1"), 60*5)
 	return s.adapter.SendDingTalk(message)
 }
 
 func (s *Service) SendTyped(message, stockCode string, msgType int) Delivery {
-	ttl, _ := s.cache.TTL([]byte(stockCode))
-	if ttl > 0 {
+	ttl, err := s.cache.TTL([]byte(stockCode))
+	if err == nil && ttl > 0 {
 		return Delivery{}
 	}
-	if err := s.cache.Set([]byte(stockCode), []byte("1"), ttlForMessageType(msgType)); err != nil {
-		return Delivery{}
-	}
+	_ = s.cache.Set([]byte(stockCode), []byte("1"), ttlForMessageType(msgType))
 
 	content := formatNotificationContent(s.adapter.LoadStockInfo(stockCode))
 	if strings.TrimSpace(content) != "" {

@@ -848,6 +848,16 @@ func (a *App) buildStockAICronJob(stockCode string) func() {
 		if a.watchlistService == nil {
 			return
 		}
+		displayName := stockCode
+		for _, follow := range a.watchlistService.ListScheduledStocks(a.ctx) {
+			if follow.StockCode == stockCode && strings.TrimSpace(follow.Name) != "" {
+				displayName = follow.Name + "_" + follow.StockCode
+				break
+			}
+		}
+		if a.emitEvent != nil {
+			a.emitEvent(a.ctx, "warnMsg", "开始自动分析"+displayName)
+		}
 		result, userErr := a.watchlistService.RunScheduledAnalysis(a.ctx, stockCode)
 		if userErr != nil {
 			if a.emitEvent != nil {
@@ -856,7 +866,6 @@ func (a *App) buildStockAICronJob(stockCode string) func() {
 			return
 		}
 		if a.emitEvent != nil {
-			a.emitEvent(a.ctx, "warnMsg", "开始自动分析"+result.Name+"_"+result.StockCode)
 			a.emitEvent(a.ctx, "warnMsg", "AI分析完成："+result.Name+"_"+result.StockCode)
 		}
 	}

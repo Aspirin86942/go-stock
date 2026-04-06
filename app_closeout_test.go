@@ -174,11 +174,13 @@ type closeoutWatchlistServiceStub struct {
 	listResult    []watchlistservice.ScheduledStock
 	runStockCode  string
 	runResult     watchlistservice.ScheduledStock
+	runHook       func()
 }
 
 func (s *closeoutWatchlistServiceStub) SaveStockAICron(ctx context.Context, cronText, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError) {
 	s.saveCronText = cronText
 	s.saveStockCode = stockCode
+	s.listResult = append(s.listResult, s.saveResult)
 	return s.saveResult, nil
 }
 
@@ -188,6 +190,9 @@ func (s *closeoutWatchlistServiceStub) ListScheduledStocks(ctx context.Context) 
 
 func (s *closeoutWatchlistServiceStub) RunScheduledAnalysis(ctx context.Context, stockCode string) (watchlistservice.ScheduledStock, *contractservice.UserVisibleError) {
 	s.runStockCode = stockCode
+	if s.runHook != nil {
+		s.runHook()
+	}
 	return s.runResult, nil
 }
 
@@ -366,8 +371,6 @@ func TestApp_NotificationHelpersDelegateToService(t *testing.T) {
 
 func TestApp_SetStockAICronRegistersAndRestoresJobsThroughWatchlistService(t *testing.T) {
 	cronScheduler := cron.New(cron.WithSeconds())
-	cronScheduler.Start()
-	t.Cleanup(func() { cronScheduler.Stop() })
 
 	watchlist := &closeoutWatchlistServiceStub{
 		saveResult: watchlistservice.ScheduledStock{
@@ -415,6 +418,11 @@ func TestApp_SetStockAICronRegistersAndRestoresJobsThroughWatchlistService(t *te
 		t.Fatal("expected restored sz000001 cron entry")
 	}
 
+	watchlist.runHook = func() {
+		if len(events) == 0 || events[0] != "开始自动分析Apple_usaapl" {
+			t.Fatalf("expected start event before running analysis, got %#v", events)
+		}
+	}
 	job := app.buildStockAICronJob("usaapl")
 	job()
 	if watchlist.runStockCode != "usaapl" {

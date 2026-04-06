@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"errors"
 	"testing"
 
 	"go-stock/backend/data"
@@ -9,9 +10,14 @@ import (
 type fakeCache struct {
 	ttl    map[string]uint32
 	setTTL map[string]int
+	ttlErr error
+	setErr error
 }
 
 func (f *fakeCache) TTL(key []byte) (uint32, error) {
+	if f.ttlErr != nil {
+		return 0, f.ttlErr
+	}
 	if f.ttl == nil {
 		return 0, nil
 	}
@@ -23,7 +29,7 @@ func (f *fakeCache) Set(key []byte, value []byte, expireSeconds int) error {
 		f.setTTL = map[string]int{}
 	}
 	f.setTTL[string(key)] = expireSeconds
-	return nil
+	return f.setErr
 }
 
 type fakeAdapter struct {
@@ -86,5 +92,35 @@ func TestService_SendTypedDeliversLocalAndDingTalk(t *testing.T) {
 	}
 	if cache.setTTL["sz000001"] != 300 {
 		t.Fatalf("unexpected ttl seconds: %d", cache.setTTL["sz000001"])
+	}
+}
+
+func TestService_SendDingTalkContinuesWhenCacheFails(t *testing.T) {
+	cache := &fakeCache{ttlErr: errors.New("cache unavailable"), setErr: errors.New("cache unavailable")}
+	adapter := &fakeAdapter{dingResult: "发送成功"}
+	svc := NewService(cache, adapter)
+
+	if got := svc.SendDingTalk("body", "sh600519"); got != "发送成功" {
+		t.Fatalf("expected ding talk send to continue when cache fails, got %q", got)
+	}
+}
+
+func TestService_SendTypedContinuesWhenCacheSetFails(t *testing.T) {
+	cache := &fakeCache{setErr: errors.New("cache write failed")}
+	adapter := &fakeAdapter{
+		dingResult: "发送钉钉消息成功",
+		stockInfo: &data.StockInfo{
+			Name:     "平安银行",
+			Price:    "12.34",
+			PreClose: "12.00",
+			Date:     "2026-04-06",
+			Time:     "10:00:00",
+		},
+	}
+	svc := NewService(cache, adapter)
+
+	result := svc.SendTyped("body", "sz000001", 1)
+	if result.DingResult != "发送钉钉消息成功" || result.EventContent == "" {
+		t.Fatalf("expected typed send to continue when cache write fails, got %#v", result)
 	}
 }
