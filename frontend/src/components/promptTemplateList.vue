@@ -1,14 +1,15 @@
 <script setup>
 import {computed, h, onBeforeMount, onMounted, ref, reactive} from 'vue'
 import {
-  GetPromptTemplateList,
   GetConfig,
-  AddPromptTemplate,
-  DeletePromptTemplate,
-  UpdatePromptTemplate
 } from "../../wailsjs/go/main/App";
 import { EventsEmit } from "../../wailsjs/runtime";
 import {NButton, NInput, NTag, NText, useMessage, useNotification,useDialog, NModal, NCard, NForm, NFormItem, NSpace} from "naive-ui";
+import {
+  deletePromptTemplate as removePromptTemplate,
+  loadPromptTemplatePage,
+  savePromptTemplate as persistPromptTemplate,
+} from "../services/analysisService.mjs";
 
 const notify = useNotification()
 const message = useMessage()
@@ -137,7 +138,7 @@ const modalDataRef = reactive({
 
 function query({ page, pageSize = 10, name = "", type = "", content = "" }) {
   return new Promise((resolve) => {
-    GetPromptTemplateList({
+    loadPromptTemplatePage({
       "page": page,
       "pageSize": pageSize,
       "name": name,
@@ -227,8 +228,7 @@ function savePromptTemplate() {
     return
   }
 
-  const apiCall = modalDataRef.isEdit ? UpdatePromptTemplate : AddPromptTemplate
-  apiCall(modalDataRef.formData).then((res) => {
+  persistPromptTemplate(modalDataRef.formData, { edit: modalDataRef.isEdit }).then((res) => {
     message.info( res )
     modalDataRef.visible = false
     handleSearch()
@@ -244,7 +244,7 @@ function deletePromptTemplate(id) {
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: () => {
-      DeletePromptTemplate(id).then((res) => {
+      removePromptTemplate(id).then((res) => {
         message.info( res )
         handleSearch()
         EventsEmit('promptTemplatesChanged')

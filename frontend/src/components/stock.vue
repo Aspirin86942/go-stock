@@ -6,23 +6,18 @@ import {
   AddStockGroup,
   Follow,
   GetAiConfigs,
-  GetAIResponseResult,
   GetConfig,
   GetFollowList,
   GetGroupList,
-  GetPromptTemplates,
   GetStockKLine,
   GetStockList,
   GetStockMinutePriceLineData,
   GetVersionInfo,
   Greet,
   InitializeGroupSort,
-  NewChatStream,
   OpenURL,
   RemoveGroup,
   RemoveStockGroup,
-  SaveAIResponseResult,
-  SaveAsMarkdown,
   SaveImage,
   SaveWordFile,
   SendDingDingMessageByType,
@@ -31,7 +26,6 @@ import {
   SetStockAICron,
   SetStockSort,
   SetTradingPrice,
-  ShareAnalysis,
   UnFollow,
   UpdateGroupSort
 } from '../../wailsjs/go/main/App'
@@ -73,6 +67,14 @@ import {useRoute, useRouter} from 'vue-router'
 import MoneyTrend from "./moneyTrend.vue";
 import StockSparkLine from "./stockSparkLine.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
+import {
+  loadLatestAnalysisResult,
+  loadPromptTemplates,
+  saveAnalysisMarkdown,
+  saveAnalysisResult,
+  shareAnalysis,
+  startStockAnalysis,
+} from "../services/analysisService.mjs";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
 import { normalizeFollowStockCode, resolveFollowStockCode } from "../utils/stockCode.mjs";
 
@@ -349,7 +351,7 @@ onBeforeMount(() => {
       data.darkTheme = true
     }
   })
-  GetPromptTemplates("", "").then(res => {
+  loadPromptTemplates("", "").then(res => {
     promptTemplates.value = res
 
     sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
@@ -395,7 +397,14 @@ onBeforeMount(() => {
   EventsOn("newChatStream", async (msg) => {
     data.loading = false
     if (msg === "DONE") {
-      SaveAIResponseResult(data.code, data.name, data.airesult, data.chatId, data.question, data.aiConfigId)
+      await saveAnalysisResult({
+        stockCode: data.code,
+        stockName: data.name,
+        content: data.airesult,
+        chatId: data.chatId,
+        question: data.question,
+        aiConfigId: data.aiConfigId,
+      })
       message.info("AI分析完成！")
       message.destroyAll()
     } else {
@@ -1836,11 +1845,19 @@ function aiReCheckStock(stock, stockCode) {
   //
 
   //message.info("sysPromptId:"+data.sysPromptId)
-  NewChatStream(stock, stockCode, data.question, data.aiConfigId, data.sysPromptId, enableTools.value,thinkingMode.value)
+  startStockAnalysis({
+    stockName: stock,
+    stockCode,
+    question: data.question,
+    aiConfigId: data.aiConfigId,
+    sysPromptId: data.sysPromptId,
+    enableTools: enableTools.value,
+    think: thinkingMode.value,
+  })
 }
 
 function aiCheckStock(stock, stockCode) {
-  GetAIResponseResult(stockCode).then(result => {
+  loadLatestAnalysisResult(stockCode).then(result => {
     if (result.content) {
       data.modelName = result.modelName
       data.chatId = result.chatId
@@ -1850,14 +1867,7 @@ function aiCheckStock(stock, stockCode) {
       data.loading = false
       modalShow4.value = true
       data.airesult = result.content
-      const date = new Date(result.CreatedAt);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      data.time = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+      data.time = result.CreatedAt ? result.CreatedAt.replace('T', ' ').slice(0, 19) : ''
     } else {
       data.modelName = ""
       data.question = ""
@@ -1942,7 +1952,7 @@ async function copyToClipboard() {
 }
 
 function saveAsMarkdown() {
-  SaveAsMarkdown(data.code, data.name).then(result => {
+  saveAnalysisMarkdown(data.code, data.name).then(result => {
     message.success(result)
   })
 }
@@ -2012,7 +2022,7 @@ AI赋能股票分析：自选股行情获取，成本盈亏展示，涨跌报警
 }
 
 function share(code, name) {
-  ShareAnalysis(code, name).then(msg => {
+  shareAnalysis(code, name).then(msg => {
     //message.info(msg)
     notify.info({
       avatar: () =>

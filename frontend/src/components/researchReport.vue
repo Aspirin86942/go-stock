@@ -1,8 +1,14 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
-import {GetAIResponseResultList, GetConfig, SaveAsMarkdown, ShareAnalysis,DeleteAIResponseResult} from "../../wailsjs/go/main/App";
+import {GetConfig} from "../../wailsjs/go/main/App";
 import {NAvatar, NButton, NEllipsis, NText, useMessage} from "naive-ui";
 import {MdEditor, MdPreview} from 'md-editor-v3';
+import {
+  deleteAnalysisResult,
+  loadAnalysisResultPage,
+  saveAnalysisMarkdown,
+  shareAnalysis,
+} from "../services/analysisService.mjs";
 
 
 
@@ -143,7 +149,7 @@ function query({
                }) {
   return new Promise((resolve) => {
 
-    GetAIResponseResultList({
+    loadAnalysisResultPage({
       "page": page,
       "pageSize": pageSize,
       "modelName":keyword,
@@ -204,7 +210,7 @@ function handleSearch() {
   }
 }
 function share(code, name) {
-  ShareAnalysis(code, name).then(msg => {
+  shareAnalysis(code, name).then(msg => {
     //message.info(msg)
     notify.info({
       avatar: () =>
@@ -228,7 +234,7 @@ function share(code, name) {
 }
 
 function saveAsMarkdown(code,name) {
-  SaveAsMarkdown(code, name).then(result => {
+  saveAnalysisMarkdown(code, name).then(result => {
     if(result !== ""){
       message.success(result)
     }
@@ -255,7 +261,7 @@ function formatDate(dateString) {
 }
 
 function deleteAIResponseResult(id){
-  DeleteAIResponseResult(id).then(result => {
+  deleteAnalysisResult(id).then(result => {
     if(result !== ""){
       message.success(result)
     }

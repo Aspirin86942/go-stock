@@ -2,13 +2,7 @@
 import * as echarts from "echarts";
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref} from 'vue'
 import {
-  GetAIResponseResult,
   GetConfig,
-  GetPromptTemplates,
-  SaveAIResponseResult,
-  SaveAsMarkdown,
-  ShareAnalysis,
-  SummaryStockNews,
   GetAiConfigs,
 } from "../../wailsjs/go/main/App";
 import {EventsOff, EventsOn} from "../../wailsjs/runtime";
@@ -33,6 +27,14 @@ import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import SelectStock from "./SelectStock.vue";
 import Stockhotmap from "./stockhotmap.vue";
 import { resolveFirstAiConfigId } from "../utils/aiConfig.mjs";
+import {
+  loadLatestAnalysisResult,
+  loadPromptTemplates,
+  saveAnalysisMarkdown,
+  saveAnalysisResult,
+  shareAnalysis,
+  startMarketSummary,
+} from "../services/analysisService.mjs";
 import {
   loadMarketFeeds,
   loadMarketGlobalIndexes,
@@ -117,7 +119,7 @@ onBeforeMount(() => {
     darkTheme.value = result.darkTheme
     httpProxyEnabled.value = result.httpProxyEnabled
   })
-  GetPromptTemplates("", "").then(res => {
+  loadPromptTemplates("", "").then(res => {
     promptTemplates.value = res
     sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
     userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
@@ -234,27 +236,27 @@ function reAiSummary() {
   aiSummary.value = ""
   summaryModal.value = true
   loading.value = true
-  SummaryStockNews(question.value,aiConfigId.value, sysPromptId.value,enableTools.value,thinkingMode.value,"summaryStockNews","")
+  startMarketSummary({
+    question: question.value,
+    aiConfigId: aiConfigId.value,
+    sysPromptId: sysPromptId.value,
+    enableTools: enableTools.value,
+    think: thinkingMode.value,
+    eventName: "summaryStockNews",
+    historyJSON: "",
+  })
 }
 
 function getAiSummary() {
   summaryModal.value = true
   loading.value = true
-  GetAIResponseResult("市场资讯").then(result => {
+  loadLatestAnalysisResult("市场资讯").then(result => {
     loading.value = false
     if (result.content) {
       aiSummary.value = result.content
       question.value = result.question
       loading.value = false
-
-      const date = new Date(result.CreatedAt);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      aiSummaryTime.value = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+      aiSummaryTime.value = result.CreatedAt ? result.CreatedAt.replace('T', ' ').slice(0, 19) : ''
       modelName.value = result.modelName
     } else {
       aiSummaryTime.value = ""
@@ -274,7 +276,14 @@ EventsOn("summaryStockNews", async (msg) => {
   loading.value = false
   ////console.log(msg)
   if (msg === "DONE") {
-    await SaveAIResponseResult("市场资讯", "市场资讯", aiSummary.value, chatId.value, question.value,aiConfigId.value)
+    await saveAnalysisResult({
+      stockCode: "市场资讯",
+      stockName: "市场资讯",
+      content: aiSummary.value,
+      chatId: chatId.value,
+      question: question.value,
+      aiConfigId: aiConfigId.value,
+    })
     message.info("AI分析完成！")
     message.destroyAll()
 
@@ -310,13 +319,13 @@ async function copyToClipboard() {
 }
 
 function saveAsMarkdown() {
-  SaveAsMarkdown('市场资讯', '市场资讯').then(result => {
+  saveAnalysisMarkdown('市场资讯', '市场资讯').then(result => {
     message.success(result)
   })
 }
 
 function share() {
-  ShareAnalysis('市场资讯', '市场资讯').then(msg => {
+  shareAnalysis('市场资讯', '市场资讯').then(msg => {
     //message.info(msg)
     notify.info({
       avatar: () =>
