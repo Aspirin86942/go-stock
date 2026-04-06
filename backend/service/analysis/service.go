@@ -8,6 +8,7 @@ import (
 
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	contractservice "go-stock/backend/service/contract"
 )
 
 type StreamSource interface {
@@ -78,6 +79,35 @@ func (s *Service) GetLatestResult(ctx context.Context, stockCode string) *models
 		return &models.AIResponseResult{}
 	}
 	return result
+}
+
+func (s *Service) GetResultArtifact(ctx context.Context, stockCode, stockName string) (ResultArtifact, *contractservice.UserVisibleError) {
+	result := s.results.GetLatestResult(ctx, stockCode)
+	if result == nil || len(strings.TrimSpace(result.Content)) < 100 {
+		userErr := contractservice.NewUserVisibleError(
+			"analysis.result_missing",
+			"分析结果异常",
+			false,
+			contractservice.StageService,
+		)
+		return ResultArtifact{}, &userErr
+	}
+
+	resolvedName := strings.TrimSpace(stockName)
+	if resolvedName == "" {
+		resolvedName = strings.TrimSpace(result.StockName)
+	}
+	if resolvedName == "" {
+		resolvedName = stockCode
+	}
+
+	return ResultArtifact{
+		StockCode:        stockCode,
+		StockName:        resolvedName,
+		Content:          result.Content,
+		AnalysisDate:     result.CreatedAt.Format("2006/01/02"),
+		MarkdownFilename: fmt.Sprintf("%s[%s]AI分析结果_%s.md", resolvedName, stockCode, result.CreatedAt.Format("2006-01-02_15_04_05")),
+	}, nil
 }
 
 func (s *Service) GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error) {

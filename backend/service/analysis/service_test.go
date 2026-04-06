@@ -3,9 +3,12 @@ package analysis
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"go-stock/backend/models"
+	contractservice "go-stock/backend/service/contract"
 )
 
 type fakeStreams struct {
@@ -317,6 +320,55 @@ func TestParseHistoryTreatsWhitespaceAsEmpty(t *testing.T) {
 	}
 	if history != nil {
 		t.Fatalf("expected nil history, got %#v", history)
+	}
+}
+
+func TestService_GetResultArtifactBuildsStableShareAndMarkdownFields(t *testing.T) {
+	latest := &models.AIResponseResult{
+		StockCode: "000001.SZ",
+		StockName: "平安银行",
+		Content:   strings.Repeat("分析结论", 30),
+	}
+	latest.CreatedAt = time.Date(2026, 4, 6, 9, 30, 0, 0, time.Local)
+
+	results := &fakeResults{
+		latest: latest,
+	}
+	svc := NewService(&fakeStreams{}, results, &fakePrompts{})
+
+	artifact, userErr := svc.GetResultArtifact(context.Background(), "000001.SZ", "")
+	if userErr != nil {
+		t.Fatalf("expected nil userErr, got %#v", userErr)
+	}
+	if artifact.StockCode != "000001.SZ" {
+		t.Fatalf("unexpected stock code: %q", artifact.StockCode)
+	}
+	if artifact.StockName != "平安银行" {
+		t.Fatalf("unexpected stock name: %q", artifact.StockName)
+	}
+	if artifact.AnalysisDate != "2026/04/06" {
+		t.Fatalf("unexpected analysis date: %q", artifact.AnalysisDate)
+	}
+	if artifact.MarkdownFilename != "平安银行[000001.SZ]AI分析结果_2026-04-06_09_30_00.md" {
+		t.Fatalf("unexpected markdown filename: %q", artifact.MarkdownFilename)
+	}
+}
+
+func TestService_GetResultArtifactReturnsUserVisibleErrorWhenResultMissing(t *testing.T) {
+	svc := NewService(&fakeStreams{}, &fakeResults{latest: nil}, &fakePrompts{})
+
+	_, userErr := svc.GetResultArtifact(context.Background(), "000001.SZ", "平安银行")
+	if userErr == nil {
+		t.Fatalf("expected non-nil userErr")
+	}
+	if userErr.Code != "analysis.result_missing" {
+		t.Fatalf("unexpected error code: %q", userErr.Code)
+	}
+	if userErr.Stage != contractservice.StageService {
+		t.Fatalf("unexpected error stage: %q", userErr.Stage)
+	}
+	if userErr.Retryable {
+		t.Fatalf("expected non-retryable userErr")
 	}
 }
 

@@ -10,22 +10,24 @@ import (
 )
 
 type fakeStore struct {
-	cfg             *data.SettingConfig
-	getConfigCtx    context.Context
-	updateArg       *data.SettingConfig
-	updateCtx       context.Context
-	updateResult    string
-	getPromptsCtx   context.Context
-	templates       *[]models.PromptTemplate
-	getPageCtx      context.Context
-	page            *models.PromptTemplatePageData
-	pageErr         error
-	saveCtx         context.Context
-	savedTemplate   models.PromptTemplate
-	saveResult      string
-	deleteCtx       context.Context
-	deletedID       uint
-	deleteResult    string
+	cfg           *data.SettingConfig
+	getConfigCtx  context.Context
+	updateArg     *data.SettingConfig
+	updateCtx     context.Context
+	updateResult  string
+	getPromptsCtx context.Context
+	templates     *[]models.PromptTemplate
+	getPageCtx    context.Context
+	page          *models.PromptTemplatePageData
+	pageErr       error
+	saveCtx       context.Context
+	savedTemplate models.PromptTemplate
+	saveResult    string
+	deleteCtx     context.Context
+	deletedID     uint
+	deleteResult  string
+	exportCtx     context.Context
+	exportResult  string
 }
 
 func (f *fakeStore) GetConfig(ctx context.Context) *data.SettingConfig {
@@ -62,6 +64,11 @@ func (f *fakeStore) DeletePromptTemplate(ctx context.Context, id uint) string {
 	f.deleteCtx = ctx
 	f.deletedID = id
 	return f.deleteResult
+}
+
+func (f *fakeStore) ExportConfig(ctx context.Context) string {
+	f.exportCtx = ctx
+	return f.exportResult
 }
 
 func TestService_GetAiConfigsAndPromptsReturnStableDefaults(t *testing.T) {
@@ -237,5 +244,19 @@ func TestService_GetPromptTemplatePageReturnsEmptyPageWhenStoreReturnsNil(t *tes
 	}
 	if page.Total != 0 || page.Page != 0 || page.PageSize != 0 || page.TotalPages != 0 {
 		t.Fatalf("expected zero-value page data, got %#v", page)
+	}
+}
+
+func TestService_ExportConfigDelegates(t *testing.T) {
+	store := &fakeStore{exportResult: "{\"darkTheme\":true}"}
+	svc := NewService(store)
+	bg := context.Background()
+
+	got := svc.ExportConfig(bg)
+	if got != "{\"darkTheme\":true}" {
+		t.Fatalf("unexpected export payload: %q", got)
+	}
+	if store.exportCtx != bg {
+		t.Fatalf("expected background context passed to export")
 	}
 }

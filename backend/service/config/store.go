@@ -23,6 +23,11 @@ func (s *DataStore) UpdateConfig(ctx context.Context, cfg *data.SettingConfig) s
 	return data.UpdateConfig(cfg)
 }
 
+func (s *DataStore) ExportConfig(ctx context.Context) string {
+	_ = ctx
+	return data.NewSettingsApi().Export()
+}
+
 func (s *DataStore) GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate {
 	_ = ctx
 	return data.NewPromptTemplateApi().GetPromptTemplates(name, promptType)

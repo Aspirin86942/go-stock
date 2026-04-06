@@ -10,6 +10,7 @@ import (
 type Store interface {
 	GetConfig(ctx context.Context) *data.SettingConfig
 	UpdateConfig(ctx context.Context, cfg *data.SettingConfig) string
+	ExportConfig(ctx context.Context) string
 	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
 	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
 	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
@@ -43,6 +44,10 @@ func (s *Service) GetConfig(ctx context.Context) *data.SettingConfig {
 
 func (s *Service) UpdateConfig(ctx context.Context, cfg *data.SettingConfig) string {
 	return s.store.UpdateConfig(ctx, cfg)
+}
+
+func (s *Service) ExportConfig(ctx context.Context) string {
+	return s.store.ExportConfig(ctx)
 }
 
 func (s *Service) GetAiConfigs(ctx context.Context) []*data.AIConfig {

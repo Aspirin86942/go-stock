@@ -23,12 +23,21 @@ type MarketSummaryRequest struct {
 
 // StreamChunk is a normalized event consumed by the callers.
 type StreamChunk struct {
-	ChatID       string `json:"chatId"`
-	Question     string `json:"question"`
-	Content      string `json:"content"`
-	ExtraContent string `json:"extraContent"`
-	Model        string `json:"model"`
-	Time         string `json:"time"`
-	ReasoningContent string               `json:"reasoning_content"`
-	ToolCalls        []map[string]any     `json:"tool_calls"`
+	ChatID           string           `json:"chatId"`
+	Question         string           `json:"question"`
+	Content          string           `json:"content"`
+	ExtraContent     string           `json:"extraContent"`
+	Model            string           `json:"model"`
+	Time             string           `json:"time"`
+	ReasoningContent string           `json:"reasoning_content"`
+	ToolCalls        []map[string]any `json:"tool_calls"`
+}
+
+// ResultArtifact describes a stable share/export view for the latest analysis result.
+type ResultArtifact struct {
+	StockCode        string `json:"stockCode"`
+	StockName        string `json:"stockName"`
+	Content          string `json:"content"`
+	AnalysisDate     string `json:"analysisDate"`
+	MarkdownFilename string `json:"markdownFilename"`
 }
