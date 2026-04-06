@@ -323,7 +323,7 @@ func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
 }
 
 func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.PromptTemplatePageData {
-	page, err := a.analysisService.GetPromptTemplatePage(a.ctx, query)
+	page, err := a.configService.GetPromptTemplatePage(a.ctx, query)
 	if err != nil {
 		return &models.PromptTemplatePageData{}
 	}
@@ -331,15 +331,15 @@ func (a *App) GetPromptTemplateList(query models.PromptTemplateQuery) *models.Pr
 }
 
 func (a *App) AddPromptTemplate(template models.PromptTemplate) string {
-	return a.analysisService.SavePromptTemplate(a.ctx, template)
+	return a.configService.SavePromptTemplate(a.ctx, template)
 }
 
 func (a *App) UpdatePromptTemplate(template models.PromptTemplate) string {
-	return a.analysisService.SavePromptTemplate(a.ctx, template)
+	return a.configService.SavePromptTemplate(a.ctx, template)
 }
 
 func (a *App) DeletePromptTemplate(id uint) string {
-	return a.analysisService.DeletePromptTemplate(a.ctx, id)
+	return a.configService.DeletePromptTemplate(a.ctx, id)
 }
 
 func (a *App) GetAllStockInfoList(query data.AllStockInfoQuery) *data.AllStockInfoPageData {

@@ -14,6 +14,7 @@ import (
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	analysisservice "go-stock/backend/service/analysis"
+	configservice "go-stock/backend/service/config"
 	marketservice "go-stock/backend/service/market"
 	analysissource "go-stock/backend/source/analysis"
 	marketsource "go-stock/backend/source/marketnews"
@@ -58,6 +59,7 @@ type App struct {
 	priceAtAlertReset  map[string]float64
 	marketReadService  marketReadService
 	analysisService    analysisService
+	configService      configService
 }
 
 type marketReadService interface {
@@ -75,10 +77,18 @@ type analysisService interface {
 	GetResultPage(ctx context.Context, query models.AIResponseResultQuery) (*models.AIResponseResultPageData, error)
 	DeleteResult(ctx context.Context, id uint) error
 	BatchDeleteResults(ctx context.Context, ids []uint) error
+}
+
+type configService interface {
+	GetConfig(ctx context.Context) *data.SettingConfig
+	UpdateConfig(ctx context.Context, cfg *data.SettingConfig) string
+	GetAiConfigs(ctx context.Context) []*data.AIConfig
 	GetPromptTemplates(ctx context.Context, name, promptType string) *[]models.PromptTemplate
 	GetPromptTemplatePage(ctx context.Context, query models.PromptTemplateQuery) (*models.PromptTemplatePageData, error)
 	SavePromptTemplate(ctx context.Context, template models.PromptTemplate) string
 	DeletePromptTemplate(ctx context.Context, id uint) string
+	SaveLegacyPrompt(ctx context.Context, prompt models.Prompt) string
+	DeleteLegacyPrompt(ctx context.Context, id uint) string
 }
 
 const (
@@ -109,6 +119,7 @@ func NewApp() *App {
 		priceAtAlertReset:  make(map[string]float64),
 		marketReadService:  marketservice.NewService(marketsource.NewSource()),
 		analysisService:    analysisservice.NewService(analysisProvider, analysisStore, analysisStore),
+		configService:      configservice.NewService(configservice.NewStore()),
 	}
 }
 
@@ -1560,11 +1571,11 @@ func (a *App) UpdateConfig(settingConfig *data.SettingConfig) string {
 		a.setCronEntry("MonitorStockPrices", id)
 	}
 
-	return data.UpdateConfig(settingConfig)
+	return a.configService.UpdateConfig(a.ctx, settingConfig)
 }
 
 func (a *App) GetConfig() *data.SettingConfig {
-	return data.GetSettingConfig()
+	return a.configService.GetConfig(a.ctx)
 }
 
 func (a *App) ExportConfig() string {
@@ -1666,18 +1677,13 @@ func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 }
 
 func (a *App) GetPromptTemplates(name, promptType string) *[]models.PromptTemplate {
-	return a.analysisService.GetPromptTemplates(a.ctx, name, promptType)
+	return a.configService.GetPromptTemplates(a.ctx, name, promptType)
 }
 func (a *App) AddPrompt(prompt models.Prompt) string {
-	return a.analysisService.SavePromptTemplate(a.ctx, models.PromptTemplate{
-		ID:      prompt.ID,
-		Content: prompt.Content,
-		Name:    prompt.Name,
-		Type:    prompt.Type,
-	})
+	return a.configService.SaveLegacyPrompt(a.ctx, prompt)
 }
 func (a *App) DelPrompt(id uint) string {
-	return a.analysisService.DeletePromptTemplate(a.ctx, id)
+	return a.configService.DeleteLegacyPrompt(a.ctx, id)
 }
 func (a *App) SetStockAICron(cronText, stockCode string) {
 	data.NewStockDataApi().SetStockAICron(cronText, stockCode)
@@ -2008,7 +2014,7 @@ func (a *App) SaveWordFile(filename string, base64Data string) string {
 //	@receiver a
 //	@return error
 func (a *App) GetAiConfigs() []*data.AIConfig {
-	return data.GetSettingConfig().AiConfigs
+	return a.configService.GetAiConfigs(a.ctx)
 }
 
 // GetAiAssistantSession 获取 AI 助手会话消息列表，sessionId 为空时获取最新的
