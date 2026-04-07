@@ -14,10 +14,6 @@ export function AddAllStockInfo(arg1) {
   return window['go']['main']['App']['AddAllStockInfo'](arg1);
 }
 
-export function AddCronTask(arg1) {
-  return window['go']['main']['App']['AddCronTask'](arg1);
-}
-
 export function AddGroup(arg1) {
   return window['go']['main']['App']['AddGroup'](arg1);
 }
@@ -300,6 +296,10 @@ export function GetStockEastMoneyKLinePageResult(arg1, arg2, arg3, arg4, arg5) {
 
 export function GetStockEastMoneyKLineResult(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetStockEastMoneyKLineResult'](arg1, arg2, arg3, arg4);
+}
+
+export function GetStockInfos(arg1) {
+  return window['go']['main']['App']['GetStockInfos'](arg1);
 }
 
 export function GetStockKLine(arg1, arg2, arg3) {

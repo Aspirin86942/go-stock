@@ -3,16 +3,14 @@
 import {models} from '../models';
 import {data} from '../models';
 import {context} from '../models';
-import {lo} from '../models';
 import {market} from '../models';
+import {lo} from '../models';
 
 export function AbortChatWithAgent():Promise<void>;
 
 export function AbortSummaryStockNews():Promise<void>;
 
 export function AddAllStockInfo(arg1:models.AllStockInfo):Promise<string>;
-
-export function AddCronTask(arg1:data.FollowedStock):Promise<any>;
 
 export function AddGroup(arg1:data.Group):Promise<string>;
 
@@ -46,7 +44,7 @@ export function CheckStockBaseInfo(arg1:context.Context):Promise<void>;
 
 export function CheckUpdate(arg1:number):Promise<void>;
 
-export function ClsCalendar():Promise<Array<any>>;
+export function ClsCalendar():Promise<Array<market.ClsCalendarDay>>;
 
 export function CreateCronTask(arg1:models.CronTask):Promise<string>;
 
@@ -66,7 +64,7 @@ export function DeleteStockChangeHistory(arg1:number):Promise<string>;
 
 export function DeleteTradingRecord(arg1:number):Promise<void>;
 
-export function EMDictCode(arg1:string):Promise<Array<any>>;
+export function EMDictCode(arg1:string):Promise<Array<market.EMDictCodeEntry>>;
 
 export function EnableCronTask(arg1:number,arg2:boolean):Promise<string>;
 
@@ -122,11 +120,11 @@ export function GetGroupList():Promise<Array<data.Group>>;
 
 export function GetGroupStockList(arg1:number):Promise<Array<data.GroupStock>>;
 
-export function GetHotStrategy():Promise<Record<string, any>>;
+export function GetHotStrategy():Promise<models.HotStrategy>;
 
-export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<Record<string, any>>>;
+export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<market.IndustryMoneyRankRow>>;
 
-export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<any>>;
+export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<market.IndustryRankEntry>>;
 
 export function GetMarketFeeds():Promise<market.FeedSet>;
 
@@ -134,7 +132,7 @@ export function GetMarketGlobalIndexes():Promise<market.IndexSet>;
 
 export function GetMarketIndustryRanks(arg1:string,arg2:number):Promise<Array<market.IndustryRankEntry>>;
 
-export function GetMoneyRankSina(arg1:string):Promise<Array<Record<string, any>>>;
+export function GetMoneyRankSina(arg1:string):Promise<Array<market.MoneyRankRow>>;
 
 export function GetPromptTemplateList(arg1:models.PromptTemplateQuery):Promise<models.PromptTemplatePageData>;
 
@@ -152,17 +150,19 @@ export function GetStockEastMoneyKLine(arg1:string,arg2:string,arg3:string,arg4:
 
 export function GetStockEastMoneyKLinePage(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<any>;
 
-export function GetStockEastMoneyKLinePageResult(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<Record<string, any>>;
+export function GetStockEastMoneyKLinePageResult(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<market.EastMoneyKLinePageResult>;
 
-export function GetStockEastMoneyKLineResult(arg1:string,arg2:string,arg3:string,arg4:number):Promise<Record<string, any>>;
+export function GetStockEastMoneyKLineResult(arg1:string,arg2:string,arg3:string,arg4:number):Promise<market.EastMoneyKLinePageResult>;
+
+export function GetStockInfos(arg1:Array<data.FollowedStock>):Promise<any>;
 
 export function GetStockKLine(arg1:string,arg2:string,arg3:number):Promise<any>;
 
 export function GetStockList(arg1:string):Promise<Array<data.StockBasic>>;
 
-export function GetStockMinutePriceLineData(arg1:string,arg2:string):Promise<Record<string, any>>;
+export function GetStockMinutePriceLineData(arg1:string,arg2:string):Promise<market.MinutePriceLine>;
 
-export function GetStockMoneyTrendByDay(arg1:string,arg2:number):Promise<Array<Record<string, any>>>;
+export function GetStockMoneyTrendByDay(arg1:string,arg2:number):Promise<Array<market.StockMoneyTrendRow>>;
 
 export function GetStockRealTimePrice(arg1:string):Promise<Record<string, any>>;
 
@@ -180,7 +180,7 @@ export function GetVersionInfo():Promise<models.VersionInfo>;
 
 export function GetfundList(arg1:string):Promise<Array<data.FundBasic>>;
 
-export function GlobalStockIndexes():Promise<Record<string, any>>;
+export function GlobalStockIndexes():Promise<market.IndexSet>;
 
 export function GlobalStockIndexesReadable():Promise<string>;
 
@@ -190,15 +190,15 @@ export function HotEvent(arg1:number):Promise<any>;
 
 export function HotStock(arg1:string):Promise<any>;
 
-export function HotTopic(arg1:number):Promise<Array<any>>;
+export function HotTopic(arg1:number):Promise<Array<market.HotTopicEntry>>;
 
-export function IndustryResearchReport(arg1:string):Promise<Array<any>>;
+export function IndustryResearchReport(arg1:string):Promise<Array<market.IndustryResearchReportEntry>>;
 
 export function InitCronTasks():Promise<void>;
 
 export function InitializeGroupSort():Promise<boolean>;
 
-export function InvestCalendarTimeLine(arg1:string):Promise<Array<any>>;
+export function InvestCalendarTimeLine(arg1:string):Promise<Array<market.InvestCalendarDay>>;
 
 export function LongTigerRank(arg1:string):Promise<any>;
 
@@ -230,7 +230,7 @@ export function SaveWordFile(arg1:string,arg2:string):Promise<string>;
 
 export function SearchCronTasks(arg1:string):Promise<Array<models.CronTask>>;
 
-export function SearchStock(arg1:string):Promise<Record<string, any>>;
+export function SearchStock(arg1:string):Promise<market.SearchStockResponse>;
 
 export function SendDingDingMessage(arg1:string,arg2:string):Promise<string>;
 
@@ -250,9 +250,9 @@ export function ShareAnalysis(arg1:string,arg2:string):Promise<string>;
 
 export function ShareText(arg1:string,arg2:string):Promise<string>;
 
-export function StockNotice(arg1:string):Promise<Array<any>>;
+export function StockNotice(arg1:string):Promise<Array<market.StockNoticeEntry>>;
 
-export function StockResearchReport(arg1:string):Promise<Array<any>>;
+export function StockResearchReport(arg1:string):Promise<Array<market.StockResearchReportEntry>>;
 
 export function SummaryStockNews(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:boolean,arg6:string,arg7:string):Promise<void>;
 
