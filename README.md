@@ -1,25 +1,22 @@
 # go-stock : 基于大语言模型的AI赋能股票分析工具
 ## ![go-stock](./build/appicon.png)
 ![GitHub Release](https://img.shields.io/github/v/release/ArvinLovegood/go-stock?link=https%3A%2F%2Fgithub.com%2FArvinLovegood%2Fgo-stock%2Freleases&link=https%3A%2F%2Fgithub.com%2FArvinLovegood%2Fgo-stock%2Freleases)
-[![GitHub Repo stars](https://img.shields.io/github/stars/ArvinLovegood/go-stock?link=https%3A%2F%2Fgithub.com%2FArvinLovegood%2Fgo-stock)](https://github.com/ArvinLovegood/go-stock)
-[![star](https://gitee.com/arvinlovegood_admin/go-stock/badge/star.svg?theme=dark)](https://gitee.com/arvinlovegood_admin/go-stock)
-
-[//]: # ([![star]&#40;https://gitcode.com/ArvinLovegood/go-stock/star/badge.svg&#41;]&#40;https://gitcode.com/ArvinLovegood/go-stock&#41;)
-
-### 🌟公众号
-![扫码_搜索联合传播样式-白色版.png](build/screenshot/%E6%89%AB%E7%A0%81_%E6%90%9C%E7%B4%A2%E8%81%94%E5%90%88%E4%BC%A0%E6%92%AD%E6%A0%B7%E5%BC%8F-%E7%99%BD%E8%89%B2%E7%89%88.png)
-
-### 📈 交流群
-
-[//]: # (- QQ交流群2：[点击链接加入群聊【go-stock交流群2】：892666282]&#40;https://qm.qq.com/q/5mYiy6Yxh0&#41;)
-- QQ交流群：[点击链接加入群聊【go-stock交流群】：491605333(定期清理，随缘入群)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=0YQ8qD3exahsD4YLNhzQTWe5ssstWC89&authKey=usOMMRFtIQDC%2FYcatHYapcxQbJ7PwXPHK9OypTXWzNjAq%2FRVvQu9bj2lRgb%2BSZ3p&noverify=0&group_code=491605333)
 
 ###  ✨ 简介
 - 本项目基于Wails和NaiveUI开发，结合AI大模型构建的股票分析工具。
 - 目前已支持A股，港股，美股，未来计划加入基金，ETF等支持。
 - 支持市场整体/个股情绪分析，K线技术指标分析等功能。
-- 本项目仅供娱乐，不喜勿喷，AI分析股票结果仅供学习研究，投资有风险，请谨慎使用。
+- 本项目以学习研究为主，AI 分析结果仅供参考，投资有风险，请谨慎使用。
 - 开发环境主要基于Windows10+，其他平台未测试或功能受限。
+
+### 🧭 架构与维护说明
+- 这个项目主要用于自用研究、学习 AI 能力和持续练习架构设计，不以商业化为目标。
+- 当前技术栈固定为 `Go + Wails + Vue`，本轮重构的重点不是换栈，而是把自然生长的代码边界收紧。
+- 后端现在以 `bridge -> service -> source` 为目标边界，前端现在以 `router -> pages -> components/services` 为目标边界，尽量避免继续把业务逻辑堆回桥接层和重量级组件。
+- 这次重构的目标是把项目收敛成一个可长期维护的桌面研究工作台，而不是为了“更优雅”继续增加抽象层。
+- 更完整的背景、阶段目标、非目标和收口结果见：
+  - [整体架构重构 spec](docs/superpowers/specs/2026-04-06-go-stock-overall-architecture-refactor-design.md)
+  - [整体架构重构 closeout](docs/superpowers/checklists/2026-04-07-go-stock-overall-architecture-refactor-closeout.md)
 
 ### 📃 使用手册
 [go-stock使用手册](docs/go-stock使用手册.md)
@@ -40,17 +37,11 @@
 | [LMStudio](https://lmstudio.ai/) | ✅ | 本地大模型运行平台                                                                                                                                                                                                                                                         |
 | [AnythingLLM](https://anythingllm.com/) | ✅ | 本地知识库                                                                                                                                                                                                                                                             |
 | [DeepSeek](https://www.deepseek.com/) | ✅ | deepseek-reasoner,deepseek-chat                                                                                                                                                                                                                                   |
-| [大模型聚合平台](https://cloud.siliconflow.cn/i/foufCerk) | ✅ | 如：[硅基流动](https://cloud.siliconflow.cn/i/foufCerk)，[火山方舟](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=IJSE43PZ) |
+| 大模型聚合平台 | ✅ | 如：[硅基流动](https://cloud.siliconflow.cn/)、[火山方舟](https://www.volcengine.com/product/ark) 等兼容 OpenAI API 的平台 |
 
-### <span style="color: #568DF4;">各位亲爱的朋友们，如果您对这个项目感兴趣，请先给我一个<i style="color: #EA2626;">star</i>吧，谢谢！</span>💕
-[//]: # (- 优云智算（by UCloud）：万卡规模4090免费用10小时，新人注册另增50万tokens，海量热门源项目镜像一键部署，[注册链接]&#40;https://www.compshare.cn/image-community?ytag=GPU_YY-gh_gostock&#41;)
-- 火山方舟：新用户每个模型注册即送50万tokens，[注册链接](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=IJSE43PZ)
-- 硅基流动(siliconflow)，注册即送2000万Tokens，[注册链接](https://cloud.siliconflow.cn/i/foufCerk)
-
-[//]: # (- Tushare大数据开放社区,免费提供各类金融数据,助力行业和量化研究&#40;注意：Tushare只需要120积分即可，注册完成个人资料补充即可得120积分！！！&#41;，[注册链接]&#40;https://tushare.pro/register?reg=701944&#41;)
 - 软件快速迭代开发中,请大家优先测试和使用最新发布的版本。
 - 欢迎大家提出宝贵的建议，欢迎提 issue、PR。
-- 当前版本默认开放全部功能，完成基础配置后即可直接使用。
+- 完成基础配置后即可直接使用。
 
 ## 🧩 重大功能开发计划
 | 功能说明            | 状态 | 备注                                                                                                       |
@@ -154,17 +145,7 @@
 - [Wails](https://wails.io/)
 - [Vue](https://vuejs.org/)
 - [Vite](https://vitejs.dev/)
-- [Tushare](https://tushare.pro/register?reg=701944)
-
-## ⭐ Star History
-[![Star History Chart](https://api.star-history.com/svg?repos=ArvinLovegood/go-stock&type=Date)](https://star-history.com/#ArvinLovegood/go-stock&Date)
-## 🤖 状态
-![Alt](https://repobeats.axiom.co/api/embed/40b07d415a42c2264a18c4fe1b6f182ff1470687.svg "Repobeats analytics image")
-
-## 🐳 关于技术支持申明
-- 本软件基于开源技术构建，使用 Wails、NaiveUI、Vue、AI 大模型等开源项目。
-- 技术问题建议优先通过 GitHub Issues、讨论区或对应开源社区交流。
-- 如需进一步沟通，可联系 QQ：506808970。
+- [Tushare](https://tushare.pro/)
 
 [//]: # (<img src="./build/wx.jpg" width="301px" height="402px" alt="ArvinLovegood">)
 
