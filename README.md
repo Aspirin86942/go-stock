@@ -26,13 +26,6 @@
 ### 📃 使用手册
 [go-stock使用手册](docs/go-stock使用手册.md)
 
-### 📦 立即体验
-[//]: # (- 安装版：[go-stock-amd64-installer.exe]&#40;https://github.com/ArvinLovegood/go-stock/releases&#41;)
-- 绿色版：[go-stock-windows-amd64.exe](https://github.com/ArvinLovegood/go-stock/releases)
-- MACOS绿色版：[go-stock-darwin-universal](https://github.com/ArvinLovegood/go-stock/releases)
-
-[//]: # (- MACOS安装版：[go-stock-darwin-universal.pkg]&#40;https://github.com/ArvinLovegood/go-stock/releases&#41;)
-
 ### ✅ 当前能力
 - 股票池覆盖 A 股、港股、美股。
 - 支持市场资讯、财经日历、公告、研报、分时/K线等只读研究链路。
